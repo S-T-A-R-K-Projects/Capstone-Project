@@ -19,10 +19,10 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
   late AnimationController _fabAnimationController;
 
   final List<Widget> _pages = [
-    const HomePage(),
-    const HistoryPage(),
-    const AlertsPage(),
-    const SettingsPage(),
+    HomePage(),
+    HistoryPage(),
+    AlertsPage(),
+    SettingsPage(),
   ];
 
   final iconList = <IconData>[

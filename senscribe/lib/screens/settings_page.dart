@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../main.dart';
+import 'about_support.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -11,6 +12,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  // Keep this State simple for now; we'll add new fields as we expand sections.
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = ThemeProvider();
@@ -106,6 +109,46 @@ class _SettingsPageState extends State<SettingsPage> {
                 ).animate()
                   .fadeIn(duration: 600.ms)
                   .slideY(begin: 0.2),
+                
+                // About & Support
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'About & Support',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ListTile(
+                          title: const Text('Version'),
+                          subtitle: const Text('1.0.0'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AboutSupportPage())),
+                          child: const Text('Acknowledgements'),
+                        ),
+                
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
               ],
             ),
           ),
@@ -113,4 +156,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+
+  // no disposable controllers yet
 }

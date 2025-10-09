@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+mport 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -82,4 +82,14 @@ class NotificationPage extends StatelessWidget {
                         color: Theme.of(context).textTheme.bodySmall?.color,
                       ),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

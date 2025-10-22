@@ -318,12 +318,14 @@ class _SettingsPageState extends State<SettingsPage> {
                               size: 24,
                             ),
                             const SizedBox(width: 12),
-                            Text(
-                              'Permissions & Background',
-                              style: GoogleFonts.inter(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
+                            Expanded(
+                              child: Text(
+                                'Permissions & Background',
+                                style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                               ),
                             ),
                           ],

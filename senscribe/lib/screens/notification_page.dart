@@ -51,7 +51,7 @@ class NotificationPage extends StatelessWidget {
                 end: Alignment.bottomCenter,
                 colors: [
                   Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withOpacity(0.0),
+                  Theme.of(context).colorScheme.primary.withAlpha(0),
                 ],
               ),
             ),

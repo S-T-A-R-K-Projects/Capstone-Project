@@ -106,6 +106,286 @@ class _SettingsPageState extends State<SettingsPage> {
                 ).animate()
                   .fadeIn(duration: 600.ms)
                   .slideY(begin: 0.2),
+<<<<<<< Updated upstream
+=======
+
+                // Experimental (P3) - styled card like About & Support
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.science_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Experimental (P3)',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Summarization, Voice-to-Text, Text-to-Speech (beta)',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExperimentalPage())),
+                              child: const Text('Manage'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+
+                // Name Recognition - styled card like About & Support
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.person_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Name Recognition',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Enter name, enable recognition, and choose a haptic pattern.',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NameRecognitionPage())),
+                              child: const Text('Open'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+
+                // Sound Direction - styled card like About & Support
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.navigation_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Sound Direction',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Enable sound direction detection, run a calibration routine, and view tips.',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SoundDirectionPage())),
+                              child: const Text('Calibrate'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+
+                // Privacy & Data - styled card like About & Support
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.privacy_tip_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Privacy & Data',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'On-device processing, export/delete history, and consent preferences.',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyDataPage())),
+                              child: const Text('Manage'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+
+                // Permissions & Background - styled card like About & Support
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.shield_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Permissions & Background',
+                                style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Microphone, Notifications, Haptics, and Background processing permissions.',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PermissionsBackgroundPage())),
+                              child: const Text('Open'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+
+                // About & Support
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'About & Support',
+                              style: GoogleFonts.inter(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ListTile(
+                          title: const Text('Version'),
+                          subtitle: const Text('1.0.0'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AboutSupportPage())),
+                          child: const Text('Acknowledgements'),
+                        ),
+                
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+>>>>>>> Stashed changes
               ],
             ),
           ),

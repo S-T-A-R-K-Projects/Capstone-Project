@@ -1,3 +1,7 @@
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -21,6 +25,7 @@ class HistoryPage extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
+<<<<<<< Updated upstream
             height: 100,
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -30,6 +35,26 @@ class HistoryPage extends StatelessWidget {
                   Theme.of(context).colorScheme.primary,
                   Theme.of(context).colorScheme.primary.withValues(alpha: 0.0),
                 ],
+=======
+            height: 84,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [primary, primary.withAlpha(0)],
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    'Recent activity',
+                    style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                  ),
+                ),
+>>>>>>> Stashed changes
               ),
             ),
           ),

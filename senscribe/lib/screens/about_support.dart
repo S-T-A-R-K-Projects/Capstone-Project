@@ -7,8 +7,9 @@ class AboutSupportPage extends StatelessWidget {
 	static const _supportEmail = 'support@senscribe.example';
 
 	void _copyEmail(BuildContext context) async {
+		final scaffoldMessenger = ScaffoldMessenger.of(context);
 		await Clipboard.setData(const ClipboardData(text: _supportEmail));
-		ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Support email copied to clipboard')));
+		scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Support email copied to clipboard')));
 	}
 
 	@override

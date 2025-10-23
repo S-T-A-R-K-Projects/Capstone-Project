@@ -4,6 +4,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../models/sound_caption.dart';
 import '../widgets/sound_caption_card.dart';
+import '../services/audio_classification_service.dart';
+import '../services/permission_service.dart';
+import 'dart:async';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,30 +21,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
   late AnimationController _pulseController;
   
-  // Sample real-time captions data
-  final List<SoundCaption> _captions = [
-    SoundCaption(
-      sound: 'Doorbell ringing',
-      timestamp: DateTime.now().subtract(const Duration(seconds: 15)),
-      isCritical: false,
-      direction: 'Front',
-      confidence: 0.95,
-    ),
-    SoundCaption(
-      sound: 'Car horn beeping',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-      isCritical: true,
-      direction: 'Left',
-      confidence: 0.88,
-    ),
-    SoundCaption(
-      sound: 'Dog barking',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-      isCritical: false,
-      direction: 'Back',
-      confidence: 0.92,
-    ),
-  ];
+  final AudioClassificationService _audioService = AudioClassificationService();
+  final PermissionService _permissionService = PermissionService();
+  StreamSubscription<AudioClassificationResult>? _audioSubscription;
+  
+  // Real-time captions data
+  final List<SoundCaption> _captions = [];
 
   @override
   void initState() {
@@ -50,24 +35,156 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
+    _initializeAudioService();
+  }
+
+  Future<void> _initializeAudioService() async {
+    try {
+      await _audioService.initialize();
+      _setupAudioListener();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize audio service: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _setupAudioListener() {
+    _audioSubscription = _audioService.resultsStream.listen(
+      (result) {
+        if (mounted) {
+          setState(() {
+            // Determine if sound is critical
+            final isCritical = _isCriticalSound(result.label);
+            
+            // Add new caption to the beginning of the list
+            _captions.insert(
+              0,
+              SoundCaption(
+                sound: result.label,
+                timestamp: result.timestamp,
+                isCritical: isCritical,
+                direction: result.direction ?? 'Unknown',
+                confidence: result.confidence,
+              ),
+            );
+            
+            // Limit to 50 most recent captions
+            if (_captions.length > 50) {
+              _captions.removeLast();
+            }
+          });
+        }
+      },
+      onError: (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Audio processing error: $error'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  bool _isCriticalSound(String label) {
+    // Define critical sound keywords
+    final criticalKeywords = [
+      'siren', 'alarm', 'fire', 'smoke', 'emergency',
+      'car horn', 'honk', 'beep', 'crash', 'glass',
+      'scream', 'shout', 'cry', 'baby crying'
+    ];
+    
+    final lowerLabel = label.toLowerCase();
+    return criticalKeywords.any((keyword) => lowerLabel.contains(keyword));
   }
 
   @override
   void dispose() {
+    _audioSubscription?.cancel();
     _pulseController.dispose();
+    _audioService.dispose();
     super.dispose();
   }
 
-  void _toggleMonitoring() {
-    setState(() {
-      _isMonitoring = !_isMonitoring;
-      if (_isMonitoring) {
-        _pulseController.repeat();
-      } else {
-        _pulseController.stop();
-        _pulseController.reset();
+  Future<void> _toggleMonitoring() async {
+    if (!_isMonitoring) {
+      print('Toggle monitoring - requesting permission via native...');
+      
+      // Use native iOS permission request
+      final hasPermission = await _audioService.requestMicrophonePermission();
+      print('Native permission result: $hasPermission');
+      
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Microphone permission denied. Please enable it in Settings.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Settings',
+                textColor: Colors.white,
+                onPressed: () {
+                  _permissionService.openSettings();
+                },
+              ),
+            ),
+          );
+        }
+        return;
       }
-    });
+      
+      // Start monitoring
+      try {
+        await _audioService.startMonitoring();
+        setState(() {
+          _isMonitoring = true;
+          _pulseController.repeat();
+        });
+      } catch (e) {
+        if (mounted) {
+          final errorMessage = e.toString().toLowerCase().contains('simulator') || 
+                               e.toString().contains('0 Hz')
+              ? 'Audio recording not supported on iOS Simulator. Please use a physical device.'
+              : 'Failed to start monitoring: $e';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } else {
+      // Stop monitoring
+      try {
+        await _audioService.stopMonitoring();
+        setState(() {
+          _isMonitoring = false;
+          _pulseController.stop();
+          _pulseController.reset();
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to stop monitoring: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override

@@ -1,9 +1,13 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../models/sound_caption.dart';
 import '../widgets/sound_caption_card.dart';
+import '../services/audio_classification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,31 +21,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
   late AnimationController _pulseController;
-  
-  // Sample real-time captions data
-  final List<SoundCaption> _captions = [
-    SoundCaption(
-      sound: 'Doorbell ringing',
-      timestamp: DateTime.now().subtract(const Duration(seconds: 15)),
-      isCritical: false,
-      direction: 'Front',
-      confidence: 0.95,
-    ),
-    SoundCaption(
-      sound: 'Car horn beeping',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-      isCritical: true,
-      direction: 'Left',
-      confidence: 0.88,
-    ),
-    SoundCaption(
-      sound: 'Dog barking',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-      isCritical: false,
-      direction: 'Back',
-      confidence: 0.92,
-    ),
-  ];
+  final AudioClassificationService _audioService = AudioClassificationService();
+  final List<SoundCaption> _captions = [];
+  StreamSubscription<Map<String, dynamic>>? _classificationSubscription;
 
   @override
   void initState() {
@@ -54,11 +36,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _classificationSubscription?.cancel();
+    if (_isMonitoring) {
+      _audioService.stop();
+    }
     _pulseController.dispose();
     super.dispose();
   }
 
-  void _toggleMonitoring() {
+  Future<void> _toggleMonitoring() async {
+    if (!Platform.isIOS) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Audio classification is currently available on iOS only.')),
+      );
+      return;
+    }
+
     setState(() {
       _isMonitoring = !_isMonitoring;
       if (_isMonitoring) {
@@ -68,10 +62,117 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         _pulseController.reset();
       }
     });
+
+    if (_isMonitoring) {
+      await _startMonitoring();
+    } else {
+      await _stopMonitoring();
+    }
+  }
+
+  Future<void> _startMonitoring() async {
+    _classificationSubscription ??= _audioService.classificationStream.listen(
+      _handleClassificationEvent,
+      onError: (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Audio classification error: $error')),
+        );
+        setState(() {
+          _isMonitoring = false;
+          _pulseController.stop();
+          _pulseController.reset();
+        });
+      },
+    );
+
+    try {
+      await _audioService.start();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to start monitoring: $error')),
+      );
+      setState(() {
+        _isMonitoring = false;
+        _pulseController.stop();
+        _pulseController.reset();
+      });
+    }
+  }
+
+  Future<void> _stopMonitoring() async {
+    await _audioService.stop();
+  }
+
+  void _handleClassificationEvent(Map<String, dynamic> data) {
+    final type = data['type'] as String?;
+    if (type == 'status') {
+      final status = data['status'] as String?;
+      if (status == 'stopped' && mounted) {
+        setState(() {
+          _isMonitoring = false;
+          _pulseController.stop();
+          _pulseController.reset();
+        });
+      }
+      return;
+    }
+    if (type != null && type != 'result') {
+      return;
+    }
+
+    final label = data['label'] as String? ?? 'Unknown sound';
+    final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
+    final timestampMs = (data['timestampMs'] as num?)?.toInt();
+    final DateTime timestamp;
+    if (timestampMs != null) {
+      timestamp = DateTime.fromMillisecondsSinceEpoch(timestampMs, isUtc: true).toLocal();
+    } else {
+      timestamp = DateTime.now();
+    }
+
+    const criticalLabels = {
+      'siren',
+      'fire_alarm',
+      'smoke_alarm',
+      'scream',
+      'baby_crying',
+      'dog_bark',
+      'gunshot',
+      'glass_breaking',
+    };
+    final normalizedLabel = label.toLowerCase().replaceAll(' ', '_');
+    final isCritical = criticalLabels.contains(normalizedLabel);
+
+    setState(() {
+      _captions.insert(
+        0,
+        SoundCaption(
+          sound: label,
+          timestamp: timestamp,
+          isCritical: isCritical,
+          direction: 'Unknown',
+          confidence: confidence,
+        ),
+      );
+      if (_captions.length > 50) {
+        _captions.removeRange(50, _captions.length);
+      }
+    });
+  }
+
+  List<SoundCaption> get _filteredCaptions {
+    if (_selectedFilter == 'Critical') {
+      return _captions.where((caption) => caption.isCritical).toList();
+    }
+    return List<SoundCaption>.from(_captions);
   }
 
   @override
   Widget build(BuildContext context) {
+    final filteredCaptions = _filteredCaptions;
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -267,7 +368,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
           
           // Sound Captions List
-          _captions.isEmpty 
+          filteredCaptions.isEmpty 
             ? SliverFillRemaining(
                 child: Center(
                   child: Column(
@@ -313,13 +414,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         child: FadeInAnimation(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            child: SoundCaptionCard(caption: _captions[index]),
+                            child: SoundCaptionCard(caption: filteredCaptions[index]),
                           ),
                         ),
                       ),
                     );
                   },
-                  childCount: _captions.length,
+                  childCount: filteredCaptions.length,
                 ),
               ),
               

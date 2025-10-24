@@ -1,11 +1,13 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/services.dart';
 
 class AudioClassificationService {
-  static const MethodChannel _methodChannel = MethodChannel('senscribe/audio_classifier');
-  static const EventChannel _eventChannel = EventChannel('senscribe/audio_classifier_events');
+  static const MethodChannel _methodChannel = MethodChannel(
+    'senscribe/audio_classifier',
+  );
+  static const EventChannel _eventChannel = EventChannel(
+    'senscribe/audio_classifier_events',
+  );
 
   Stream<Map<String, dynamic>>? _cachedStream;
 
@@ -23,16 +25,10 @@ class AudioClassificationService {
   }
 
   Future<void> start() async {
-    if (!Platform.isIOS) {
-      return;
-    }
     await _methodChannel.invokeMethod('start');
   }
 
   Future<void> stop() async {
-    if (!Platform.isIOS) {
-      return;
-    }
     await _methodChannel.invokeMethod('stop');
   }
 }

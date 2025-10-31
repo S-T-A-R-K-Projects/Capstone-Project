@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -73,6 +74,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showPicker,
+        child: const Icon(Icons.add),
+      ),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -329,6 +334,36 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ],
       ),
+    );
+  }
+
+  void _showPicker() {
+    // Show a Cupertino-style action sheet containing a picker wheel
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) {
+  final options = ['Option 1', 'Option 2'];
+
+        return CupertinoActionSheet(
+          actions: [
+            SizedBox(
+              height: 216,
+              child: CupertinoPicker(
+                backgroundColor: CupertinoColors.systemBackground.resolveFrom(context),
+                itemExtent: 36,
+                onSelectedItemChanged: (int index) {},
+                children: options.map((o) => Center(child: Text(o))).toList(),
+              ),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Done'),
+          ),
+        );
+      },
     );
   }
 }

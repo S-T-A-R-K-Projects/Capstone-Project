@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../models/sound_caption.dart';
 import '../widgets/sound_caption_card.dart';
+import '../services/tts_service.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final String mode;
+  const HomePage({super.key, this.mode = 'speech'});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -17,6 +18,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isMonitoring = false;
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
+  final TextEditingController _ttsController = TextEditingController();
   late AnimationController _pulseController;
   
   // Sample real-time captions data
@@ -51,10 +53,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
+    // Initialize TTS (non-blocking)
+    TtsService().init();
   }
 
   @override
   void dispose() {
+    _ttsController.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -74,10 +79,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showPicker,
-        child: const Icon(Icons.add),
-      ),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -238,95 +239,168 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ),
           
-          // Real-time Feed Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+          // Main content: either Speech-to-Text feed or Text-to-Speech composer
+          if (widget.mode == 'speech') ...[
+            // Real-time Feed Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.hearing_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 24,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.hearing_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 24,
+                    const SizedBox(width: 12),
+                    Text(
+                      'Real-time Sound Feed',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Real-time Sound Feed',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ).animate()
-                .slideX(begin: -0.2, duration: 500.ms)
-                .fadeIn(),
+                  ],
+                ).animate()
+                  .slideX(begin: -0.2, duration: 500.ms)
+                  .fadeIn(),
+              ),
             ),
-          ),
-          
-          // Sound Captions List
-          _captions.isEmpty 
-            ? SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.volume_off_rounded,
-                        size: 80,
-                        color: Colors.grey[400],
-                      ).animate()
-                        .scale(duration: 600.ms)
-                        .then()
-                        .shimmer(duration: 1000.ms),
-                      const SizedBox(height: 24),
-                      Text(
-                        'No sounds detected yet',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Start monitoring to see live captions',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ).animate()
-                    .fadeIn(duration: 800.ms)
-                    .slideY(begin: 0.2),
-                ),
-              )
-            : SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    return AnimationConfiguration.staggeredList(
-                      position: index,
-                      duration: const Duration(milliseconds: 375),
-                      child: SlideAnimation(
-                        verticalOffset: 50.0,
-                        child: FadeInAnimation(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            child: SoundCaptionCard(caption: _captions[index]),
+
+            // Sound Captions List
+            _captions.isEmpty 
+              ? SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.volume_off_rounded,
+                          size: 80,
+                          color: Colors.grey[400],
+                        ).animate()
+                          .scale(duration: 600.ms)
+                          .then()
+                          .shimmer(duration: 1000.ms),
+                        const SizedBox(height: 24),
+                        Text(
+                          'No sounds detected yet',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Start monitoring to see live captions',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ).animate()
+                      .fadeIn(duration: 800.ms)
+                      .slideY(begin: 0.2),
+                  ),
+                )
+              : SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      return AnimationConfiguration.staggeredList(
+                        position: index,
+                        duration: const Duration(milliseconds: 375),
+                        child: SlideAnimation(
+                          verticalOffset: 50.0,
+                          child: FadeInAnimation(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              child: SoundCaptionCard(caption: _captions[index]),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: _captions.length,
+                  ),
+                ),
+          ] else ...[
+            // Text-to-Speech composer UI
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.record_voice_over,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Text-to-Speech',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      elevation: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            TextField(
+                              controller: _ttsController,
+                              maxLines: 6,
+                              decoration: const InputDecoration(
+                                hintText: 'Enter text to speak...',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                ElevatedButton(
+                                  onPressed: () {
+                                    final text = _ttsController.text.trim();
+                                    if (text.isNotEmpty) {
+                                      TtsService().speak(text);
+                                    }
+                                  },
+                                  child: const Text('Speak'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-                  },
-                  childCount: _captions.length,
+                    ),
+                  ],
                 ),
               ),
+            ),
+          ],
               
           // Bottom padding for FAB
           const SliverToBoxAdapter(
@@ -337,33 +411,5 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  void _showPicker() {
-    // Show a Cupertino-style action sheet containing a picker wheel
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (BuildContext context) {
-  final options = ['Option 1', 'Option 2'];
-
-        return CupertinoActionSheet(
-          actions: [
-            SizedBox(
-              height: 216,
-              child: CupertinoPicker(
-                backgroundColor: CupertinoColors.systemBackground.resolveFrom(context),
-                itemExtent: 36,
-                onSelectedItemChanged: (int index) {},
-                children: options.map((o) => Center(child: Text(o))).toList(),
-              ),
-            ),
-          ],
-          cancelButton: CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('Done'),
-          ),
-        );
-      },
-    );
-  }
+  // _showPicker is handled by the parent navigation FAB; no local implementation needed.
 }

@@ -10,9 +10,17 @@ class TtsService {
 
   Future<void> init() async {
     // Optional: Set default options. Keep minimal defaults.
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
+    try {
+      await _flutterTts.setSpeechRate(0.5);
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setLanguage('en-US');
+      await _flutterTts.awaitSpeakCompletion(true);
+    } catch (e) {
+      // ignore silently for now; caller can catch when speaking
+      // dev print for debugging
+      // print('TtsService.init error: $e');
+    }
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       // Android-specific settings could go here.
@@ -20,8 +28,16 @@ class TtsService {
   }
 
   Future<void> speak(String text) async {
-    if (text.trim().isEmpty) return;
-    await _flutterTts.speak(text);
+    final t = text.trim();
+    if (t.isEmpty) return;
+    try {
+      // stop any existing speech
+      await _flutterTts.stop();
+      await _flutterTts.speak(t);
+    } catch (e) {
+      // rethrow so caller can handle
+      throw Exception('TTS speak failed: $e');
+    }
   }
 
   Future<void> stop() async {

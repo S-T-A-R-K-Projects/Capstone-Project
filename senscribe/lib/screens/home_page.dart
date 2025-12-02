@@ -382,10 +382,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 ElevatedButton(
-                                  onPressed: () {
+                                  onPressed: () async {
                                     final text = _ttsController.text.trim();
-                                    if (text.isNotEmpty) {
-                                      TtsService().speak(text);
+                                    if (text.isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Please enter text to speak')),
+                                      );
+                                      return;
+                                    }
+                                    try {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Speaking...')),
+                                      );
+                                      await TtsService().speak(text);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Done')),
+                                      );
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('TTS failed: ${e.toString()}')),
+                                      );
                                     }
                                   },
                                   child: const Text('Speak'),

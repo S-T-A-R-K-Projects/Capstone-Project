@@ -1,3 +1,4 @@
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -73,7 +74,8 @@ class HistoryPage extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  end: Alignment.bottomCenter,    
+                  colors: [primary, primary.withOpacity(0.0)],
                   colors: [primary, primary.withAlpha(0)],
                 ),
               ),

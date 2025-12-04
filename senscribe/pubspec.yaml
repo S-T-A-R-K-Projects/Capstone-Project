@@ -47,6 +47,7 @@ dependencies:
   flutter_speed_dial: ^7.0.0
   speech_to_text: ^7.0.0
   permission_handler: ^11.3.1
+  shared_preferences: ^2.1.0
   
 
 dev_dependencies:

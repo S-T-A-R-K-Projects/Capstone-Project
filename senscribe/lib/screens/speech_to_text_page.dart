@@ -5,6 +5,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 
+import '../services/history_service.dart';
+import '../models/history_item.dart';
+
 class SpeechToTextPage extends StatefulWidget {
   final bool isMonitoring;
   final AnimationController pulseController;
@@ -166,6 +169,21 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                   _currentWords = '';
                 });
                 print('After: "$_transcribedText"');
+
+                // Save a minimal history entry for this transcription
+                try {
+                  final id = DateTime.now().millisecondsSinceEpoch.toString();
+                  final item = HistoryItem(
+                    id: id,
+                    title: result.recognizedWords,
+                    subtitle: 'Speech transcription',
+                    timestamp: DateTime.now(),
+                    metadata: {'source': 'speech_to_text'},
+                  );
+                  HistoryService().add(item);
+                } catch (e) {
+                  print('Failed saving history: $e');
+                }
 
                 // Restart immediately to keep listening
                 Future.delayed(const Duration(milliseconds: 200), () {

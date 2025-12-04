@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import '../screens/home_page.dart';
 import '../screens/history_page.dart';
 import '../screens/alerts_page.dart';
@@ -70,16 +71,43 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
         ),
       ),
       floatingActionButton: _selectedIndex == 0 ? 
-        FloatingActionButton(
-          onPressed: () {
-            // TODO: Implement quick actions
-            _fabAnimationController.forward().then((_) {
-              _fabAnimationController.reverse();
-            });
-          },
+        SpeedDial(
+          icon: Icons.add_rounded,
+          activeIcon: Icons.close_rounded,
           backgroundColor: Theme.of(context).colorScheme.secondary,
           foregroundColor: Colors.white,
-          child: const Icon(Icons.add_rounded),
+          activeForegroundColor: Colors.white,
+          activeBackgroundColor: Theme.of(context).colorScheme.secondary,
+          buttonSize: const Size(56.0, 56.0),
+          visible: true,
+          closeManually: false,
+          curve: Curves.bounceIn,
+          overlayColor: Colors.black,
+          overlayOpacity: 0.5,
+          elevation: 8.0,
+          shape: const CircleBorder(),
+          children: [
+            SpeedDialChild(
+              child: const Icon(Icons.mic_rounded),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              label: 'Speech to Text',
+              labelStyle: const TextStyle(fontSize: 16.0),
+              onTap: () {
+                // TODO: Implement Speech to Text functionality
+              },
+            ),
+            SpeedDialChild(
+              child: const Icon(Icons.volume_up_rounded),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              label: 'Text to Speech',
+              labelStyle: const TextStyle(fontSize: 16.0),
+              onTap: () {
+                // TODO: Implement Text to Speech functionality
+              },
+            ),
+          ],
         ).animate()
           .scale(duration: 300.ms)
           .then()

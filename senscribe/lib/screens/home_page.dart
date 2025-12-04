@@ -10,17 +10,24 @@ import '../widgets/sound_caption_card.dart';
 import '../services/audio_classification_service.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final bool isMonitoring;
+  final AnimationController pulseController;
+  final VoidCallback onToggleMonitoring;
+
+  const HomePage({
+    super.key,
+    required this.isMonitoring,
+    required this.pulseController,
+    required this.onToggleMonitoring,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  bool _isMonitoring = false;
+class _HomePageState extends State<HomePage> {
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
-  late AnimationController _pulseController;
   final AudioClassificationService _audioService = AudioClassificationService();
   final List<SoundCaption> _captions = [];
   StreamSubscription<Map<String, dynamic>>? _classificationSubscription;
@@ -28,19 +35,29 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
+    if (widget.isMonitoring) {
+      _startMonitoring();
+    }
+  }
+
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isMonitoring != oldWidget.isMonitoring) {
+      if (widget.isMonitoring) {
+        _startMonitoring();
+      } else {
+        _stopMonitoring();
+      }
+    }
   }
 
   @override
   void dispose() {
     _classificationSubscription?.cancel();
-    if (_isMonitoring) {
+    if (widget.isMonitoring) {
       _audioService.stop();
     }
-    _pulseController.dispose();
     super.dispose();
   }
 
@@ -57,21 +74,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return;
     }
 
-    setState(() {
-      _isMonitoring = !_isMonitoring;
-      if (_isMonitoring) {
-        _pulseController.repeat();
-      } else {
-        _pulseController.stop();
-        _pulseController.reset();
-      }
-    });
-
-    if (_isMonitoring) {
-      await _startMonitoring();
-    } else {
-      await _stopMonitoring();
-    }
+    widget.onToggleMonitoring();
   }
 
   Future<void> _startMonitoring() async {
@@ -82,11 +85,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Audio classification error: $error')),
         );
-        setState(() {
-          _isMonitoring = false;
-          _pulseController.stop();
-          _pulseController.reset();
-        });
+        if (widget.isMonitoring) {
+          widget.onToggleMonitoring();
+        }
       },
     );
 
@@ -97,11 +98,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unable to start monitoring: $error')),
       );
-      setState(() {
-        _isMonitoring = false;
-        _pulseController.stop();
-        _pulseController.reset();
-      });
+      if (widget.isMonitoring) {
+        widget.onToggleMonitoring();
+      }
     }
   }
 
@@ -113,12 +112,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final type = data['type'] as String?;
     if (type == 'status') {
       final status = data['status'] as String?;
-      if (status == 'stopped' && mounted) {
-        setState(() {
-          _isMonitoring = false;
-          _pulseController.stop();
-          _pulseController.reset();
-        });
+      if (status == 'stopped' && mounted && widget.isMonitoring) {
+        widget.onToggleMonitoring();
       }
       return;
     }
@@ -222,19 +217,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 child: Row(
                                   children: [
                                     AnimatedBuilder(
-                                      animation: _pulseController,
+                                      animation: widget.pulseController,
                                       builder: (context, child) {
                                         return Transform.scale(
-                                          scale: _isMonitoring
+                                          scale: widget.isMonitoring
                                               ? 1.0 +
-                                                    (_pulseController.value *
+                                                    (widget.pulseController.value *
                                                         0.2)
                                               : 1.0,
                                           child: Container(
                                             width: 48,
                                             height: 48,
                                             decoration: BoxDecoration(
-                                              color: _isMonitoring
+                                              color: widget.isMonitoring
                                                   ? Colors.green.withValues(
                                                       alpha: 0.2,
                                                     )
@@ -244,11 +239,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                               shape: BoxShape.circle,
                                             ),
                                             child: Icon(
-                                              _isMonitoring
+                                              widget.isMonitoring
                                                   ? Icons.mic_rounded
                                                   : Icons.mic_off_rounded,
                                               size: 24,
-                                              color: _isMonitoring
+                                              color: widget.isMonitoring
                                                   ? Colors.green
                                                   : Colors.grey,
                                             ),
@@ -263,21 +258,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            _isMonitoring
+                                            widget.isMonitoring
                                                 ? 'Monitoring Active'
                                                 : 'Monitoring Stopped',
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .titleMedium
                                                 ?.copyWith(
-                                                  color: _isMonitoring
+                                                  color: widget.isMonitoring
                                                       ? Colors.green
                                                       : Colors.grey[600],
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                           ),
                                           Text(
-                                            _isMonitoring
+                                            widget.isMonitoring
                                                 ? 'Listening for sounds...'
                                                 : 'Tap to start monitoring',
                                             style: Theme.of(context)
@@ -293,7 +288,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     ElevatedButton(
                                           onPressed: _toggleMonitoring,
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: _isMonitoring
+                                            backgroundColor: widget.isMonitoring
                                                 ? Colors.red
                                                 : Colors.green,
                                             foregroundColor: Colors.white,
@@ -303,7 +298,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                             ),
                                           ),
                                           child: Text(
-                                            _isMonitoring ? 'Stop' : 'Start',
+                                            widget.isMonitoring ? 'Stop' : 'Start',
                                           ),
                                         )
                                         .animate()

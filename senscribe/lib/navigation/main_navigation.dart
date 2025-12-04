@@ -7,6 +7,8 @@ import '../screens/home_page.dart';
 import '../screens/history_page.dart';
 import '../screens/alerts_page.dart';
 import '../screens/settings_page.dart';
+import '../screens/speech_to_text_page.dart';
+import '../screens/text_to_speech_page.dart';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -18,20 +20,8 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   late AnimationController _fabAnimationController;
-
-  final List<Widget> _pages = [
-    HomePage(),
-    HistoryPage(),
-    AlertsPage(),
-    SettingsPage(),
-  ];
-
-  final iconList = <IconData>[
-    Icons.home_rounded,
-    Icons.history_rounded,
-    Icons.notifications_rounded,
-    Icons.settings_rounded,
-  ];
+  bool _isMonitoring = false;
+  late AnimationController _monitoringPulseController;
 
   @override
   void initState() {
@@ -40,13 +30,58 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
+    _monitoringPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
   }
 
   @override
   void dispose() {
     _fabAnimationController.dispose();
+    _monitoringPulseController.dispose();
     super.dispose();
   }
+
+  void _toggleMonitoring() {
+    setState(() {
+      _isMonitoring = !_isMonitoring;
+      if (_isMonitoring) {
+        _monitoringPulseController.repeat();
+      } else {
+        _monitoringPulseController.stop();
+        _monitoringPulseController.reset();
+      }
+    });
+  }
+
+  List<Widget> get _pages => [
+    HomePage(
+      isMonitoring: _isMonitoring,
+      pulseController: _monitoringPulseController,
+      onToggleMonitoring: _toggleMonitoring,
+    ),
+    HistoryPage(),
+    AlertsPage(),
+    SettingsPage(),
+    SpeechToTextPage(
+      isMonitoring: _isMonitoring,
+      pulseController: _monitoringPulseController,
+      onToggleMonitoring: _toggleMonitoring,
+    ),
+    TextToSpeechPage(
+      isMonitoring: _isMonitoring,
+      pulseController: _monitoringPulseController,
+      onToggleMonitoring: _toggleMonitoring,
+    ),
+  ];
+
+  final iconList = <IconData>[
+    Icons.home_rounded,
+    Icons.history_rounded,
+    Icons.notifications_rounded,
+    Icons.settings_rounded,
+  ];
 
   void _onItemTapped(int index) {
     setState(() {
@@ -70,9 +105,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
           ),
         ),
       ),
-      floatingActionButton: _selectedIndex == 0 ? 
+      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 4 || _selectedIndex == 5) ? 
         SpeedDial(
-          icon: Icons.add_rounded,
+          icon: _selectedIndex == 0 ? Icons.add_rounded : Icons.home_rounded,
           activeIcon: Icons.close_rounded,
           backgroundColor: Theme.of(context).colorScheme.secondary,
           foregroundColor: Colors.white,
@@ -87,6 +122,19 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
           elevation: 8.0,
           shape: const CircleBorder(),
           children: [
+            if (_selectedIndex == 4 || _selectedIndex == 5)
+              SpeedDialChild(
+                child: const Icon(Icons.hearing_rounded),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                label: 'R-T Sound Feed',
+                labelStyle: const TextStyle(fontSize: 16.0),
+                onTap: () {
+                  setState(() {
+                    _selectedIndex = 0;
+                  });
+                },
+              ),
             SpeedDialChild(
               child: const Icon(Icons.mic_rounded),
               backgroundColor: Theme.of(context).colorScheme.primary,
@@ -94,7 +142,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
               label: 'Speech to Text',
               labelStyle: const TextStyle(fontSize: 16.0),
               onTap: () {
-                // TODO: Implement Speech to Text functionality
+                setState(() {
+                  _selectedIndex = 4;
+                });
               },
             ),
             SpeedDialChild(
@@ -104,7 +154,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
               label: 'Text to Speech',
               labelStyle: const TextStyle(fontSize: 16.0),
               onTap: () {
-                // TODO: Implement Text to Speech functionality
+                setState(() {
+                  _selectedIndex = 5;
+                });
               },
             ),
           ],

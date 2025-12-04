@@ -20,8 +20,15 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   late AnimationController _fabAnimationController;
-  bool _isMonitoring = false;
-  late AnimationController _monitoringPulseController;
+  
+  // Separate monitoring states for each feature
+  bool _isSoundFeedMonitoring = false;
+  bool _isSpeechToTextMonitoring = false;
+  bool _isTextToSpeechMonitoring = false;
+  
+  late AnimationController _soundFeedPulseController;
+  late AnimationController _speechToTextPulseController;
+  late AnimationController _textToSpeechPulseController;
 
   @override
   void initState() {
@@ -30,7 +37,15 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
-    _monitoringPulseController = AnimationController(
+    _soundFeedPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _speechToTextPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _textToSpeechPulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
@@ -39,40 +54,66 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
   @override
   void dispose() {
     _fabAnimationController.dispose();
-    _monitoringPulseController.dispose();
+    _soundFeedPulseController.dispose();
+    _speechToTextPulseController.dispose();
+    _textToSpeechPulseController.dispose();
     super.dispose();
   }
 
-  void _toggleMonitoring() {
+  void _toggleSoundFeedMonitoring() {
     setState(() {
-      _isMonitoring = !_isMonitoring;
-      if (_isMonitoring) {
-        _monitoringPulseController.repeat();
+      _isSoundFeedMonitoring = !_isSoundFeedMonitoring;
+      if (_isSoundFeedMonitoring) {
+        _soundFeedPulseController.repeat();
       } else {
-        _monitoringPulseController.stop();
-        _monitoringPulseController.reset();
+        _soundFeedPulseController.stop();
+        _soundFeedPulseController.reset();
+      }
+    });
+  }
+
+  void _toggleSpeechToTextMonitoring() {
+    setState(() {
+      _isSpeechToTextMonitoring = !_isSpeechToTextMonitoring;
+      if (_isSpeechToTextMonitoring) {
+        _speechToTextPulseController.repeat();
+      } else {
+        _speechToTextPulseController.stop();
+        _speechToTextPulseController.reset();
+      }
+    });
+  }
+
+  void _toggleTextToSpeechMonitoring() {
+    setState(() {
+      _isTextToSpeechMonitoring = !_isTextToSpeechMonitoring;
+      if (_isTextToSpeechMonitoring) {
+        _textToSpeechPulseController.repeat();
+      } else {
+        _textToSpeechPulseController.stop();
+        _textToSpeechPulseController.reset();
       }
     });
   }
 
   List<Widget> get _pages => [
     HomePage(
-      isMonitoring: _isMonitoring,
-      pulseController: _monitoringPulseController,
-      onToggleMonitoring: _toggleMonitoring,
+      isMonitoring: _isSoundFeedMonitoring,
+      pulseController: _soundFeedPulseController,
+      onToggleMonitoring: _toggleSoundFeedMonitoring,
     ),
     HistoryPage(),
     AlertsPage(),
     SettingsPage(),
     SpeechToTextPage(
-      isMonitoring: _isMonitoring,
-      pulseController: _monitoringPulseController,
-      onToggleMonitoring: _toggleMonitoring,
+      isMonitoring: _isSpeechToTextMonitoring,
+      pulseController: _speechToTextPulseController,
+      onToggleMonitoring: _toggleSpeechToTextMonitoring,
     ),
     TextToSpeechPage(
-      isMonitoring: _isMonitoring,
-      pulseController: _monitoringPulseController,
-      onToggleMonitoring: _toggleMonitoring,
+      isMonitoring: _isTextToSpeechMonitoring,
+      pulseController: _textToSpeechPulseController,
+      onToggleMonitoring: _toggleTextToSpeechMonitoring,
     ),
   ];
 

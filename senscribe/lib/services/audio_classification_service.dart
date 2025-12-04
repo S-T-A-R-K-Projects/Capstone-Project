@@ -25,10 +25,18 @@ class AudioClassificationService {
   }
 
   Future<void> start() async {
-    await _methodChannel.invokeMethod('start');
+    try {
+      await _methodChannel.invokeMethod('start');
+    } catch (e) {
+      print('Audio classification not implemented yet: $e');
+    }
   }
 
   Future<void> stop() async {
-    await _methodChannel.invokeMethod('stop');
+    try {
+      await _methodChannel.invokeMethod('stop');
+    } catch (e) {
+      print('Audio classification not implemented yet: $e');
+    }
   }
 }

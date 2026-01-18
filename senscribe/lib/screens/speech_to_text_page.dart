@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -30,16 +29,22 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   final SpeechToText _speech = SpeechToText();
   bool _isAvailable = false;
   bool _isListening = false;
+  bool _isSaving = false;
 
   // Helper method to safely show SnackBar (avoids showing during build)
   void _showSnackBar(String message) {
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
-    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _log(String message) {
+    assert(() {
+      // ignore: avoid_print
+      print(message);
+      return true;
+    }());
   }
 
   @override
@@ -71,7 +76,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
         debugLogging: true, // Enable debug logging to help diagnose issues
       );
 
-      print('=== SPEECH INITIALIZE RESULT: $_isAvailable ===');
+      _log('=== SPEECH INITIALIZE RESULT: $_isAvailable ===');
 
       if (!_isAvailable && mounted) {
         _showSnackBar(
@@ -81,7 +86,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
 
       if (mounted) setState(() {});
     } catch (e) {
-      print('=== INIT ERROR: $e ===');
+      _log('=== INIT ERROR: $e ===');
       if (mounted) {
         _showSnackBar('Failed to initialize speech: $e');
       }
@@ -89,11 +94,11 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   }
 
   void _onSpeechStatus(String status) {
-    print('=== SPEECH STATUS: $status ===');
-    print('Monitoring: ${widget.isMonitoring}, Listening: $_isListening');
+    _log('=== SPEECH STATUS: $status ===');
+    _log('Monitoring: ${widget.isMonitoring}, Listening: $_isListening');
 
     if (status == 'done' || status == 'notListening') {
-      print('Speech stopped - status: $status');
+      _log('Speech stopped - status: $status');
       if (mounted) {
         setState(() {
           _isListening = false;
@@ -111,11 +116,11 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   }
 
   void _onSpeechError(SpeechRecognitionError error) {
-    print('=== SPEECH ERROR: ${error.errorMsg} ===');
+    _log('=== SPEECH ERROR: ${error.errorMsg} ===');
     if (mounted) {
       // error_no_match is normal - just means no speech detected in timeout period
       if (error.errorMsg == 'error_no_match') {
-        print('No match error - restarting if still monitoring...');
+        _log('No match error - restarting if still monitoring...');
         if (widget.isMonitoring) {
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted && widget.isMonitoring) {
@@ -134,22 +139,20 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   }
 
   Future<void> _startListening() async {
-    print('=== START LISTENING CALLED ===');
-    print(
-      'Available: $_isAvailable, Already listening: ${_speech.isListening}',
-    );
+    _log('=== START LISTENING CALLED ===');
+    _log('Available: $_isAvailable, Already listening: ${_speech.isListening}');
 
     if (!_isAvailable) {
-      print('ERROR: Speech not available');
+      _log('ERROR: Speech not available');
       _showSnackBar('Speech recognition not available');
       return;
     }
 
     try {
-      print('Calling speech.listen...');
+      _log('Calling speech.listen...');
       await _speech.listen(
         onResult: (result) {
-          print(
+          _log(
             'Got result: ${result.recognizedWords}, final: ${result.finalResult}',
           );
           if (mounted) {
@@ -161,34 +164,19 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
             } else {
               // Final result - save to transcript ONLY ONCE
               if (widget.isMonitoring && result.recognizedWords.isNotEmpty) {
-                print('=== SAVING FINAL RESULT ===');
-                print('Before: "$_transcribedText"');
-                print('Adding: "${result.recognizedWords}"');
+                _log('=== SAVING FINAL RESULT ===');
+                _log('Before: "$_transcribedText"');
+                _log('Adding: "${result.recognizedWords}"');
                 setState(() {
-                  _transcribedText += result.recognizedWords + ' ';
+                  _transcribedText += '${result.recognizedWords} ';
                   _currentWords = '';
                 });
-                print('After: "$_transcribedText"');
-
-                // Save a minimal history entry for this transcription
-                try {
-                  final id = DateTime.now().millisecondsSinceEpoch.toString();
-                  final item = HistoryItem(
-                    id: id,
-                    title: result.recognizedWords,
-                    subtitle: 'Speech transcription',
-                    timestamp: DateTime.now(),
-                    metadata: {'source': 'speech_to_text'},
-                  );
-                  HistoryService().add(item);
-                } catch (e) {
-                  print('Failed saving history: $e');
-                }
+                _log('After: "$_transcribedText"');
 
                 // Restart immediately to keep listening
                 Future.delayed(const Duration(milliseconds: 200), () {
                   if (mounted && widget.isMonitoring && !_speech.isListening) {
-                    print('Restarting to continue listening...');
+                    _log('Restarting to continue listening...');
                     _startListening();
                   }
                 });
@@ -198,15 +186,17 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
         },
         listenFor: const Duration(hours: 24),
         pauseFor: const Duration(hours: 24),
-        partialResults: true,
-        cancelOnError: false,
-        listenMode: ListenMode.dictation,
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+        ),
       );
 
-      print('Listen started successfully');
+      _log('Listen started successfully');
       if (mounted) setState(() => _isListening = true);
     } catch (e) {
-      print('ERROR starting listening: $e');
+      _log('ERROR starting listening: $e');
       if (mounted) {
         _showSnackBar('Error: $e');
       }
@@ -214,16 +204,14 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   }
 
   Future<void> _stopListening() async {
-    print('=== STOP LISTENING CALLED ===');
+    _log('=== STOP LISTENING CALLED ===');
     await _speech.stop();
     if (mounted) {
       setState(() {
         _isListening = false;
-        // Don't save current words here - final result callback already handled it
-        _currentWords = '';
       });
     }
-    print('Stopped successfully');
+    _log('Stopped successfully');
   }
 
   void _clearText() {
@@ -231,6 +219,102 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
       _transcribedText = '';
       _currentWords = '';
     });
+  }
+
+  bool get _hasTranscript {
+    return _transcribedText.trim().isNotEmpty ||
+        _currentWords.trim().isNotEmpty;
+  }
+
+  String get _fullTranscript {
+    final buffer = StringBuffer();
+    final finalized = _transcribedText.trim();
+    final pending = _currentWords.trim();
+    if (finalized.isNotEmpty) {
+      buffer.write(finalized);
+    }
+    if (pending.isNotEmpty) {
+      if (buffer.isNotEmpty) {
+        buffer.write(' ');
+      }
+      buffer.write(pending);
+    }
+    return buffer.toString();
+  }
+
+  String _formatDefaultTitle(int index) {
+    final padded = index.toString().padLeft(4, '0');
+    return 'Text-$padded';
+  }
+
+  Future<void> _saveTranscript() async {
+    if (_isSaving) return;
+    final trimmed = _fullTranscript.trim();
+    if (trimmed.isEmpty) return;
+
+    setState(() => _isSaving = true);
+    final service = HistoryService();
+    final nextIndex = await service.nextTextIndex();
+    if (!mounted) {
+      setState(() => _isSaving = false);
+      return;
+    }
+
+    final defaultTitle = _formatDefaultTitle(nextIndex);
+    final controller = TextEditingController(text: defaultTitle);
+
+    final chosenTitle = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save transcription'),
+        content: TextField(
+          controller: controller,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+            hintText: 'Text-0001',
+          ),
+          maxLength: 40,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+
+    controller.dispose();
+    if (chosenTitle == null) {
+      setState(() => _isSaving = false);
+      return;
+    }
+
+    final title = chosenTitle.isEmpty ? defaultTitle : chosenTitle;
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final item = HistoryItem(
+      id: id,
+      title: title,
+      subtitle: 'Speech transcription',
+      content: trimmed,
+      timestamp: DateTime.now(),
+      metadata: {'source': 'speech_to_text'},
+    );
+
+    await service.add(item);
+    if (!mounted) return;
+    _showSnackBar('Saved to history');
+    setState(() => _isSaving = false);
   }
 
   @override
@@ -424,7 +508,18 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                     ),
                   ),
                   const Spacer(),
-                  if (_transcribedText.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: !_hasTranscript || _isListening || _isSaving
+                        ? null
+                        : _saveTranscript,
+                    icon: const Icon(Icons.save_outlined, size: 18),
+                    label: const Text('Save'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      disabledForegroundColor: Colors.grey,
+                    ),
+                  ),
+                  if (_hasTranscript)
                     IconButton(
                       icon: const Icon(Icons.clear),
                       onPressed: _clearText,
@@ -439,7 +534,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
           SliverFillRemaining(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: (_transcribedText.isEmpty && _currentWords.isEmpty)
+              child: !_hasTranscript
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,

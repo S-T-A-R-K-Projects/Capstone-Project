@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -40,8 +39,47 @@ class _HistoryPageState extends State<HistoryPage> {
     return '${diff.inDays}d ago';
   }
 
+  String _previewContent(HistoryItem item) {
+    final text = item.content.trim();
+    if (text.isEmpty) return item.subtitle;
+    const maxLength = 64;
+    return text.length > maxLength ? '${text.substring(0, maxLength)}…' : text;
+  }
+
   Future<void> _remove(String id) async {
     await _service.remove(id);
+    await _load();
+  }
+
+  Future<void> _rename(HistoryItem item) async {
+    final controller = TextEditingController(text: item.title);
+    final updatedTitle = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename transcription'),
+        content: TextField(
+          controller: controller,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(labelText: 'Name'),
+          maxLength: 40,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    if (updatedTitle == null) return;
+    final title = updatedTitle.isEmpty ? item.title : updatedTitle;
+    await _service.update(item.copyWith(title: title));
     await _load();
   }
 
@@ -52,8 +90,14 @@ class _HistoryPageState extends State<HistoryPage> {
         title: const Text('Clear history?'),
         content: const Text('This will remove all history entries.'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Clear')),
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Clear'),
+          ),
         ],
       ),
     );
@@ -71,7 +115,10 @@ class _HistoryPageState extends State<HistoryPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('History', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        title: Text(
+          'History',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: primary,
         elevation: 0,
         actions: [
@@ -101,7 +148,11 @@ class _HistoryPageState extends State<HistoryPage> {
                   alignment: Alignment.bottomLeft,
                   child: Text(
                     'Recent activity',
-                    style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -111,47 +162,90 @@ class _HistoryPageState extends State<HistoryPage> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _items.isEmpty
-                    ? Center(
-                        child: Text('No history yet', style: GoogleFonts.inter(color: Colors.grey[600])),
-                      )
-                    : ListView.builder(
-                        itemCount: _items.length,
-                        itemBuilder: (context, index) {
-                          final entry = _items[index];
-                          return Dismissible(
-                            key: ValueKey(entry.id),
-                            direction: DismissDirection.endToStart,
-                            onDismissed: (_) => _remove(entry.id),
-                            background: Container(
-                              color: Colors.redAccent,
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              child: const Icon(Icons.delete, color: Colors.white),
+                ? Center(
+                    child: Text(
+                      'No history yet',
+                      style: GoogleFonts.inter(color: Colors.grey[600]),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _items.length,
+                    itemBuilder: (context, index) {
+                      final entry = _items[index];
+                      return Dismissible(
+                        key: ValueKey(entry.id),
+                        direction: DismissDirection.endToStart,
+                        onDismissed: (_) => _remove(entry.id),
+                        background: Container(
+                          color: Colors.redAccent,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        child: ListTile(
+                          leading: const CircleAvatar(child: Icon(Icons.mic)),
+                          title: Text(
+                            entry.title,
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
                             ),
-                            child: ListTile(
-                              leading: const CircleAvatar(child: Icon(Icons.mic)),
-                              title: Text(entry.title, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                              subtitle: Text('${entry.subtitle} • ${_formatTimestamp(entry.timestamp)}', style: GoogleFonts.inter()),
-                              onTap: () async {
-                                // Minimal details sheet
-                                await showModalBottomSheet<void>(
-                                  context: context,
-                                  builder: (c) => Padding(
+                          ),
+                          subtitle: Text(
+                            '${_previewContent(entry)} • ${_formatTimestamp(entry.timestamp)}',
+                            style: GoogleFonts.inter(),
+                          ),
+                          onTap: () async {
+                            await showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              builder: (c) {
+                                return DraggableScrollableSheet(
+                                  expand: false,
+                                  initialChildSize: 0.6,
+                                  minChildSize: 0.4,
+                                  maxChildSize: 0.9,
+                                  builder: (context, scrollController) => Padding(
                                     padding: const EdgeInsets.all(16),
                                     child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text(entry.title, style: theme.textTheme.titleLarge),
+                                        Text(
+                                          entry.title,
+                                          style: theme.textTheme.titleLarge,
+                                        ),
                                         const SizedBox(height: 8),
-                                        Text(entry.subtitle, style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[700])),
-                                        const SizedBox(height: 8),
-                                        Text('Recorded: ${entry.timestamp.toLocal().toString()}', style: theme.textTheme.bodySmall),
+                                        Text(
+                                          'Recorded: ${entry.timestamp.toLocal().toString()}',
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Expanded(
+                                          child: SingleChildScrollView(
+                                            controller: scrollController,
+                                            child: SelectableText(
+                                              entry.content,
+                                              style: theme.textTheme.bodyMedium,
+                                            ),
+                                          ),
+                                        ),
                                         const SizedBox(height: 12),
                                         Row(
-                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
                                           children: [
-                                            TextButton(onPressed: () => Navigator.of(c).pop(), child: const Text('Close')),
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.of(c).pop(),
+                                              child: const Text('Close'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () async {
+                                                Navigator.of(c).pop();
+                                                await _rename(entry);
+                                              },
+                                              child: const Text('Rename'),
+                                            ),
                                             TextButton(
                                               onPressed: () async {
                                                 Navigator.of(c).pop();
@@ -160,16 +254,18 @@ class _HistoryPageState extends State<HistoryPage> {
                                               child: const Text('Delete'),
                                             ),
                                           ],
-                                        )
+                                        ),
                                       ],
                                     ),
                                   ),
                                 );
                               },
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

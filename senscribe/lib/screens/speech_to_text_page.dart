@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -31,20 +33,12 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   bool _isListening = false;
   bool _isSaving = false;
 
-  // Helper method to safely show SnackBar (avoids showing during build)
+  // Helper method to safely show SnackBar
   void _showSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  void _log(String message) {
-    assert(() {
-      // ignore: avoid_print
-      print(message);
-      return true;
-    }());
   }
 
   @override
@@ -57,36 +51,29 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   void didUpdateWidget(SpeechToTextPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isMonitoring != oldWidget.isMonitoring) {
-      if (widget.isMonitoring && !_isListening) {
+      if (widget.isMonitoring) {
         _startListening();
-      } else if (!widget.isMonitoring && _isListening) {
+      } else {
         _stopListening();
       }
     }
   }
 
   Future<void> _initializeSpeech() async {
-    // The speech_to_text plugin handles permission requests internally
-    // initialize() will request permissions and return false if denied
-    // or if speech recognition is not available on the device
     try {
       _isAvailable = await _speech.initialize(
         onStatus: _onSpeechStatus,
         onError: _onSpeechError,
-        debugLogging: true, // Enable debug logging to help diagnose issues
       );
-
-      _log('=== SPEECH INITIALIZE RESULT: $_isAvailable ===');
 
       if (!_isAvailable && mounted) {
         _showSnackBar(
-          'Speech recognition not available. Please check permissions in Settings.',
+          'Speech recognition not available. Please check permissions.',
         );
       }
 
       if (mounted) setState(() {});
     } catch (e) {
-      _log('=== INIT ERROR: $e ===');
       if (mounted) {
         _showSnackBar('Failed to initialize speech: $e');
       }
@@ -94,124 +81,117 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   }
 
   void _onSpeechStatus(String status) {
-    _log('=== SPEECH STATUS: $status ===');
-    _log('Monitoring: ${widget.isMonitoring}, Listening: $_isListening');
+    if (!mounted) return;
 
-    if (status == 'done' || status == 'notListening') {
-      _log('Speech stopped - status: $status');
-      if (mounted) {
+    if (status == 'listening') {
+      setState(() => _isListening = true);
+    } else if (status == 'done' || status == 'notListening') {
+      // Finalize any pending text before restarting
+      if (_currentWords.isNotEmpty) {
         setState(() {
+          if (_transcribedText.isNotEmpty && !_transcribedText.endsWith(' ')) {
+            _transcribedText += ' ';
+          }
+          _transcribedText += _currentWords;
+          _currentWords = '';
           _isListening = false;
         });
-        // Auto-restart if still monitoring
-        if (widget.isMonitoring) {
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted && widget.isMonitoring && !_speech.isListening) {
-              _startListening();
-            }
-          });
-        }
+      } else {
+        setState(() => _isListening = false);
+      }
+
+      // Restart immediately if still monitoring
+      if (widget.isMonitoring) {
+        _startListening();
       }
     }
   }
 
   void _onSpeechError(SpeechRecognitionError error) {
-    _log('=== SPEECH ERROR: ${error.errorMsg} ===');
-    if (mounted) {
-      // error_no_match is normal - just means no speech detected in timeout period
-      if (error.errorMsg == 'error_no_match') {
-        _log('No match error - restarting if still monitoring...');
-        if (widget.isMonitoring) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted && widget.isMonitoring) {
-              _startListening();
-            }
-          });
-        } else {
-          setState(() => _isListening = false);
-        }
-      } else {
-        // Real error - show message and stop
-        setState(() => _isListening = false);
-        _showSnackBar('Speech error: ${error.errorMsg}');
-      }
+    if (!mounted) return;
+
+    setState(() => _isListening = false);
+
+    // Only show error for non-normal errors
+    if (error.errorMsg != 'error_no_match' &&
+        error.errorMsg != 'error_speech_timeout') {
+      _showSnackBar('Speech error: ${error.errorMsg}');
+    }
+
+    // Restart if still monitoring (unless permission error)
+    if (widget.isMonitoring && error.errorMsg != 'error_permission') {
+      _startListening();
     }
   }
 
   Future<void> _startListening() async {
-    _log('=== START LISTENING CALLED ===');
-    _log('Available: $_isAvailable, Already listening: ${_speech.isListening}');
+    if (!_isAvailable || !widget.isMonitoring) return;
 
-    if (!_isAvailable) {
-      _log('ERROR: Speech not available');
-      _showSnackBar('Speech recognition not available');
-      return;
-    }
+    // Don't start if already listening
+    if (_speech.isListening) return;
 
     try {
-      _log('Calling speech.listen...');
       await _speech.listen(
         onResult: (result) {
-          _log(
-            'Got result: ${result.recognizedWords}, final: ${result.finalResult}',
-          );
-          if (mounted) {
-            // Only update current words if not final
-            if (!result.finalResult) {
-              setState(() {
-                _currentWords = result.recognizedWords;
-              });
-            } else {
-              // Final result - save to transcript ONLY ONCE
-              if (widget.isMonitoring && result.recognizedWords.isNotEmpty) {
-                _log('=== SAVING FINAL RESULT ===');
-                _log('Before: "$_transcribedText"');
-                _log('Adding: "${result.recognizedWords}"');
-                setState(() {
-                  _transcribedText += '${result.recognizedWords} ';
-                  _currentWords = '';
-                });
-                _log('After: "$_transcribedText"');
+          if (!mounted) return;
 
-                // Restart immediately to keep listening
-                Future.delayed(const Duration(milliseconds: 200), () {
-                  if (mounted && widget.isMonitoring && !_speech.isListening) {
-                    _log('Restarting to continue listening...');
-                    _startListening();
-                  }
-                });
+          // Always update with latest recognized words
+          // We treat partial results as the "current segment"
+          // and finalize them when the session ends
+          setState(() {
+            _currentWords = result.recognizedWords;
+          });
+
+          // If this is marked as final, move to transcript
+          if (result.finalResult && result.recognizedWords.isNotEmpty) {
+            setState(() {
+              if (_transcribedText.isNotEmpty &&
+                  !_transcribedText.endsWith(' ')) {
+                _transcribedText += ' ';
               }
-            }
+              _transcribedText += result.recognizedWords;
+              _currentWords = '';
+            });
           }
         },
-        listenFor: const Duration(hours: 24),
-        pauseFor: const Duration(hours: 24),
+        listenFor: const Duration(days: 1), // Never stop on our own
+        pauseFor: const Duration(days: 1), // Never finalize on pause
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: false,
           listenMode: ListenMode.dictation,
+          autoPunctuation: true,
         ),
       );
 
-      _log('Listen started successfully');
-      if (mounted) setState(() => _isListening = true);
-    } catch (e) {
-      _log('ERROR starting listening: $e');
       if (mounted) {
-        _showSnackBar('Error: $e');
+        setState(() => _isListening = true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isListening = false);
+        // Retry after a short delay
+        if (widget.isMonitoring) {
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (mounted && widget.isMonitoring) {
+              _startListening();
+            }
+          });
+        }
       }
     }
   }
 
   Future<void> _stopListening() async {
-    _log('=== STOP LISTENING CALLED ===');
-    await _speech.stop();
-    if (mounted) {
-      setState(() {
-        _isListening = false;
-      });
+    try {
+      await _speech.stop();
+    } catch (e) {
+      // Ignore stop errors
     }
-    _log('Stopped successfully');
+
+    if (mounted) {
+      setState(() => _isListening = false);
+    }
   }
 
   void _clearText() {
@@ -234,17 +214,14 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
       buffer.write(finalized);
     }
     if (pending.isNotEmpty) {
-      if (buffer.isNotEmpty) {
-        buffer.write(' ');
-      }
+      if (buffer.isNotEmpty) buffer.write(' ');
       buffer.write(pending);
     }
     return buffer.toString();
   }
 
   String _formatDefaultTitle(int index) {
-    final padded = index.toString().padLeft(4, '0');
-    return 'Text-$padded';
+    return 'Text-${index.toString().padLeft(4, '0')}';
   }
 
   Future<void> _saveTranscript() async {
@@ -253,6 +230,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
     if (trimmed.isEmpty) return;
 
     setState(() => _isSaving = true);
+
     final service = HistoryService();
     final nextIndex = await service.nextTextIndex();
     if (!mounted) {
@@ -425,7 +403,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                                           ),
                                           Text(
                                             widget.isMonitoring
-                                                ? 'Speak now...'
+                                                ? (_isListening
+                                                      ? 'Listening...'
+                                                      : 'Preparing...')
                                                 : 'Tap to start monitoring',
                                             style: Theme.of(context)
                                                 .textTheme
@@ -593,7 +573,12 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                                   ),
                                 if (_currentWords.isNotEmpty)
                                   TextSpan(
-                                    text: _currentWords,
+                                    text:
+                                        _currentWords.isNotEmpty &&
+                                            _transcribedText.isNotEmpty &&
+                                            !_transcribedText.endsWith(' ')
+                                        ? ' $_currentWords'
+                                        : _currentWords,
                                     style: Theme.of(context).textTheme.bodyLarge
                                         ?.copyWith(
                                           height: 1.5,

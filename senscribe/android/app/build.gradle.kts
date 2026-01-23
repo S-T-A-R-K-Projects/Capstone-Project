@@ -24,7 +24,7 @@ android {
         applicationId = "com.example.senscribe"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = maxOf(24, flutter.minSdkVersion)
+        minSdk = 31 // Leap SDK requires minSdk 31
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -48,14 +48,9 @@ flutter {
 dependencies {
     // Audio classification
     implementation("com.google.mediapipe:tasks-audio:0.10.14")
-    
-    // ONNX Runtime for LLM inference
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:latest.release")
-    implementation(files("libs/onnxruntime-genai-android-0.11.4.aar"))
-    
-    // For SAF (Storage Access Framework) file operations
-    implementation("androidx.documentfile:documentfile:1.0.1")
-    
+
     // Coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+
 }

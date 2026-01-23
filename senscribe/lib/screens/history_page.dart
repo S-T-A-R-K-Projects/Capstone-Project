@@ -292,17 +292,23 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
   String _streamedSummary = '';
   StreamSubscription<String>? _tokenSubscription;
 
+  // Editing state
+  bool _isEditing = false;
+  late TextEditingController _transcriptController;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _currentItem = widget.item;
+    _transcriptController = TextEditingController(text: _currentItem.content);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _tokenSubscription?.cancel();
+    _transcriptController.dispose();
     super.dispose();
   }
 
@@ -380,7 +386,7 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
         title: const Text('AI Model Not Configured'),
         content: const Text(
           'To use text summarization, you need to configure the AI model first.\n\n'
-          'This requires downloading the Phi-3.5-Mini model (~1.8 GB) and selecting its folder location in settings.',
+          'This requires downloading the Qwen3 1.7B (GGUF) model (~1.2 GB) and selecting its folder location in settings.',
         ),
         actions: [
           TextButton(
@@ -415,13 +421,45 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
     );
   }
 
+  Future<void> _saveTranscript() async {
+    final newContent = _transcriptController.text.trim();
+    if (newContent.isEmpty) return;
+
+    try {
+      final updatedItem = _currentItem.copyWith(content: newContent);
+      await _historyService.update(updatedItem);
+
+      if (mounted) {
+        setState(() {
+          _currentItem = updatedItem;
+          _isEditing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transcription updated'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      _showError('Failed to save changes: $e');
+    }
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _isEditing = false;
+      _transcriptController.text = _currentItem.content;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.75,
+      initialChildSize: 0.85,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (context, scrollController) => Container(
@@ -470,19 +508,28 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                       ],
                     ),
                   ),
+
+                  // Action Buttons
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Edit Title Button
                       IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        icon: const Icon(
+                          Icons.drive_file_rename_outline,
+                          size: 20,
+                        ),
                         onPressed: widget.onRename,
-                        tooltip: 'Rename',
+                        tooltip: 'Rename Title',
                       ),
+
+                      // Delete Button
                       IconButton(
                         icon: const Icon(Icons.delete_outline, size: 20),
                         onPressed: widget.onDelete,
                         tooltip: 'Delete',
                       ),
+
                       IconButton(
                         icon: const Icon(Icons.close),
                         onPressed: () => Navigator.pop(context),
@@ -544,6 +591,46 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
+          // Edit Controls Header (Only visible in Transcript tab)
+          if (!_isEditing)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _isEditing = true;
+                    // Ensure controller is synced
+                    _transcriptController.text = _currentItem.content;
+                  });
+                },
+                icon: const Icon(Icons.edit_note, size: 18),
+                label: const Text("Edit Text"),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+
+          if (_isEditing)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _cancelEdit,
+                    child: const Text("Cancel"),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _saveTranscript,
+                    icon: const Icon(Icons.save, size: 16),
+                    label: const Text("Save"),
+                  ),
+                ],
+              ),
+            ),
+
           Expanded(
             child: Container(
               width: double.infinity,
@@ -557,18 +644,34 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                   color: theme.colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
-              child: SingleChildScrollView(
-                controller: scrollController,
-                child: SelectableText(
-                  _currentItem.content,
-                  style: GoogleFonts.inter(fontSize: 15, height: 1.6),
-                ),
-              ),
+              child: _isEditing
+                  ? TextField(
+                      controller: _transcriptController,
+                      maxLines: null,
+                      expands: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: 'Transcript text...',
+                      ),
+                      style: GoogleFonts.inter(fontSize: 15, height: 1.6),
+                    )
+                  : SingleChildScrollView(
+                      controller: scrollController,
+                      child: SelectableText(
+                        _currentItem.content,
+                        style: GoogleFonts.inter(fontSize: 15, height: 1.6),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 12),
-          _buildSummarizeButton(theme),
-          const SizedBox(height: 16),
+
+          // Hide summarize button while editing to avoid confusion
+          if (!_isEditing) ...[
+            _buildSummarizeButton(theme),
+            const SizedBox(height: 16),
+          ],
         ],
       ),
     );

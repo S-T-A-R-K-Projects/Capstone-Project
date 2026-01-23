@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'llm_service.dart';
+import 'package:flutter_leap_sdk/flutter_leap_sdk.dart';
 
-/// High-level service for text summarization
-/// Handles model lifecycle (load -> summarize -> unload) automatically
+import 'leap_service.dart';
+import '../models/llm_model.dart';
+
+/// High-level service for text summarization using Liquid AI Leap.
+/// Updated to use native managed models ONLY.
 class SummarizationService {
-  static const _modelPathKey = 'llm_model_path';
+  static const _modelNameKey = 'llm_model_name_leap';
 
   // Singleton pattern
   static final SummarizationService _instance =
@@ -14,276 +17,146 @@ class SummarizationService {
   factory SummarizationService() => _instance;
   SummarizationService._internal();
 
-  final LLMService _llmService = LLMService();
+  final LeapService _leapService = LeapService();
 
-  /// Get stored model path
-  Future<String?> getModelPath() async {
+  /// Get currently selected model name
+  Future<String> getSelectedModelName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_modelPathKey);
+    return prefs.getString(_modelNameKey) ?? LLMModel.defaultModel.name;
   }
 
-  /// Save model path
-  Future<void> setModelPath(String path) async {
+  /// Set selected model name
+  Future<void> setSelectedModelName(String name) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_modelPathKey, path);
+    await prefs.setString(_modelNameKey, name);
   }
 
-  /// Clear stored model path
-  Future<void> clearModelPath() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_modelPathKey);
+  /// Get currently active model object
+  Future<LLMModel> getActiveModel() async {
+    final name = await getSelectedModelName();
+    return LLMModel.getModelByName(name) ?? LLMModel.defaultModel;
   }
 
-  /// Check if model is configured
-  Future<bool> isModelConfigured() async {
-    final path = await getModelPath();
-    return path != null && path.isNotEmpty;
+  /// Check if model is configured (Using SDK)
+  Future<bool> isModelConfigured([LLMModel? model]) async {
+    final m = model ?? await getActiveModel();
+    // Use SDK to check if managed model exists
+    return await FlutterLeapSdkService.checkModelExists(m.name);
   }
 
-  /// Get the token stream for real-time updates
-  Stream<String> get tokenStream => _llmService.tokenStream;
+  // Maximum characters for input
+  static const int _maxInputChars = 3000;
 
-  // Maximum characters for input to stay within model's context window
-  // Reduced to ~200 tokens (~800 chars) for mobile memory constraints
-  static const int _maxInputChars = 800;
-
-  /// Truncate transcript if too long to prevent context overflow
+  /// Truncate transcript if too long
   String _truncateIfNeeded(String transcript) {
     if (transcript.length <= _maxInputChars) {
       return transcript;
     }
-    // Truncate and add indicator
     final truncated = transcript.substring(0, _maxInputChars);
-    // Try to cut at a sentence boundary
     final lastPeriod = truncated.lastIndexOf('.');
     if (lastPeriod > _maxInputChars * 0.8) {
-      return '${truncated.substring(0, lastPeriod + 1)} [Text truncated for length]';
+      return '${truncated.substring(0, lastPeriod + 1)} [Text truncated]';
     }
-    return '$truncated... [Text truncated for length]';
+    return '$truncated... [Text truncated]';
   }
 
-  /// Build the summarization prompt with proper formatting for Phi-3.5-Mini
-  String _buildSummarizationPrompt(String transcript) {
-    final processedTranscript = _truncateIfNeeded(transcript);
-    debugPrint(
-      'SummarizationService: Original transcript length: ${transcript.length} chars',
-    );
-    debugPrint(
-      'SummarizationService: Processed transcript length: ${processedTranscript.length} chars',
-    );
-    debugPrint(
-      'SummarizationService: Was truncated: ${transcript.length != processedTranscript.length}',
-    );
-    return '''<|system|>
-You are a helpful assistant that creates medium-length summaries in 4-6 sentences.
-Capture all key points concisely and clearly. Focus on the most important information.
-Write complete sentences and do not stop mid-sentence.
-<|end|>
-<|user|>
-Summarize the following text in 4-6 complete sentences:
-
-$processedTranscript
-<|end|>
-<|assistant|>
-''';
-  }
-
-  /// Summarize text with automatic model load/unload
-  ///
-  /// This method:
-  /// 1. Loads the model from the configured path
-  /// 2. Runs inference with the summarization prompt
-  /// 3. Unloads the model immediately after completion
-  ///
-  /// Returns the summary or throws an exception if something fails.
-  ///
-  /// Listen to [tokenStream] to receive real-time token updates.
-  Future<String> summarize(String transcript) async {
-    // Check if model is configured
-    final modelPath = await getModelPath();
-    if (modelPath == null || modelPath.isEmpty) {
-      throw SummarizationException(
-        'Model not configured. Please configure the AI model in settings.',
-      );
-    }
+  /// Download Model using Leap SDK Native Download
+  Future<void> downloadModelFiles(
+    LLMModel model, {
+    required Function(double) onProgress,
+    required Function(String) onStatus,
+  }) async {
+    onStatus('Initializing Download...');
 
     try {
-      // Load the model
-      debugPrint('SummarizationService: Loading model from: $modelPath');
-      final loaded = await _llmService.loadModel(modelPath);
-      debugPrint('SummarizationService: Model loaded: $loaded');
-      if (!loaded) {
-        throw SummarizationException(
-          'Failed to load the AI model. Please check if the model files are valid.',
-        );
-      }
-
-      // Build the prompt
-      final prompt = _buildSummarizationPrompt(transcript);
-      debugPrint(
-        'SummarizationService: Total prompt length: ${prompt.length} chars',
-      );
-
-      // Collect streamed tokens
-      String summary = '';
-      final completer = Completer<void>();
-      int tokenCount = 0;
-
-      late StreamSubscription<String> subscription;
-      subscription = _llmService.tokenStream.listen(
-        (token) {
-          summary += token;
-          tokenCount++;
-          // Log every 10 tokens
-          if (tokenCount <= 5 || tokenCount % 20 == 0) {
-            debugPrint(
-              'SummarizationService: Token #$tokenCount received, summary length: ${summary.length}',
-            );
-          }
-        },
-        onError: (error) {
-          debugPrint('SummarizationService: Stream error: $error');
-          if (!completer.isCompleted) {
-            completer.completeError(error);
-          }
+      // Use Native SDK Download
+      onStatus('Downloading ${model.name}...');
+      await FlutterLeapSdkService.downloadModel(
+        modelName: model.name,
+        onProgress: (progress) {
+          // progress.percentage is 0-100
+          final percent = progress.percentage / 100.0;
+          onProgress(percent);
         },
       );
 
-      // Run inference with parameters optimized for summarization
-      // Note: max_length in ONNX GenAI is TOTAL sequence length (input + output)
-      // With ~500 input tokens, we need at least 800+ for meaningful output
-      // Let native code handle max_length (default 1000)
-      debugPrint('SummarizationService: Starting summarization...');
-      final success = await _llmService.summarize(
-        prompt,
-        params: {}, // Let native code use default max_length
-      );
-      debugPrint(
-        'SummarizationService: Summarization finished. Success: $success, Total tokens: $tokenCount',
-      );
-      debugPrint(
-        'SummarizationService: Final summary length: ${summary.length} chars',
-      );
-
-      // Cancel subscription
-      await subscription.cancel();
-
-      // Always unload the model immediately after use
-      await _llmService.unloadModel();
-
-      if (!success) {
-        throw SummarizationException('Summarization failed. Please try again.');
-      }
-
-      return summary.trim();
+      onStatus('Model Downloaded.');
     } catch (e) {
-      // Ensure model is unloaded even on error
-      await _llmService.unloadModel();
-
-      if (e is SummarizationException) {
-        rethrow;
-      }
-      throw SummarizationException(
-        'An error occurred during summarization: $e',
-      );
+      debugPrint('SummarizationService: Download failed: $e');
+      throw SummarizationException('Failed to download model: $e');
     }
   }
 
-  /// Summarize text with streaming callback
-  ///
-  /// [onToken] is called for each generated token (for real-time UI updates)
-  /// Returns the complete summary when done.
+  // Expose loadModel for UI reloading
+  Future<void> loadModel(String modelName) async {
+    // Just pass the model name to LeapService (which wraps SDK load)
+    await _leapService.loadModel(modelName);
+  }
+
+  /// Unload the currently loaded model to free resources
+  Future<void> unloadModel() async {
+    debugPrint('SummarizationService: Unloading model...');
+    await _leapService.dispose();
+  }
+
+  /// Summarize text using Leap service (streaming)
   Future<String> summarizeWithCallback(
     String transcript, {
     required void Function(String token) onToken,
   }) async {
     // Check if model is configured
-    final modelPath = await getModelPath();
-    if (modelPath == null || modelPath.isEmpty) {
+    final name = await getSelectedModelName();
+
+    debugPrint('SummarizationService: Loading managed model: $name');
+
+    // Ensure model is downloaded
+    final exists = await FlutterLeapSdkService.checkModelExists(name);
+    if (!exists) {
       throw SummarizationException(
-        'Model not configured. Please configure the AI model in settings.',
-      );
+          'Model not found on device. Please download it in Settings.');
     }
 
     try {
-      // Load the model
-      debugPrint(
-        'SummarizationService: [Callback] Loading model from: $modelPath',
-      );
-      final loaded = await _llmService.loadModel(modelPath);
-      debugPrint('SummarizationService: [Callback] Model loaded: $loaded');
-      if (!loaded) {
-        throw SummarizationException(
-          'Failed to load the AI model. Please check if the model files are valid.',
-        );
-      }
+      // 1. Load Model (SDK Native)
+      await _leapService.loadModel(name);
 
-      // Build the prompt
-      final prompt = _buildSummarizationPrompt(transcript);
-      debugPrint(
-        'SummarizationService: [Callback] Total prompt length: ${prompt.length} chars',
-      );
+      final processedTranscript = _truncateIfNeeded(transcript);
+      String fullResponse = '';
 
-      // Collect streamed tokens with callback
-      String summary = '';
-      int tokenCount = 0;
+      // 2. Generate
+      final stream = _leapService.generateStream(processedTranscript);
+      final completer = Completer<String>();
 
-      late StreamSubscription<String> subscription;
-      subscription = _llmService.tokenStream.listen((token) {
-        summary += token;
-        tokenCount++;
-        onToken(token);
-        // Log every 10 tokens
-        if (tokenCount <= 5 || tokenCount % 20 == 0) {
-          debugPrint(
-            'SummarizationService: [Callback] Token #$tokenCount, summary length: ${summary.length}',
-          );
-        }
-      });
-
-      // Run inference - let native code handle max_length
-      debugPrint('SummarizationService: [Callback] Starting summarization...');
-      final success = await _llmService.summarize(
-        prompt,
-        params: {}, // Let native code use default max_length
-      );
-      debugPrint(
-        'SummarizationService: [Callback] Finished. Success: $success, Total tokens: $tokenCount',
-      );
-      debugPrint(
-        'SummarizationService: [Callback] Final summary: "${summary.substring(0, summary.length > 100 ? 100 : summary.length)}..."',
+      stream.listen(
+        (token) {
+          fullResponse += token;
+          onToken(token);
+        },
+        onError: (e) {
+          if (!completer.isCompleted) completer.completeError(e);
+        },
+        onDone: () {
+          if (!completer.isCompleted) completer.complete(fullResponse);
+        },
       );
 
-      // Cancel subscription
-      await subscription.cancel();
+      final result = await completer.future;
 
-      // Always unload the model immediately after use
-      await _llmService.unloadModel();
+      // 3. Unload Model (Cleanup)
+      await unloadModel();
 
-      if (!success) {
-        throw SummarizationException('Summarization failed. Please try again.');
-      }
-
-      return summary.trim();
+      return result;
     } catch (e) {
-      // Ensure model is unloaded even on error
-      await _llmService.unloadModel();
-
-      if (e is SummarizationException) {
-        rethrow;
-      }
-      throw SummarizationException(
-        'An error occurred during summarization: $e',
-      );
+      debugPrint('SummarizationService: Error: $e');
+      await unloadModel();
+      throw SummarizationException('Summarization failed: $e');
     }
   }
 }
 
-/// Exception thrown when summarization fails
 class SummarizationException implements Exception {
   final String message;
   SummarizationException(this.message);
-
   @override
   String toString() => message;
 }

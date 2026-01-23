@@ -13,6 +13,7 @@
 .history
 .svn/
 /tampa
+Agents.md
 
 # As packages are no longer pinned, we use a lockfile for testing locally.
 # When unpinning packages, Using lockfiles ensures that failures in PRs are
@@ -164,3 +165,5 @@ app.*.symbols
 .python-version
 .gclient_previous_custom_vars
 .gclient_previous_sync_commits
+senscribe/lib/services/summarization_service.dart
+.vscode/settings.json

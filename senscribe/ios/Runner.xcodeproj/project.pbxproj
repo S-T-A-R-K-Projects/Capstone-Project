@@ -17,9 +17,8 @@
 		C305B4872EAAF038008583BE /* AudioClassificationPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C305B4862EAAF038008583BE /* AudioClassificationPlugin.swift */; };
 		C305B4892EAAF067008583BE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C305B4882EAAF067008583BE /* AppDelegate.swift */; };
 		E2D69E4342F9FD3FF9D3B010 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D13C5FD2D829BF11A3C501E2 /* Pods_Runner.framework */; };
-		GENAI0001000000000000001 /* GenAIWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = GENAI0002000000000000002 /* GenAIWrapper.mm */; };
-		GENAI0003000000000000003 /* onnxruntime-genai.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = GENAI0004000000000000004 /* onnxruntime-genai.xcframework */; };
-		GENAI0005000000000000005 /* onnxruntime-genai.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = GENAI0004000000000000004 /* onnxruntime-genai.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+
+
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,7 +38,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				GENAI0005000000000000005 /* onnxruntime-genai.xcframework in Embed Frameworks */,
+
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -71,9 +70,7 @@
 		C305B4862EAAF038008583BE /* AudioClassificationPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioClassificationPlugin.swift; sourceTree = "<group>"; };
 		C305B4882EAAF067008583BE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		D13C5FD2D829BF11A3C501E2 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		GENAI0006000000000000006 /* GenAIWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GenAIWrapper.h; sourceTree = "<group>"; };
-		GENAI0002000000000000002 /* GenAIWrapper.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = GenAIWrapper.mm; sourceTree = "<group>"; };
-		GENAI0004000000000000004 /* onnxruntime-genai.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "onnxruntime-genai.xcframework"; sourceTree = "<group>"; };
+
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,7 +87,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E2D69E4342F9FD3FF9D3B010 /* Pods_Runner.framework in Frameworks */,
-				GENAI0003000000000000003 /* onnxruntime-genai.xcframework in Frameworks */,
+
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -141,7 +138,7 @@
 		97C146E51CF9000F007C117D = {
 			isa = PBXGroup;
 			children = (
-				GENAI0004000000000000004 /* onnxruntime-genai.xcframework */,
+
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
@@ -169,8 +166,7 @@
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
 				C305B4882EAAF067008583BE /* AppDelegate.swift */,
 				97C147021CF9000F007C117D /* Info.plist */,
-				GENAI0006000000000000006 /* GenAIWrapper.h */,
-				GENAI0002000000000000002 /* GenAIWrapper.mm */,
+
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
@@ -411,7 +407,7 @@
 				C305B4872EAAF038008583BE /* AudioClassificationPlugin.swift in Sources */,
 				C305B4892EAAF067008583BE /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
-				GENAI0001000000000000001 /* GenAIWrapper.mm in Sources */,
+
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -10,6 +10,9 @@ import '../screens/settings_page.dart';
 import '../screens/speech_to_text_page.dart';
 import '../screens/text_to_speech_page.dart';
 
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
+
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
 
@@ -17,15 +20,16 @@ class MainNavigationPage extends StatefulWidget {
   State<MainNavigationPage> createState() => _MainNavigationPageState();
 }
 
-class _MainNavigationPageState extends State<MainNavigationPage> with TickerProviderStateMixin {
+class _MainNavigationPageState extends State<MainNavigationPage>
+    with TickerProviderStateMixin {
   int _selectedIndex = 0;
   late AnimationController _fabAnimationController;
-  
+
   // Separate monitoring states for each feature
   bool _isSoundFeedMonitoring = false;
   bool _isSpeechToTextMonitoring = false;
   bool _isTextToSpeechMonitoring = false;
-  
+
   late AnimationController _soundFeedPulseController;
   late AnimationController _speechToTextPulseController;
   late AnimationController _textToSpeechPulseController;
@@ -33,6 +37,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
   @override
   void initState() {
     super.initState();
+    _requestStoragePermission();
     _fabAnimationController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -49,6 +54,18 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
+  }
+
+  Future<void> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      if (await Permission.manageExternalStorage.isDenied) {
+        await Permission.manageExternalStorage.request();
+      }
+      // Fail-safe for older Android versions or if manage is not applicable (though manifest says manage)
+      if (await Permission.storage.isDenied) {
+        await Permission.storage.request();
+      }
+    }
   }
 
   @override
@@ -139,72 +156,76 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
         child: SlideAnimation(
           horizontalOffset: 50.0,
           child: FadeInAnimation(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: _pages,
-            ),
+            child: IndexedStack(index: _selectedIndex, children: _pages),
           ),
         ),
       ),
-      floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 4 || _selectedIndex == 5) ? 
-        SpeedDial(
-          icon: _selectedIndex == 0 ? Icons.add_rounded : Icons.home_rounded,
-          activeIcon: Icons.close_rounded,
-          backgroundColor: Theme.of(context).colorScheme.secondary,
-          foregroundColor: Colors.white,
-          activeForegroundColor: Colors.white,
-          activeBackgroundColor: Theme.of(context).colorScheme.secondary,
-          buttonSize: const Size(56.0, 56.0),
-          visible: true,
-          closeManually: false,
-          curve: Curves.bounceIn,
-          overlayColor: Colors.black,
-          overlayOpacity: 0.5,
-          elevation: 8.0,
-          shape: const CircleBorder(),
-          children: [
-            if (_selectedIndex == 4 || _selectedIndex == 5)
-              SpeedDialChild(
-                child: const Icon(Icons.hearing_rounded),
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
-                label: 'R-T Sound Feed',
-                labelStyle: const TextStyle(fontSize: 16.0),
-                onTap: () {
-                  setState(() {
-                    _selectedIndex = 0;
-                  });
-                },
-              ),
-            SpeedDialChild(
-              child: const Icon(Icons.mic_rounded),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-              label: 'Speech to Text',
-              labelStyle: const TextStyle(fontSize: 16.0),
-              onTap: () {
-                setState(() {
-                  _selectedIndex = 4;
-                });
-              },
-            ),
-            SpeedDialChild(
-              child: const Icon(Icons.volume_up_rounded),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-              label: 'Text to Speech',
-              labelStyle: const TextStyle(fontSize: 16.0),
-              onTap: () {
-                setState(() {
-                  _selectedIndex = 5;
-                });
-              },
-            ),
-          ],
-        ).animate()
-          .scale(duration: 300.ms)
-          .then()
-          .shimmer(duration: 1000.ms) : null,
+      floatingActionButton:
+          (_selectedIndex == 0 || _selectedIndex == 4 || _selectedIndex == 5)
+          ? SpeedDial(
+                  icon: _selectedIndex == 0
+                      ? Icons.add_rounded
+                      : Icons.home_rounded,
+                  activeIcon: Icons.close_rounded,
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                  foregroundColor: Colors.white,
+                  activeForegroundColor: Colors.white,
+                  activeBackgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.secondary,
+                  buttonSize: const Size(56.0, 56.0),
+                  visible: true,
+                  closeManually: false,
+                  curve: Curves.bounceIn,
+                  overlayColor: Colors.black,
+                  overlayOpacity: 0.5,
+                  elevation: 8.0,
+                  shape: const CircleBorder(),
+                  children: [
+                    if (_selectedIndex == 4 || _selectedIndex == 5)
+                      SpeedDialChild(
+                        child: const Icon(Icons.hearing_rounded),
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        label: 'R-T Sound Feed',
+                        labelStyle: const TextStyle(fontSize: 16.0),
+                        onTap: () {
+                          setState(() {
+                            _selectedIndex = 0;
+                          });
+                        },
+                      ),
+                    SpeedDialChild(
+                      child: const Icon(Icons.mic_rounded),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      label: 'Speech to Text',
+                      labelStyle: const TextStyle(fontSize: 16.0),
+                      onTap: () {
+                        setState(() {
+                          _selectedIndex = 4;
+                        });
+                      },
+                    ),
+                    SpeedDialChild(
+                      child: const Icon(Icons.volume_up_rounded),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      label: 'Text to Speech',
+                      labelStyle: const TextStyle(fontSize: 16.0),
+                      onTap: () {
+                        setState(() {
+                          _selectedIndex = 5;
+                        });
+                      },
+                    ),
+                  ],
+                )
+                .animate()
+                .scale(duration: 300.ms)
+                .then()
+                .shimmer(duration: 1000.ms)
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: AnimatedBottomNavigationBar(
         icons: iconList,

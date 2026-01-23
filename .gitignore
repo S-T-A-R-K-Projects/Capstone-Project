@@ -165,5 +165,4 @@ app.*.symbols
 .python-version
 .gclient_previous_custom_vars
 .gclient_previous_sync_commits
-senscribe/lib/services/summarization_service.dart
 .vscode/settings.json

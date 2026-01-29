@@ -54,6 +54,7 @@ dependencies:
   url_launcher: ^6.2.5
   dio: ^5.9.0
   path_provider: ^2.1.5
+  uuid: ^4.0.0
 
 dev_dependencies:
   flutter_test:

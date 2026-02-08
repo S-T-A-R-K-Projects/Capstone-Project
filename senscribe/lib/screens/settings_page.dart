@@ -131,7 +131,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'Experimental (P3)',
+                              'Functions',
                               style: GoogleFonts.inter(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
@@ -142,7 +142,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Summarization, Voice-to-Text, Text-to-Speech (beta)',
+                          'Speech-to-Text, Text-to-Speech',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             color: Theme.of(context).textTheme.bodySmall?.color,

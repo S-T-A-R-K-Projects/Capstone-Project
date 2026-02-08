@@ -118,7 +118,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
   ];
 
   final iconList = <IconData>[
-    Icons.home_rounded,
+    Icons.hearing_rounded,
     Icons.history_rounded,
     Icons.notifications_rounded,
     Icons.settings_rounded,

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:vibration/vibration.dart';
+import '../services/trigger_word_service.dart';
+import '../models/trigger_alert.dart';
+import '../widgets/trigger_alert_dialog.dart';
 
 class TextToSpeechPage extends StatefulWidget {
   final bool isMonitoring;
@@ -20,6 +24,7 @@ class TextToSpeechPage extends StatefulWidget {
 
 class _TextToSpeechPageState extends State<TextToSpeechPage> {
   final TextEditingController _textController = TextEditingController();
+  final TriggerWordService _triggerWordService = TriggerWordService();
 
   @override
   void dispose() {
@@ -31,6 +36,64 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
     setState(() {
       _textController.clear();
     });
+  }
+
+  Future<void> _checkTriggerWordsAndSpeak() async {
+    if (_textController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter text to speak')),
+      );
+      return;
+    }
+
+    // Check for trigger words
+    final detectedTriggers = 
+        await _triggerWordService.checkForTriggers(_textController.text);
+
+    // If triggers found, create alerts and notify user
+    if (detectedTriggers.isNotEmpty) {
+      // Create alerts for each trigger
+      for (final trigger in detectedTriggers) {
+        await _triggerWordService.addAlert(
+          TriggerAlert(
+            triggerWord: trigger,
+            detectedText: _textController.text,
+            source: 'text_to_speech',
+          ),
+        );
+      }
+
+      // Haptic feedback - vibrate with pattern for accessibility
+      await _vibrateForTrigger();
+
+      // Show prominent visual notification dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => TriggerAlertDialog(
+            detectedTriggers: detectedTriggers,
+            detectedText: _textController.text,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _vibrateForTrigger() async {
+    final hasVibrator = await Vibration.hasVibrator();
+    if (hasVibrator == true) {
+      // Vibrate with pattern: 500ms on, 200ms off, 500ms on
+      // This creates a distinctive double vibration for alarm/alert
+      await Vibration.vibrate(
+        duration: 500,
+        intensities: [0, 255],
+      );
+      await Future.delayed(const Duration(milliseconds: 200));
+      await Vibration.vibrate(
+        duration: 500,
+        intensities: [0, 255],
+      );
+    }
   }
 
   @override
@@ -253,6 +316,29 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                             ),
                           ),
                           textAlignVertical: TextAlignVertical.top,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _checkTriggerWordsAndSpeak,
+                          icon: const Icon(Icons.volume_up_rounded),
+                          label: Text(
+                            'Speak & Check Triggers',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
                       ),
                     ],

@@ -8,6 +8,8 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 
 import '../services/history_service.dart';
 import '../models/history_item.dart';
+import '../services/trigger_word_service.dart';
+import '../models/trigger_alert.dart';
 
 class SpeechToTextPage extends StatefulWidget {
   final bool isMonitoring;
@@ -32,6 +34,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   bool _isAvailable = false;
   bool _isListening = false;
   bool _isSaving = false;
+  final TriggerWordService _triggerWordService = TriggerWordService();
 
   // Helper method to safely show SnackBar
   void _showSnackBar(String message) {
@@ -152,6 +155,35 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
               _transcribedText += result.recognizedWords;
               _currentWords = '';
             });
+
+            // Check for trigger words in the finalized segment
+            () async {
+              try {
+                final detected = await _triggerWordService.checkForTriggers(result.recognizedWords);
+                if (detected.isNotEmpty) {
+                  for (final trigger in detected) {
+                    await _triggerWordService.addAlert(
+                      TriggerAlert(
+                        triggerWord: trigger,
+                        detectedText: result.recognizedWords,
+                        source: 'speech_to_text',
+                      ),
+                    );
+                  }
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Trigger detected: ${detected.join(', ')}'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
+                }
+              } catch (_) {
+                // Ignore trigger-check errors silently
+              }
+            }();
           }
         },
         listenFor: const Duration(days: 1), // Never stop on our own

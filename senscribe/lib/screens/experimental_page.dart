@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -8,7 +9,16 @@ class ExperimentalPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Functions', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: AdaptiveButton.icon(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () => Navigator.of(context).pop(),
+            style: AdaptiveButtonStyle.glass,
+          ),
+        ),
+        title: Text('Functions',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
@@ -56,12 +66,12 @@ class ExperimentalPage extends StatelessWidget {
               'STT Features',
               Icons.check_circle_rounded,
               '• Start/stop recording manually\n'
-              '• Auto-stop on silence (configurable)\n'
-              '• Display live transcription as you speak\n'
-              '• Show confidence percentage for accuracy\n'
-              '• Copy text to clipboard\n'
-              '• Share transcription\n'
-              '• Save to history',
+                  '• Auto-stop on silence (configurable)\n'
+                  '• Display live transcription as you speak\n'
+                  '• Show confidence percentage for accuracy\n'
+                  '• Copy text to clipboard\n'
+                  '• Share transcription\n'
+                  '• Save to history',
             ),
             const SizedBox(height: 16),
 
@@ -71,11 +81,11 @@ class ExperimentalPage extends StatelessWidget {
               'STT Configuration',
               Icons.settings_rounded,
               '• Select input language\n'
-              '• Adjust silence timeout (how long to wait)\n'
-              '• Toggle partial result display\n'
-              '• Enable/disable sound effects\n'
-              '• Choose output format (text only, with timestamps)\n'
-              '• Microphone input selection',
+                  '• Adjust silence timeout (how long to wait)\n'
+                  '• Toggle partial result display\n'
+                  '• Enable/disable sound effects\n'
+                  '• Choose output format (text only, with timestamps)\n'
+                  '• Microphone input selection',
             ),
             const SizedBox(height: 16),
 
@@ -99,12 +109,12 @@ class ExperimentalPage extends StatelessWidget {
               'TTS Features',
               Icons.check_circle_rounded,
               '• Paste or type text to speak\n'
-              '• Play/pause/stop audio playback\n'
-              '• Display text with word highlighting\n'
-              '• Speed control (slow, normal, fast)\n'
-              '• Save audio recording\n'
-              '• Share audio as file\n'
-              '• Multiple voice options to choose from',
+                  '• Play/pause/stop audio playback\n'
+                  '• Display text with word highlighting\n'
+                  '• Speed control (slow, normal, fast)\n'
+                  '• Save audio recording\n'
+                  '• Share audio as file\n'
+                  '• Multiple voice options to choose from',
             ),
             const SizedBox(height: 16),
 
@@ -114,11 +124,11 @@ class ExperimentalPage extends StatelessWidget {
               'TTS Configuration',
               Icons.settings_rounded,
               '• Select voice (male, female, accent)\n'
-              '• Adjust speech rate (0.5x to 2x)\n'
-              '• Pitch control (high/low)\n'
-              '• Volume adjustment\n'
-              '• Language selection\n'
-              '• Phoneme correction for proper pronunciation',
+                  '• Adjust speech rate (0.5x to 2x)\n'
+                  '• Pitch control (high/low)\n'
+                  '• Volume adjustment\n'
+                  '• Language selection\n'
+                  '• Phoneme correction for proper pronunciation',
             ),
             const SizedBox(height: 16),
 
@@ -157,11 +167,11 @@ class ExperimentalPage extends StatelessWidget {
               'Performance & Accuracy',
               Icons.speed_rounded,
               '• Fast real-time processing\n'
-              '• Offline functionality (no internet required)\n'
-              '• Low latency speech recognition\n'
-              '• Clear, natural sounding speech\n'
-              '• Handles background noise well\n'
-              '• Optimized for mobile devices',
+                  '• Offline functionality (no internet required)\n'
+                  '• Low latency speech recognition\n'
+                  '• Clear, natural sounding speech\n'
+                  '• Handles background noise well\n'
+                  '• Optimized for mobile devices',
             ),
             const SizedBox(height: 16),
 
@@ -185,11 +195,11 @@ class ExperimentalPage extends StatelessWidget {
               'Best Practices',
               Icons.lightbulb_rounded,
               '• Speak clearly for better STT accuracy\n'
-              '• Use proper microphone distance (4-6 inches)\n'
-              '• Minimize background noise\n'
-              '• Check connectivity before using TTS\n'
-              '• Use punctuation for better TTS naturalness\n'
-              '• Review and save important transcriptions',
+                  '• Use proper microphone distance (4-6 inches)\n'
+                  '• Minimize background noise\n'
+                  '• Check connectivity before using TTS\n'
+                  '• Use punctuation for better TTS naturalness\n'
+                  '• Review and save important transcriptions',
             ),
             const SizedBox(height: 32),
           ],

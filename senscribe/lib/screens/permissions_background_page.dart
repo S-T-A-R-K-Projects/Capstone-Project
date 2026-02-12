@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -6,7 +7,8 @@ class PermissionsBackgroundPage extends StatefulWidget {
   const PermissionsBackgroundPage({super.key});
 
   @override
-  State<PermissionsBackgroundPage> createState() => _PermissionsBackgroundPageState();
+  State<PermissionsBackgroundPage> createState() =>
+      _PermissionsBackgroundPageState();
 }
 
 class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
@@ -27,13 +29,14 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
     });
 
     if (!mounted) return;
-    
+
     if (status.isDenied) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Microphone permission denied')),
       );
     } else if (status.isPermanentlyDenied) {
-      _showOpenSettingsDialog('Microphone permission is permanently denied. Open settings to enable it?');
+      _showOpenSettingsDialog(
+          'Microphone permission is permanently denied. Open settings to enable it?');
     } else if (status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Microphone permission granted')),
@@ -54,7 +57,8 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
         const SnackBar(content: Text('Notification permission denied')),
       );
     } else if (status.isPermanentlyDenied) {
-      _showOpenSettingsDialog('Notification permission is permanently denied. Open settings to enable it?');
+      _showOpenSettingsDialog(
+          'Notification permission is permanently denied. Open settings to enable it?');
     } else if (status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notification permission granted')),
@@ -63,11 +67,13 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
   }
 
   Future<void> _disableMicrophonePermission() async {
-    _showOpenSettingsDialog('To disable microphone permission, go to System Settings and revoke it for this app.');
+    _showOpenSettingsDialog(
+        'To disable microphone permission, go to System Settings and revoke it for this app.');
   }
 
   Future<void> _disableNotificationPermission() async {
-    _showOpenSettingsDialog('To disable notification permission, go to System Settings and revoke it for this app.');
+    _showOpenSettingsDialog(
+        'To disable notification permission, go to System Settings and revoke it for this app.');
   }
 
   void _showOpenSettingsDialog(String message) {
@@ -109,8 +115,10 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return ListTile(
-                leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-                title: Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                leading:
+                    Icon(icon, color: Theme.of(context).colorScheme.primary),
+                title: Text(title,
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
                 subtitle: const Text('Loading...'),
               );
             }
@@ -124,7 +132,8 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
               children: [
                 Row(
                   children: [
-                    Icon(icon, color: Theme.of(context).colorScheme.primary, size: 28),
+                    Icon(icon,
+                        color: Theme.of(context).colorScheme.primary, size: 28),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -142,14 +151,16 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
                             description,
                             style: GoogleFonts.inter(
                               fontSize: 12,
-                              color: Theme.of(context).textTheme.bodySmall?.color,
+                              color:
+                                  Theme.of(context).textTheme.bodySmall?.color,
                             ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
@@ -170,10 +181,13 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        icon: Icon(isGranted ? Icons.check_circle : Icons.add_circle),
+                        icon: Icon(
+                            isGranted ? Icons.check_circle : Icons.add_circle),
                         label: Text(isGranted ? 'Enabled' : 'Enable'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isGranted ? Colors.green : Theme.of(context).colorScheme.primary,
+                          backgroundColor: isGranted
+                              ? Colors.green
+                              : Theme.of(context).colorScheme.primary,
                           foregroundColor: Colors.white,
                         ),
                         onPressed: isGranted ? null : onEnable,
@@ -205,7 +219,16 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Permissions & Background', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: AdaptiveButton.icon(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () => Navigator.of(context).pop(),
+            style: AdaptiveButtonStyle.glass,
+          ),
+        ),
+        title: Text('Permissions & Background',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),

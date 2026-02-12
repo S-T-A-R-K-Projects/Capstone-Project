@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -8,8 +9,18 @@ class SoundDirectionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Sound Direction', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: AdaptiveButton.icon(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () => Navigator.of(context).pop(),
+            style: AdaptiveButtonStyle.glass,
+          ),
+        ),
+        title: Text('Sound Direction',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -45,7 +56,9 @@ class SoundDirectionPage extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Start calibration (placeholder)'))),
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Start calibration (placeholder)'))),
                     child: const Text('Calibrate'),
                   ),
                 ),
@@ -55,8 +68,13 @@ class SoundDirectionPage extends StatelessWidget {
                     context: context,
                     builder: (context) => AlertDialog(
                       title: const Text('Calibration tips'),
-                      content: const Text('Place the device on a flat surface and rotate slowly during calibration.'),
-                      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+                      content: const Text(
+                          'Place the device on a flat surface and rotate slowly during calibration.'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'))
+                      ],
                     ),
                   ),
                   child: const Text('View'),

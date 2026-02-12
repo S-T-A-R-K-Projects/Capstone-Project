@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -8,8 +9,18 @@ class NameRecognitionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Name Recognition', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: AdaptiveButton.icon(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () => Navigator.of(context).pop(),
+            style: AdaptiveButtonStyle.glass,
+          ),
+        ),
+        title: Text('Name Recognition',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -31,7 +42,8 @@ class NameRecognitionPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
-                    Text('Configure name recognition behavior and haptic feedback.'),
+                    Text(
+                        'Configure name recognition behavior and haptic feedback.'),
                     SizedBox(height: 8),
                     Text('- Enable/disable recognition'),
                     Text('- Enter name to prioritize'),
@@ -45,7 +57,10 @@ class NameRecognitionPage extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Open name recognition editor (placeholder)'))),
+                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                'Open name recognition editor (placeholder)'))),
                     child: const Text('Edit name recognition'),
                   ),
                 ),
@@ -55,8 +70,13 @@ class NameRecognitionPage extends StatelessWidget {
                     context: context,
                     builder: (context) => AlertDialog(
                       title: const Text('Haptic patterns'),
-                      content: const Text('Select the haptic pattern used when a recognized name appears.'),
-                      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+                      content: const Text(
+                          'Select the haptic pattern used when a recognized name appears.'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'))
+                      ],
                     ),
                   ),
                   child: const Text('View'),

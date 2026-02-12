@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -115,8 +116,16 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: AdaptiveButton.icon(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () => Navigator.of(context).pop(),
+            style: AdaptiveButtonStyle.glass,
+          ),
+        ),
         title: Text(
-          'AI Model Configuration',
+          'AI Model Settings',
           style: GoogleFonts.inter(fontWeight: FontWeight.bold),
         ),
         backgroundColor: primary,

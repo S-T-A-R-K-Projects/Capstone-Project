@@ -67,11 +67,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _classificationSubscription?.cancel();
-    // Do NOT stop audio service if we want background monitoring or shared state consistency
-    // However, if the user explicitly toggles it off, they do it via the prop.
-    // The widget.isMonitoring determines if this page *thinks* it's monitoring.
-    // But since state is shared, we should probably respect the global state?
-    // User passed `isMonitoring` from parent (Unified).
     super.dispose();
   }
 

@@ -37,8 +37,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   // Expansion State
   bool _isSoundExpanded = true;
-  bool _isSTTExpanded =
-      true; // User might want this smaller by default? keeping true as per request "expandable" implies it's open or closed.
+  bool _isSTTExpanded = true;
   bool _isTTSExpanded = true;
 
   // Simultaneous Monitoring States
@@ -110,13 +109,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   @override
   void dispose() {
     _audioSubscription?.cancel();
-    // Do NOT stop audio service here if we want it to persist across pages,
-    // BUT we should stop it if the app is closing?
-    // User logic: "Think of memory; we won’t store the same data twice. But we display it on two different locations on demand."
-    // If we leave this page, we might want to keep monitoring if it's "Unified Home".
-    // Usually home page dispose means app exit or tab switch.
-    // I will NOT stop audio service here to allow background monitoring if implemented.
-    // actually, if we navigate away, we might want to keep it running.
 
     _speech.stop();
     _ttsService.stop();
@@ -217,20 +209,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     final text = _ttsController.text.trim();
     if (text.isEmpty) return;
 
-    // _ttsController.clear(); // Don't clear automatically as per user request (or maybe I misunderstood? "when you write something and press enter, it clears its type box automatically. Add a clear button for it as well.")
-    // Actually user said: "when you write something and press enter, it clears its type box automatically. Add a clear button for it as well."
-    // Implies: It currently clears automatically (which is annoying?), OR they just want a manual clear button.
-    // Usually chatting apps clear on send. But for TTS, maybe they want to repeat it?
-    // "Add a clear button for it as well" implies manual control.
-    // I will KEEP the auto-clear for now as it's standard "submit" behavior, but surely adding a clear button helps if they want to clear without sending?
-    // Wait, "when you write something and press enter, it clears its type box automatically." -> Sounds like a complaint?
-    // "Add a clear button for it as well."
-    // I'll assume they want to PREVENT auto-clear or just want the utility.
-    // I will REMOVE auto-clear to be safe, and let them use the clear button?
-    // Or maybe keep auto-clear on Submit, but definitely add Clear button.
-    // Le'ts keep auto-clear on SUBMIT (Enter), because that's what "Submitted" usually means.
-    // But I will add the Clear button as requested.
-
     _ttsController.clear();
     _ttsService.speak(text);
 
@@ -253,10 +231,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     if (!mounted) return;
 
     final defaultTitle = 'Text-${nextIndex.toString().padLeft(4, '0')}';
-    // Simplified save to avoid complex dialogs here, or just save with default?
-    // User asked for "Save button that saves the STT to history".
-    // I'll try to show a simple dialog or just save immediately.
-    // Let's do a simple save for speed/UX in this unified view.
 
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     final item = HistoryItem(
@@ -381,7 +355,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
-      height: isExpanded ? height : 60, // Collapsed height
+      height: isExpanded
+          ? height
+          : 72, // Collapsed height increased to fix overflow
       margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -399,42 +375,45 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(
               children: [
-                IconButton(
-                  icon: Icon(isExpanded
+                AdaptiveButton.icon(
+                  icon: isExpanded
                       ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded),
+                      : Icons.keyboard_arrow_down_rounded,
                   onPressed: onCollapseToggle,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  iconSize: 20,
-                  color: Colors.grey,
+                  style: AdaptiveButtonStyle.glass,
                 ),
                 const SizedBox(width: 8),
                 Icon(icon,
-                    size: 20, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(title,
-                    style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w600, fontSize: 16)),
-                const Spacer(),
+                    size: 24, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(title,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600, fontSize: 16)),
+                ),
                 if (showToggle && onToggle != null)
                   IconButton(
                     icon: Icon(isMonitoring
                         ? Icons.stop_circle_rounded
                         : Icons.play_circle_fill_rounded),
                     color: isMonitoring ? Colors.red : Colors.green,
+                    iconSize: 32,
                     onPressed: onToggle,
                   ),
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                const SizedBox(width: 8),
+                AdaptiveButton.icon(
+                  icon: Icons.arrow_forward_ios_rounded,
                   onPressed: onExpand,
+                  style: AdaptiveButtonStyle.glass,
                 ),
               ],
             ),
           ),
+
           if (isExpanded) ...[
             const Divider(height: 1),
             // Content

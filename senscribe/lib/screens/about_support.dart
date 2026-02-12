@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,14 +11,24 @@ class AboutSupportPage extends StatelessWidget {
   void _copyEmail(BuildContext context) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     await Clipboard.setData(const ClipboardData(text: _supportEmail));
-    scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Support email copied to clipboard')));
+    scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Support email copied to clipboard')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('About & Support', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: AdaptiveButton.icon(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onPressed: () => Navigator.of(context).pop(),
+            style: AdaptiveButtonStyle.glass,
+          ),
+        ),
+        title: Text('About & Support',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
@@ -62,12 +73,12 @@ class AboutSupportPage extends StatelessWidget {
               'Key Features',
               Icons.star_rounded,
               '• Real-time sound classification using AI/ML\n'
-              '• Speech-to-Text for voice input\n'
-              '• Text-to-Speech for audio output\n'
-              '• Custom name recognition alerts\n'
-              '• Sound direction detection\n'
-              '• History tracking and export\n'
-              '• Privacy-first design (on-device processing)',
+                  '• Speech-to-Text for voice input\n'
+                  '• Text-to-Speech for audio output\n'
+                  '• Custom name recognition alerts\n'
+                  '• Sound direction detection\n'
+                  '• History tracking and export\n'
+                  '• Privacy-first design (on-device processing)',
             ),
             const SizedBox(height: 16),
 
@@ -91,12 +102,12 @@ class AboutSupportPage extends StatelessWidget {
               'How Audio Classification Works',
               Icons.settings_remote_rounded,
               '1. Your device records audio through the microphone\n'
-              '2. Audio is processed in real-time (16 kHz, mono)\n'
-              '3. YAMNet AI model analyzes the audio (0.975 sec windows)\n'
-              '4. Results return with confidence scores\n'
-              '5. Top classifications displayed in real-time\n'
-              '6. Duplicate labels throttled (700 ms minimum)\n'
-              '7. History saved locally on your device\n\n'
+                  '2. Audio is processed in real-time (16 kHz, mono)\n'
+                  '3. YAMNet AI model analyzes the audio (0.975 sec windows)\n'
+                  '4. Results return with confidence scores\n'
+                  '5. Top classifications displayed in real-time\n'
+                  '6. Duplicate labels throttled (700 ms minimum)\n'
+                  '7. History saved locally on your device\n\n'
                   'All processing is 100% on-device. No audio is sent anywhere.',
             ),
             const SizedBox(height: 16),
@@ -107,10 +118,10 @@ class AboutSupportPage extends StatelessWidget {
               'Platform Support',
               Icons.devices_rounded,
               '• Android 6.0+ (API 23+)\n'
-              '• iOS 12.0+\n'
-              '• Requires microphone permissions\n'
-              '• Works offline (no internet required)\n'
-              '• Optimized for Bluetooth/headset microphones',
+                  '• iOS 12.0+\n'
+                  '• Requires microphone permissions\n'
+                  '• Works offline (no internet required)\n'
+                  '• Optimized for Bluetooth/headset microphones',
             ),
             const SizedBox(height: 16),
 
@@ -120,10 +131,10 @@ class AboutSupportPage extends StatelessWidget {
               'Known Limitations',
               Icons.warning_rounded,
               '• Accuracy depends on audio quality and background noise\n'
-              '• Some sounds may not be recognized\n'
-              '• Requires recent device hardware for optimal performance\n'
-              '• Battery usage increases during active monitoring\n'
-              '• Works best in quiet to moderate noise environments',
+                  '• Some sounds may not be recognized\n'
+                  '• Requires recent device hardware for optimal performance\n'
+                  '• Battery usage increases during active monitoring\n'
+                  '• Works best in quiet to moderate noise environments',
             ),
             const SizedBox(height: 16),
 
@@ -147,16 +158,16 @@ class AboutSupportPage extends StatelessWidget {
               'Open Source Dependencies',
               Icons.extension_rounded,
               '• flutter_animate\n'
-              '• google_fonts\n'
-              '• animated_bottom_navigation_bar\n'
-              '• flutter_speed_dial\n'
-              '• flutter_staggered_animations\n'
-              '• permission_handler\n'
-              '• speech_to_text\n'
-              '• shared_preferences\n'
-              '• lottie\n'
-              '• shimmer\n'
-              '& more...',
+                  '• google_fonts\n'
+                  '• animated_bottom_navigation_bar\n'
+                  '• flutter_speed_dial\n'
+                  '• flutter_staggered_animations\n'
+                  '• permission_handler\n'
+                  '• speech_to_text\n'
+                  '• shared_preferences\n'
+                  '• lottie\n'
+                  '• shimmer\n'
+                  '& more...',
             ),
             const SizedBox(height: 16),
 
@@ -178,13 +189,13 @@ class AboutSupportPage extends StatelessWidget {
               'Frequently Asked Questions',
               Icons.help_rounded,
               'Q: Is my audio data safe?\n'
-              'A: Yes! All processing happens on your device. No data is uploaded.\n\n'
-              'Q: Does the app work offline?\n'
-              'A: Yes! The app works completely offline.\n\n'
-              'Q: Why is accuracy sometimes low?\n'
-              'A: Accuracy depends on sound clarity and background noise.\n\n'
-              'Q: Can I export my history?\n'
-              'A: Yes, you can export all your data anytime.',
+                  'A: Yes! All processing happens on your device. No data is uploaded.\n\n'
+                  'Q: Does the app work offline?\n'
+                  'A: Yes! The app works completely offline.\n\n'
+                  'Q: Why is accuracy sometimes low?\n'
+                  'A: Accuracy depends on sound clarity and background noise.\n\n'
+                  'Q: Can I export my history?\n'
+                  'A: Yes, you can export all your data anytime.',
             ),
             const SizedBox(height: 24),
 

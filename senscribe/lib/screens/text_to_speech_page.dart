@@ -4,22 +4,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../services/text_to_speech_service.dart';
 
 class TextToSpeechPage extends StatefulWidget {
-  // Removed monitoring parameters as this page should focus on TTS
   const TextToSpeechPage({
     super.key,
-    // Keep parameters optional/named but ignore them if passed from old code to avoid breakage immediately,
-    // OR better, update call sites.
-    // I already updated UnifiedHomePage to pass dummy values, but I can just make them optional or remove them.
-    // UnifiedHomePage passes: isMonitoring: false, pulseController: ..., onToggle: ...
-    // I should probably clean up UnifiedHomePage call too, but standard practice is to clean the class first.
-    // I will remove them and let the caller break, then I'll fix the caller (UnifiedHomePage) in the previous step I already did?
-    // Wait, in UnifiedHomePage I wrote:
-    // onExpand: () => _navigateToExpanded(TextToSpeechPage(isMonitoring: false, pulseController: _speechPulseController, onToggleMonitoring: () {})),
-    // So I need to keep the constructor compatible OR update UnifiedHomePage again.
-    // I'll update the constructor to be compatible but deprecated/unused, OR just update UnifiedHomePage's call.
-    // Updating UnifiedHomePage again is annoying.
-    // I'll keep the constructor signature for now but mark as ignored, or optional.
-    // Actually, I can just change the constructor to named optional and ignore them.
     this.isMonitoring = false,
     this.pulseController,
     this.onToggleMonitoring,

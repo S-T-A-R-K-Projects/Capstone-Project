@@ -62,55 +62,24 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            leading: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: AdaptiveButton.icon(
-                icon: Icons.arrow_back_ios_new_rounded,
-                onPressed: () => Navigator.of(context).pop(),
-                style: AdaptiveButtonStyle.glass,
-              ),
-            ),
-            expandedHeight: 120, // Reduced height since monitoring is gone
-            floating: false,
-            pinned: true,
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            foregroundColor: Colors.white,
-            title: Text(
-              'Text to Speech',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Input Area
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Card(
-                    elevation: 2,
-                    child: Padding(
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(title: 'Text to Speech'),
+      body: Material(
+        color: Colors.transparent,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Top padding for iOS 26 translucent app bar
+              if (PlatformInfo.isIOS26OrHigher())
+                SizedBox(
+                    height:
+                        MediaQuery.of(context).padding.top + kToolbarHeight),
+              // Input Area
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    AdaptiveCard(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -124,7 +93,6 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                               suffixIcon: IconButton(
                                 icon: const Icon(Icons.clear),
                                 onPressed: _clearText,
-                                tooltip: 'Clear text',
                               ),
                             ),
                             style: GoogleFonts.inter(fontSize: 18),
@@ -136,34 +104,34 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                               if (_isSpeaking)
                                 Padding(
                                   padding: const EdgeInsets.only(right: 16.0),
-                                  child: OutlinedButton.icon(
-                                    onPressed: _stop,
-                                    icon: const Icon(Icons.stop_rounded),
-                                    label: const Text('Stop'),
-                                    style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.red),
+                                  child: SizedBox(
+                                    width: 70,
+                                    child: AdaptiveButton(
+                                      onPressed: _stop,
+                                      label: 'Stop',
+                                      style: AdaptiveButtonStyle.bordered,
+                                    ),
                                   ),
                                 ),
-                              FilledButton.icon(
-                                onPressed: _speak,
-                                icon: const Icon(Icons.volume_up_rounded),
-                                label: const Text('Speak'),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24, vertical: 12),
+                              SizedBox(
+                                width: 80,
+                                child: AdaptiveButton(
+                                  onPressed: _speak,
+                                  label: 'Speak',
+                                  style: AdaptiveButtonStyle.filled,
                                 ),
                               ),
                             ],
                           ),
                         ],
                       ),
-                    ),
-                  ).animate().fadeIn().slideY(begin: 0.1),
-                ],
+                    ).animate().fadeIn().slideY(begin: 0.1),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

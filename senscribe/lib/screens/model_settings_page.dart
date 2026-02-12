@@ -90,67 +90,54 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red[700],
-        behavior: SnackBarBehavior.floating,
-      ),
+    AdaptiveSnackBar.show(
+      context,
+      message: message,
+      type: AdaptiveSnackBarType.error,
     );
   }
 
   void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green[700],
-        behavior: SnackBarBehavior.floating,
-      ),
+    AdaptiveSnackBar.show(
+      context,
+      message: message,
+      type: AdaptiveSnackBarType.success,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: AdaptiveButton.icon(
-            icon: Icons.arrow_back_ios_new_rounded,
-            onPressed: () => Navigator.of(context).pop(),
-            style: AdaptiveButtonStyle.glass,
-          ),
-        ),
-        title: Text(
-          'AI Model Settings',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _checkStatus,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStatusCard(theme),
-                    const SizedBox(height: 24),
-                    _buildActionSection(theme),
-                    const SizedBox(height: 24),
-                    _buildModelInfoCard(theme),
-                  ],
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(title: 'AI Model Settings'),
+      body: Material(
+        color: Colors.transparent,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: _checkStatus,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Top padding for iOS 26 translucent app bar
+                      if (PlatformInfo.isIOS26OrHigher())
+                        SizedBox(
+                            height: MediaQuery.of(context).padding.top +
+                                kToolbarHeight),
+                      _buildStatusCard(theme),
+                      const SizedBox(height: 24),
+                      _buildActionSection(theme),
+                      const SizedBox(height: 24),
+                      _buildModelInfoCard(theme),
+                    ],
+                  ),
                 ),
               ),
-            ),
+      ),
     );
   }
 
@@ -160,71 +147,67 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
         _isConfigured ? Icons.check_circle : Icons.cloud_off_rounded;
     final statusText = _isConfigured ? 'Model Found' : 'Model Not Found';
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(statusIcon, color: statusColor, size: 32),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        statusText,
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+    return AdaptiveCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(statusIcon, color: statusColor, size: 32),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      statusText,
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Text(
-                        _isConfigured ? 'Ready for use' : 'Requires download',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                    ),
+                    Text(
+                      _isConfigured ? 'Ready for use' : 'Requires download',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey[600],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     ).animate().fadeIn();
   }
 
   Widget _buildActionSection(ThemeData theme) {
     if (_isDownloading) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Text(
-                'Initializing Model...',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              if (_downloadProgress > 0 && _downloadProgress < 1.0)
-                LinearProgressIndicator(value: _downloadProgress)
-              else
-                const LinearProgressIndicator(), // Indeterminate active
+      return AdaptiveCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text(
+              'Initializing Model...',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            if (_downloadProgress > 0 && _downloadProgress < 1.0)
+              LinearProgressIndicator(value: _downloadProgress)
+            else
+              const LinearProgressIndicator(), // Indeterminate active
 
-              const SizedBox(height: 8),
-              if (_statusMessage.isNotEmpty)
-                Text(
-                  _statusMessage,
-                  style: GoogleFonts.inter(color: Colors.grey, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-            ],
-          ),
+            const SizedBox(height: 8),
+            if (_statusMessage.isNotEmpty)
+              Text(
+                _statusMessage,
+                style: GoogleFonts.inter(color: Colors.grey, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+          ],
         ),
       );
     }
@@ -235,23 +218,10 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
         SizedBox(
           width: double.infinity,
           height: 50,
-          child: ElevatedButton.icon(
+          child: AdaptiveButton(
             onPressed: _startDownload,
-            icon: Icon(
-                _isConfigured ? Icons.refresh : Icons.cloud_download_rounded),
-            label: Text(
-              _isConfigured ? 'Reload Model' : 'Download Model (~1.2 GB)',
-              style:
-                  GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 16),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+            label: _isConfigured ? 'Reload Model' : 'Download Model (~1.2 GB)',
+            style: AdaptiveButtonStyle.filled,
           ),
         ),
         if (!_isConfigured)
@@ -291,35 +261,31 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   }
 
   Widget _buildModelInfoCard(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Model Information',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
+    return AdaptiveCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Model Information',
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
             ),
-            const SizedBox(height: 12),
-            _buildInfoRow('ID', _modelId, theme),
-            _buildInfoRow('Type', 'Leap Managed Model', theme),
-            _buildInfoRow(
-                'Description', 'Qwen 3 (1.7B). Managed via Liquid SDK.', theme),
-            const SizedBox(height: 8),
-            Text(
-              'Powered by flutter_leap_sdk',
-              style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: Colors.grey,
-                  fontStyle: FontStyle.italic),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          _buildInfoRow('ID', _modelId, theme),
+          _buildInfoRow('Type', 'Leap Managed Model', theme),
+          _buildInfoRow(
+              'Description', 'Qwen 3 (1.7B). Managed via Liquid SDK.', theme),
+          const SizedBox(height: 8),
+          Text(
+            'Powered by flutter_leap_sdk',
+            style: GoogleFonts.inter(
+                fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+          ),
+        ],
       ),
     );
   }

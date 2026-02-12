@@ -7,81 +7,84 @@ class SoundDirectionPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: AdaptiveButton.icon(
-            icon: Icons.arrow_back_ios_new_rounded,
-            onPressed: () => Navigator.of(context).pop(),
-            style: AdaptiveButtonStyle.glass,
-          ),
-        ),
-        title: Text('Sound Direction',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            Text(
-              'Sound direction',
-              style: GoogleFonts.inter(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Enable or calibrate the sound direction detection.'),
-                    SizedBox(height: 8),
-                    Text('- Enable/disable detection'),
-                    Text('- Run calibration routine'),
-                    Text('- View calibration tips'),
-                  ],
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(title: 'Sound Direction'),
+      body: Material(
+        color: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top padding for iOS 26 translucent app bar
+              if (PlatformInfo.isIOS26OrHigher())
+                SizedBox(
+                    height:
+                        MediaQuery.of(context).padding.top + kToolbarHeight),
+              const SizedBox(height: 12),
+              Text(
+                'Sound direction',
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Start calibration (placeholder)'))),
-                    child: const Text('Calibrate'),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                          'Enable or calibrate the sound direction detection.'),
+                      SizedBox(height: 8),
+                      Text('- Enable/disable detection'),
+                      Text('- Run calibration routine'),
+                      Text('- View calibration tips'),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                TextButton(
-                  onPressed: () => showDialog<void>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Calibration tips'),
-                      content: const Text(
-                          'Place the device on a flat surface and rotate slowly during calibration.'),
-                      actions: [
-                        TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Close'))
-                      ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: () => AdaptiveSnackBar.show(
+                        context,
+                        message: 'Start calibration (placeholder)',
+                        type: AdaptiveSnackBarType.info,
+                      ),
+                      label: 'Calibrate',
+                      style: AdaptiveButtonStyle.filled,
                     ),
                   ),
-                  child: const Text('View'),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 70,
+                    child: AdaptiveButton(
+                      onPressed: () => AdaptiveAlertDialog.show(
+                        context: context,
+                        title: 'Calibration tips',
+                        message:
+                            'Place the device on a flat surface and rotate slowly during calibration.',
+                        actions: [
+                          AlertAction(
+                            title: 'Close',
+                            style: AlertActionStyle.cancel,
+                            onPressed: () {},
+                          ),
+                        ],
+                      ),
+                      label: 'View',
+                      style: AdaptiveButtonStyle.plain,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

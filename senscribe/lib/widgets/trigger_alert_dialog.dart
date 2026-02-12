@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 class TriggerAlertDialog extends StatefulWidget {
   final List<String> detectedTriggers;
@@ -52,7 +53,8 @@ class _TriggerAlertDialogState extends State<TriggerAlertDialog>
           // Main content card with pulsing animation
           ScaleTransition(
             scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-              CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+              CurvedAnimation(
+                  parent: _pulseController, curve: Curves.easeInOut),
             ),
             child: Card(
               elevation: 20,
@@ -83,7 +85,7 @@ class _TriggerAlertDialogState extends State<TriggerAlertDialog>
                           curve: Curves.easeInOut,
                         ),
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.warning_rounded,
                         size: 64,
                         color: Colors.white,
@@ -192,27 +194,14 @@ class _TriggerAlertDialogState extends State<TriggerAlertDialog>
                     ),
                     const SizedBox(height: 24),
 
-                    // Action buttons
+                    // Action button - using AdaptiveButton
                     Row(
                       children: [
                         Expanded(
-                          child: ElevatedButton(
+                          child: AdaptiveButton(
                             onPressed: () => Navigator.pop(context),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.red[600],
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              'OK',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                            label: 'OK',
+                            style: AdaptiveButtonStyle.filled,
                           ),
                         ),
                       ],
@@ -221,10 +210,8 @@ class _TriggerAlertDialogState extends State<TriggerAlertDialog>
                 ),
               ),
             ),
-          )
-              .animate()
-              .fadeIn(duration: 300.ms)
-              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1.0, 1.0)),
+          ).animate().fadeIn(duration: 300.ms).scale(
+              begin: const Offset(0.8, 0.8), end: const Offset(1.0, 1.0)),
         ],
       ),
     );

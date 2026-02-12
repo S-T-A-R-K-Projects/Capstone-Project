@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -40,9 +39,11 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   // Helper method to safely show SnackBar
   void _showSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
+    AdaptiveSnackBar.show(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      type: AdaptiveSnackBarType.info,
+    );
   }
 
   @override
@@ -139,14 +140,10 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
         onResult: (result) {
           if (!mounted) return;
 
-          // Always update with latest recognized words
-          // We treat partial results as the "current segment"
-          // and finalize them when the session ends
           setState(() {
             _currentWords = result.recognizedWords;
           });
 
-          // If this is marked as final, move to transcript
           if (result.finalResult && result.recognizedWords.isNotEmpty) {
             setState(() {
               if (_transcribedText.isNotEmpty &&
@@ -174,12 +171,10 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                   }
 
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content:
-                            Text('Trigger detected: ${detected.join(', ')}'),
-                        backgroundColor: Colors.orange,
-                      ),
+                    AdaptiveSnackBar.show(
+                      context,
+                      message: 'Trigger detected: ${detected.join(', ')}',
+                      type: AdaptiveSnackBarType.warning,
                     );
                   }
                 }
@@ -282,10 +277,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
         title: const Text('Save transcription'),
         content: TextField(
           controller: controller,
-          textInputAction: TextInputAction.done,
           decoration: const InputDecoration(
-            labelText: 'Name',
             hintText: 'Text-0001',
+            border: OutlineInputBorder(),
           ),
           maxLength: 40,
         ),
@@ -338,310 +332,234 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            leading: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: AdaptiveButton.icon(
-                icon: Icons.arrow_back_ios_new_rounded,
-                onPressed: () => Navigator.of(context).pop(),
-                style: AdaptiveButtonStyle.glass,
-              ),
-            ),
-            expandedHeight: 280,
-            floating: false,
-            pinned: true,
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            foregroundColor: Colors.white,
-            title: Text(
-              'SenScribe',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
+    final theme = Theme.of(context);
+
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(title: 'SenScribe'),
+      body: Material(
+        color: Colors.transparent,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top padding for iOS 26 translucent app bar
+              if (PlatformInfo.isIOS26OrHigher())
+                SizedBox(
+                    height:
+                        MediaQuery.of(context).padding.top + kToolbarHeight),
+              // Monitoring status card
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: AdaptiveCard(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      AnimatedBuilder(
+                        animation: widget.pulseController,
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: widget.isMonitoring
+                                ? 1.0 + (widget.pulseController.value * 0.2)
+                                : 1.0,
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: widget.isMonitoring
+                                    ? Colors.red.withValues(alpha: 0.2)
+                                    : Colors.grey.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                widget.isMonitoring
+                                    ? Icons.mic_rounded
+                                    : Icons.mic_off_rounded,
+                                size: 24,
+                                color: widget.isMonitoring
+                                    ? Colors.red
+                                    : Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.isMonitoring
+                                  ? 'Monitoring Active'
+                                  : 'Monitoring Stopped',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: widget.isMonitoring
+                                    ? Colors.green
+                                    : Colors.grey[600],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              widget.isMonitoring
+                                  ? (_isListening
+                                      ? 'Listening...'
+                                      : 'Preparing...')
+                                  : 'Tap to start monitoring',
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        width: 80,
+                        child: AdaptiveButton(
+                          onPressed: widget.onToggleMonitoring,
+                          label: widget.isMonitoring ? 'Stop' : 'Start',
+                          style: AdaptiveButtonStyle.filled,
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        // Listening Status Card
-                        Card(
-                          elevation: 4,
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
-                              children: [
-                                AnimatedBuilder(
-                                  animation: widget.pulseController,
-                                  builder: (context, child) {
-                                    return Transform.scale(
-                                      scale: widget.isMonitoring
-                                          ? 1.0 +
-                                              (widget.pulseController.value *
-                                                  0.2)
-                                          : 1.0,
-                                      child: Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          color: widget.isMonitoring
-                                              ? Colors.red.withValues(
-                                                  alpha: 0.2,
-                                                )
-                                              : Colors.grey.withValues(
-                                                  alpha: 0.2,
-                                                ),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          widget.isMonitoring
-                                              ? Icons.mic_rounded
-                                              : Icons.mic_off_rounded,
-                                          size: 24,
-                                          color: widget.isMonitoring
-                                              ? Colors.red
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        widget.isMonitoring
-                                            ? 'Monitoring Active'
-                                            : 'Monitoring Stopped',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: widget.isMonitoring
-                                                  ? Colors.green
-                                                  : Colors.grey[600],
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                      Text(
-                                        widget.isMonitoring
-                                            ? (_isListening
-                                                ? 'Listening...'
-                                                : 'Preparing...')
-                                            : 'Tap to start monitoring',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: Colors.grey[600],
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: widget.onToggleMonitoring,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: widget.isMonitoring
-                                        ? Colors.red
-                                        : Colors.green,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    widget.isMonitoring ? 'Stop' : 'Start',
-                                  ),
-                                )
-                                    .animate()
-                                    .scale(duration: 200.ms)
-                                    .then()
-                                    .shimmer(
-                                      duration: 1000.ms,
-                                      delay: 500.ms,
-                                    ),
-                              ],
-                            ),
-                          ),
-                        )
-                            .animate()
-                            .slideY(begin: 0.3, duration: 600.ms)
-                            .fadeIn(),
-
-                        const SizedBox(height: 64),
-                      ],
-                    ),
-                  ),
-                ),
+                ).animate().slideY(begin: 0.3, duration: 600.ms).fadeIn(),
               ),
-            ),
-          ),
 
-          // Speech to Text Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+              // Speech to Text Header
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.mic_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 24,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.mic_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 24,
+                    const SizedBox(width: 12),
+                    Text(
+                      'Speech to Text',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Speech to Text',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: !_hasTranscript || _isListening || _isSaving
-                        ? null
-                        : _saveTranscript,
-                    icon: const Icon(Icons.save_outlined, size: 18),
-                    label: const Text('Save'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.green,
-                      disabledForegroundColor: Colors.grey,
+                    const Spacer(),
+                    SizedBox(
+                      width: 70,
+                      child: AdaptiveButton(
+                        onPressed: !_hasTranscript || _isListening || _isSaving
+                            ? null
+                            : _saveTranscript,
+                        label: 'Save',
+                        style: AdaptiveButtonStyle.plain,
+                      ),
                     ),
-                  ),
-                  if (_hasTranscript)
-                    IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: _clearText,
-                      tooltip: 'Clear text',
-                    ),
-                ],
-              ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
-            ),
-          ),
+                    if (_hasTranscript)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: _clearText,
+                      ),
+                  ],
+                ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
+              ),
 
-          // Transcribed Text Display
-          SliverFillRemaining(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: !_hasTranscript
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _isListening
-                                ? Icons.mic_rounded
-                                : Icons.mic_none_rounded,
-                            size: 80,
-                            color: _isListening ? Colors.red : Colors.grey[400],
-                          )
-                              .animate()
-                              .scale(duration: 600.ms)
-                              .then()
-                              .shimmer(duration: 1000.ms),
-                          const SizedBox(height: 24),
-                          Text(
-                            _isListening
-                                ? 'Listening...'
-                                : 'No speech detected yet',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
+              // Transcribed Text Display
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.45,
+                  child: !_hasTranscript
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _isListening
+                                    ? Icons.mic_rounded
+                                    : Icons.mic_none_rounded,
+                                size: 80,
+                                color: _isListening
+                                    ? Colors.red
+                                    : Colors.grey[400],
+                              )
+                                  .animate()
+                                  .scale(duration: 600.ms)
+                                  .then()
+                                  .shimmer(duration: 1000.ms),
+                              const SizedBox(height: 24),
+                              Text(
+                                _isListening
+                                    ? 'Listening...'
+                                    : 'No speech detected yet',
+                                style: theme.textTheme.titleMedium?.copyWith(
                                   color: _isListening
                                       ? Colors.red
                                       : Colors.grey[600],
                                   fontWeight: FontWeight.w600,
                                 ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _isListening
-                                ? 'Speak now...'
-                                : 'Start monitoring to begin transcription',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(color: Colors.grey[500]),
-                          ),
-                        ],
-                      ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.2),
-                    )
-                  : Card(
-                      elevation: 2,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        child: SingleChildScrollView(
-                          child: SelectableText.rich(
-                            TextSpan(
-                              children: [
-                                if (_transcribedText.isNotEmpty)
-                                  TextSpan(
-                                    text: _transcribedText,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge
-                                        ?.copyWith(height: 1.5),
-                                  ),
-                                if (_currentWords.isNotEmpty)
-                                  TextSpan(
-                                    text: _currentWords.isNotEmpty &&
-                                            _transcribedText.isNotEmpty &&
-                                            !_transcribedText.endsWith(' ')
-                                        ? ' $_currentWords'
-                                        : _currentWords,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge
-                                        ?.copyWith(
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _isListening
+                                    ? 'Speak now...'
+                                    : 'Start monitoring to begin transcription',
+                                style: theme.textTheme.bodyMedium
+                                    ?.copyWith(color: Colors.grey[500]),
+                              ),
+                            ],
+                          )
+                              .animate()
+                              .fadeIn(duration: 800.ms)
+                              .slideY(begin: 0.2),
+                        )
+                      : AdaptiveCard(
+                          padding: const EdgeInsets.all(20),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: SingleChildScrollView(
+                              child: SelectableText.rich(
+                                TextSpan(
+                                  children: [
+                                    if (_transcribedText.isNotEmpty)
+                                      TextSpan(
+                                        text: _transcribedText,
+                                        style: theme.textTheme.bodyLarge
+                                            ?.copyWith(height: 1.5),
+                                      ),
+                                    if (_currentWords.isNotEmpty)
+                                      TextSpan(
+                                        text: _currentWords.isNotEmpty &&
+                                                _transcribedText.isNotEmpty &&
+                                                !_transcribedText.endsWith(' ')
+                                            ? ' $_currentWords'
+                                            : _currentWords,
+                                        style:
+                                            theme.textTheme.bodyLarge?.copyWith(
                                           height: 1.5,
                                           color: Colors.grey[600],
                                           fontStyle: FontStyle.italic,
                                         ),
-                                  ),
-                              ],
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1),
-            ),
-          ),
+                        ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1),
+                ),
+              ),
 
-          // Bottom padding for FAB
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
+              // Bottom padding
+              const SizedBox(height: 100),
+            ],
+          ),
+        ),
       ),
     );
   }

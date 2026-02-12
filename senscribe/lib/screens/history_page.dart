@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 import '../models/history_item.dart';
 import '../services/history_service.dart';
@@ -71,25 +72,30 @@ class _HistoryPageState extends State<HistoryPage> {
     final controller = TextEditingController(text: item.title);
     final updatedTitle = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename transcription'),
-        content: TextField(
-          controller: controller,
-          textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(labelText: 'Name'),
-          maxLength: 40,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Rename transcription'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              hintText: 'Name',
+              border: OutlineInputBorder(),
+            ),
+            maxLength: 40,
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
 
     controller.dispose();
@@ -110,7 +116,7 @@ class _HistoryPageState extends State<HistoryPage> {
             onPressed: () => Navigator.of(c).pop(false),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(c).pop(true),
             child: const Text('Clear'),
           ),
@@ -150,114 +156,76 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'History',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: primary,
-        elevation: 0,
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(
+        title: 'History',
         actions: [
-          IconButton(
-            tooltip: 'Clear history',
-            icon: const Icon(Icons.delete_sweep_outlined),
-            onPressed: _items.isEmpty ? null : _clearAll,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            height: 84,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [primary, primary.withAlpha(0)],
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Align(
-                  alignment: Alignment.bottomLeft,
-                  child: Text(
-                    'Recent activity',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
+          if (_items.isNotEmpty)
+            AdaptiveAppBarAction(
+              onPressed: _clearAll,
+              icon: Icons.delete_sweep_outlined,
+              iosSymbol: 'trash',
             ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                ? Center(
-                    child: Text(
-                      'No history yet',
-                      style: GoogleFonts.inter(color: Colors.grey[600]),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: _items.length,
-                    itemBuilder: (context, index) {
-                      final entry = _items[index];
-                      return Dismissible(
-                        key: ValueKey(entry.id),
-                        direction: DismissDirection.endToStart,
-                        onDismissed: (_) => _remove(entry.id),
-                        background: Container(
-                          color: Colors.redAccent,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: entry.hasSummary
-                                ? Colors.green[100]
-                                : theme.colorScheme.primaryContainer,
-                            child: Icon(
-                              entry.hasSummary ? Icons.summarize : Icons.mic,
-                              color: entry.hasSummary
-                                  ? Colors.green[700]
-                                  : theme.colorScheme.primary,
-                            ),
-                          ),
-                          title: Text(
-                            entry.title,
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: Text(
-                            '${_previewContent(entry)} - ${_formatTimestamp(entry.timestamp)}',
-                            style: GoogleFonts.inter(),
-                          ),
-                          trailing: entry.hasSummary
-                              ? Icon(
-                                  Icons.check_circle,
-                                  color: Colors.green[600],
-                                  size: 18,
-                                )
-                              : null,
-                          onTap: () => _showDetailModal(entry),
-                        ),
-                      );
-                    },
-                  ),
-          ),
         ],
       ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _items.isEmpty
+              ? Center(
+                  child: Text(
+                    'No history yet',
+                    style: GoogleFonts.inter(color: Colors.grey[600]),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _items.length,
+                  itemBuilder: (context, index) {
+                    final entry = _items[index];
+                    return Dismissible(
+                      key: ValueKey(entry.id),
+                      direction: DismissDirection.endToStart,
+                      onDismissed: (_) => _remove(entry.id),
+                      background: Container(
+                        color: Colors.redAccent,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      child: AdaptiveListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: entry.hasSummary
+                              ? Colors.green[100]
+                              : theme.colorScheme.primaryContainer,
+                          child: Icon(
+                            entry.hasSummary ? Icons.summarize : Icons.mic,
+                            color: entry.hasSummary
+                                ? Colors.green[700]
+                                : theme.colorScheme.primary,
+                          ),
+                        ),
+                        title: Text(
+                          entry.title,
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${_previewContent(entry)} - ${_formatTimestamp(entry.timestamp)}',
+                          style: GoogleFonts.inter(),
+                        ),
+                        trailing: entry.hasSummary
+                            ? Icon(
+                                Icons.check_circle,
+                                color: Colors.green[600],
+                                size: 18,
+                              )
+                            : null,
+                        onTap: () => _showDetailModal(entry),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }
@@ -380,44 +348,40 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
   }
 
   void _showConfigureDialog() {
-    showDialog(
+    AdaptiveAlertDialog.show(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('AI Model Not Configured'),
-        content: const Text(
+      title: 'AI Model Not Configured',
+      message:
           'To use text summarization, you need to configure the AI model first.\n\n'
           'This requires downloading the Qwen3 1.7B (GGUF) model (~1.2 GB) and selecting its folder location in settings.',
+      actions: [
+        AlertAction(
+          title: 'Cancel',
+          style: AlertActionStyle.cancel,
+          onPressed: () {},
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context); // Close modal
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ModelSettingsPage(),
-                ),
-              );
-            },
-            child: const Text('Configure Now'),
-          ),
-        ],
-      ),
+        AlertAction(
+          title: 'Configure Now',
+          style: AlertActionStyle.primary,
+          onPressed: () {
+            Navigator.pop(context); // Close modal
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ModelSettingsPage(),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red[700],
-        behavior: SnackBarBehavior.floating,
-      ),
+    AdaptiveSnackBar.show(
+      context,
+      message: message,
+      type: AdaptiveSnackBarType.error,
     );
   }
 
@@ -434,11 +398,10 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
           _currentItem = updatedItem;
           _isEditing = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transcription updated'),
-            duration: Duration(seconds: 1),
-          ),
+        AdaptiveSnackBar.show(
+          context,
+          message: 'Transcription updated',
+          type: AdaptiveSnackBarType.success,
         );
       }
     } catch (e) {
@@ -515,25 +478,19 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                     children: [
                       // Edit Title Button
                       IconButton(
-                        icon: const Icon(
-                          Icons.drive_file_rename_outline,
-                          size: 20,
-                        ),
+                        icon: const Icon(Icons.drive_file_rename_outline),
                         onPressed: widget.onRename,
-                        tooltip: 'Rename Title',
                       ),
 
                       // Delete Button
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20),
+                        icon: const Icon(Icons.delete_outline),
                         onPressed: widget.onDelete,
-                        tooltip: 'Delete',
                       ),
 
                       IconButton(
                         icon: const Icon(Icons.close),
                         onPressed: () => Navigator.pop(context),
-                        tooltip: 'Close',
                       ),
                     ],
                   ),
@@ -595,7 +552,7 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
           if (!_isEditing)
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
+              child: AdaptiveButton(
                 onPressed: () {
                   setState(() {
                     _isEditing = true;
@@ -603,11 +560,8 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                     _transcriptController.text = _currentItem.content;
                   });
                 },
-                icon: const Icon(Icons.edit_note, size: 18),
-                label: const Text("Edit Text"),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
+                label: 'Edit Text',
+                style: AdaptiveButtonStyle.plain,
               ),
             ),
 
@@ -619,13 +573,12 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                 children: [
                   TextButton(
                     onPressed: _cancelEdit,
-                    child: const Text("Cancel"),
+                    child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton.icon(
+                  FilledButton(
                     onPressed: _saveTranscript,
-                    icon: const Icon(Icons.save, size: 16),
-                    label: const Text("Save"),
+                    child: const Text('Save'),
                   ),
                 ],
               ),
@@ -802,10 +755,14 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
     return SizedBox(
       width: double.infinity,
       height: 48,
-      child: ElevatedButton.icon(
+      child: AdaptiveButton.child(
         onPressed: _isSummarizing ? null : _startSummarization,
-        icon: _isSummarizing
-            ? SizedBox(
+        style: AdaptiveButtonStyle.filled,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_isSummarizing)
+              SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
@@ -813,25 +770,16 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                   color: theme.colorScheme.onPrimary,
                 ),
               )
-            : Icon(hasSummary ? Icons.refresh : Icons.auto_awesome),
-        label: Text(
-          _isSummarizing
-              ? 'Summarizing...'
-              : (hasSummary ? 'Re-summarize' : 'Summarize'),
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: theme.colorScheme.primary,
-          foregroundColor: theme.colorScheme.onPrimary,
-          disabledBackgroundColor: theme.colorScheme.primary.withValues(
-            alpha: 0.7,
-          ),
-          disabledForegroundColor: theme.colorScheme.onPrimary.withValues(
-            alpha: 0.7,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+            else
+              Icon(hasSummary ? Icons.refresh : Icons.auto_awesome),
+            const SizedBox(width: 8),
+            Text(
+              _isSummarizing
+                  ? 'Summarizing...'
+                  : (hasSummary ? 'Re-summarize' : 'Summarize'),
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
+          ],
         ),
       ),
     );

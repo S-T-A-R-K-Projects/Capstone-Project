@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/sound_caption.dart';
 
 class SoundCaptionCard extends StatelessWidget {
@@ -38,10 +39,8 @@ class SoundCaptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: caption.isCritical ? 6 : 3,
-      shadowColor:
-          caption.isCritical ? Colors.red.withValues(alpha: 0.3) : null,
+    return AdaptiveCard(
+      padding: const EdgeInsets.all(0),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
@@ -171,54 +170,26 @@ class SoundCaptionCard extends StatelessWidget {
                 ),
               ),
 
-              // Quick Actions
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert_rounded,
-                  color: Colors.grey[600],
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 8,
-                onSelected: (value) {
-                  //
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
+              // Quick Actions - using AdaptivePopupMenuButton
+              AdaptivePopupMenuButton.icon<String>(
+                icon: 'ellipsis.circle',
+                items: [
+                  AdaptivePopupMenuItem(
+                    label: 'View Details',
                     value: 'details',
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded,
-                            color: Colors.blue[600]),
-                        const SizedBox(width: 12),
-                        const Text('View Details'),
-                      ],
-                    ),
                   ),
-                  PopupMenuItem(
+                  AdaptivePopupMenuItem(
+                    label: 'Create Alert',
                     value: 'alert',
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_alert_rounded,
-                            color: Colors.orange[600]),
-                        const SizedBox(width: 12),
-                        const Text('Create Alert'),
-                      ],
-                    ),
                   ),
-                  PopupMenuItem(
+                  AdaptivePopupMenuItem(
+                    label: 'Train Custom',
                     value: 'train',
-                    child: Row(
-                      children: [
-                        Icon(Icons.model_training_rounded,
-                            color: Colors.green[600]),
-                        const SizedBox(width: 12),
-                        const Text('Train Custom'),
-                      ],
-                    ),
                   ),
                 ],
+                onSelected: (index, item) {
+                  //
+                },
               ),
             ],
           ),

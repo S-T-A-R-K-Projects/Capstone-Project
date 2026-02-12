@@ -241,8 +241,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
     await service.add(item);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text("Saved to history")));
+    AdaptiveSnackBar.show(context,
+        message: "Saved to history", type: AdaptiveSnackBarType.success);
   }
 
   void _clearSTT() {
@@ -388,13 +388,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: Row(
                 children: [
-                  // Oval Expand/Collapse Button
+                  // Circular Expand/Collapse Button
                   SizedBox(
-                    height: 48,
+                    height: 36,
                     width: 36,
                     child: AdaptiveButton.child(
                       onPressed: onCollapseToggle,
-                      style: AdaptiveButtonStyle.glass,
+                      style: PlatformInfo.isIOS26OrHigher()
+                          ? AdaptiveButtonStyle.glass
+                          : AdaptiveButtonStyle.plain,
                       child: Center(
                         child: Icon(
                           isExpanded
@@ -425,13 +427,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                       onPressed: onToggle,
                     ),
                   const SizedBox(width: 8),
-                  // Oval Forward Button
+                  // Circular Forward Button
                   SizedBox(
-                    height: 48,
+                    height: 36,
                     width: 36,
                     child: AdaptiveButton.child(
                       onPressed: onExpand,
-                      style: AdaptiveButtonStyle.glass,
+                      style: PlatformInfo.isIOS26OrHigher()
+                          ? AdaptiveButtonStyle.glass
+                          : AdaptiveButtonStyle.plain,
                       child: Center(
                         child: Icon(
                           Icons.arrow_forward_ios_rounded,
@@ -477,7 +481,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           : _soundEvents.length, // Show limited items
       itemBuilder: (context, index) {
         final event = _soundEvents[index];
-        return ListTile(
+        return AdaptiveListTile(
           leading: Icon(
             event.isCritical
                 ? Icons.warning_amber_rounded
@@ -488,7 +492,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
               style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
           subtitle: Text("${event.confidence.toStringAsFixed(2)} confidence",
               style: GoogleFonts.inter(fontSize: 12)),
-          dense: true,
         );
       },
     );
@@ -508,23 +511,23 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton.icon(
-                icon: const Icon(Icons.save_alt_rounded, size: 16),
-                label: const Text("Save"),
-                onPressed: _saveSTTTranscript,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(60, 30),
+              SizedBox(
+                width: 70,
+                child: AdaptiveButton(
+                  onPressed: _saveSTTTranscript,
+                  label: "Save",
+                  style: AdaptiveButtonStyle.plain,
+                  size: AdaptiveButtonSize.small,
                 ),
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.clear_all_rounded, size: 16),
-                label: const Text("Clear"),
-                onPressed: _clearSTT,
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(60, 30),
+              SizedBox(
+                width: 70,
+                child: AdaptiveButton(
+                  onPressed: _clearSTT,
+                  label: "Clear",
+                  style: AdaptiveButtonStyle.plain,
+                  color: Colors.red,
+                  size: AdaptiveButtonSize.small,
                 ),
               ),
             ],
@@ -586,10 +589,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.volume_up_rounded),
-              style: IconButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white),
               onPressed: _handleTTSSubmit,
+              style: IconButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              ),
             ),
           ],
         ),

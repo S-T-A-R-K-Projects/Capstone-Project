@@ -559,6 +559,9 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
     ThemeData theme,
     ScrollController scrollController,
   ) {
+    final transcriptColor =
+        theme.brightness == Brightness.dark ? Colors.white : Colors.black87;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -622,7 +625,11 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                         border: InputBorder.none,
                         hintText: 'Transcript text...',
                       ),
-                      style: GoogleFonts.inter(fontSize: 15, height: 1.6),
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        height: 1.6,
+                        color: transcriptColor,
+                      ),
                     )
                   : SingleChildScrollView(
                       controller: scrollController,
@@ -631,7 +638,7 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                         style: GoogleFonts.inter(
                           fontSize: 15,
                           height: 1.6,
-                          color: theme.colorScheme.onSurface,
+                          color: transcriptColor,
                         ),
                       ),
                     ),

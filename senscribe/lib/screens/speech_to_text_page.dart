@@ -3,13 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:speech_to_text/speech_to_text.dart';
-import 'package:speech_to_text/speech_recognition_error.dart';
 
 import '../services/history_service.dart';
 import '../models/history_item.dart';
-import '../services/trigger_word_service.dart';
-import '../models/trigger_alert.dart';
+import '../services/stt_transcript_service.dart';
 
 class SpeechToTextPage extends StatefulWidget {
   final bool isMonitoring;
@@ -30,14 +27,11 @@ class SpeechToTextPage extends StatefulWidget {
 class _SpeechToTextPageState extends State<SpeechToTextPage> {
   String _transcribedText = '';
   String _currentWords = '';
-  final SpeechToText _speech = SpeechToText();
-  bool _isAvailable = false;
   bool _isListening = false;
   bool _isSaving = false;
   late bool _isMonitoring;
-  final Map<String, DateTime> _lastTriggerAlertAt = {};
-  static const Duration _triggerCooldown = Duration(seconds: 2);
-  final TriggerWordService _triggerWordService = TriggerWordService();
+  StreamSubscription<SttTranscriptSnapshot>? _transcriptSubscription;
+  final SttTranscriptService _sttTranscriptService = SttTranscriptService();
 
   // Helper method to safely show SnackBar
   void _showSnackBar(String message) {
@@ -53,221 +47,51 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   void initState() {
     super.initState();
     _isMonitoring = widget.isMonitoring;
-    _initializeSpeech();
+    _isListening = _isMonitoring;
+    _syncFromSharedTranscript(_sttTranscriptService.current, notify: false);
+    _transcriptSubscription = _sttTranscriptService.stream.listen((snapshot) {
+      if (!mounted) return;
+      _syncFromSharedTranscript(snapshot);
+    });
+  }
+
+  void _syncFromSharedTranscript(
+    SttTranscriptSnapshot snapshot, {
+    bool notify = true,
+  }) {
+    if (!notify) {
+      _transcribedText = snapshot.finalizedText;
+      _currentWords = snapshot.partialWords;
+      return;
+    }
+
+    setState(() {
+      _transcribedText = snapshot.finalizedText;
+      _currentWords = snapshot.partialWords;
+    });
   }
 
   @override
   void didUpdateWidget(SpeechToTextPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isMonitoring != oldWidget.isMonitoring) {
-      _isMonitoring = widget.isMonitoring;
-      if (_isMonitoring) {
-        _startListening();
-      } else {
-        _stopListening();
-      }
-    }
-  }
-
-  Future<void> _initializeSpeech() async {
-    try {
-      _isAvailable = await _speech.initialize(
-        onStatus: _onSpeechStatus,
-        onError: _onSpeechError,
-      );
-
-      if (!_isAvailable && mounted) {
-        _showSnackBar(
-          'Speech recognition not available. Please check permissions.',
-        );
-      }
-
-      if (mounted) setState(() {});
-
-      if (_isAvailable && _isMonitoring) {
-        await _startListening();
-      }
-    } catch (e) {
-      if (mounted) {
-        _showSnackBar('Failed to initialize speech: $e');
-      }
-    }
-  }
-
-  void _onSpeechStatus(String status) {
-    if (!mounted) return;
-
-    if (status == 'listening') {
-      setState(() => _isListening = true);
-    } else if (status == 'done' || status == 'notListening') {
-      // Finalize any pending text before restarting
-      if (_currentWords.isNotEmpty) {
-        setState(() {
-          if (_transcribedText.isNotEmpty && !_transcribedText.endsWith(' ')) {
-            _transcribedText += ' ';
-          }
-          _transcribedText += _currentWords;
-          _currentWords = '';
-          _isListening = false;
-        });
-      } else {
-        setState(() => _isListening = false);
-      }
-
-      // Restart immediately if still monitoring
-      if (_isMonitoring) {
-        _startListening();
-      }
-    }
-  }
-
-  void _onSpeechError(SpeechRecognitionError error) {
-    if (!mounted) return;
-
-    setState(() => _isListening = false);
-
-    // Only show error for non-normal errors
-    if (error.errorMsg != 'error_no_match' &&
-        error.errorMsg != 'error_speech_timeout') {
-      _showSnackBar('Speech error: ${error.errorMsg}');
-    }
-
-    // Restart if still monitoring (unless permission error)
-    if (_isMonitoring && error.errorMsg != 'error_permission') {
-      _startListening();
-    }
-  }
-
-  Future<void> _checkAndNotifyTriggers(String recognizedText) async {
-    final text = recognizedText.trim();
-    if (text.isEmpty) return;
-
-    try {
-      final detected = await _triggerWordService.checkForTriggers(text);
-      if (detected.isEmpty || !mounted) return;
-
-      final now = DateTime.now();
-      final newlyNotified = <String>[];
-
-      for (final trigger in detected) {
-        final lastAt = _lastTriggerAlertAt[trigger];
-        final canNotify =
-            lastAt == null || now.difference(lastAt) >= _triggerCooldown;
-        if (!canNotify) continue;
-
-        _lastTriggerAlertAt[trigger] = now;
-        newlyNotified.add(trigger);
-
-        await _triggerWordService.addAlert(
-          TriggerAlert(
-            triggerWord: trigger,
-            detectedText: text,
-            source: 'speech_to_text',
-          ),
-        );
-      }
-
-      if (newlyNotified.isNotEmpty && mounted) {
-        AdaptiveSnackBar.show(
-          context,
-          message: 'Trigger detected: ${newlyNotified.join(', ')}',
-          type: AdaptiveSnackBarType.warning,
-        );
-      }
-    } catch (_) {
-      // Ignore trigger-check errors silently
+      setState(() {
+        _isMonitoring = widget.isMonitoring;
+        _isListening = _isMonitoring;
+      });
     }
   }
 
   Future<void> _handleToggleMonitoring() async {
-    final nextValue = !_isMonitoring;
     setState(() {
-      _isMonitoring = nextValue;
+      _isMonitoring = !_isMonitoring;
+      _isListening = _isMonitoring;
     });
     widget.onToggleMonitoring();
-
-    if (nextValue) {
-      await _startListening();
-    } else {
-      await _stopListening();
-    }
-  }
-
-  Future<void> _startListening() async {
-    if (!_isAvailable || !_isMonitoring) return;
-
-    // Don't start if already listening
-    if (_speech.isListening) return;
-
-    try {
-      await _speech.listen(
-        onResult: (result) {
-          if (!mounted) return;
-
-          setState(() {
-            _currentWords = result.recognizedWords;
-          });
-
-          if (result.recognizedWords.isNotEmpty) {
-            _checkAndNotifyTriggers(result.recognizedWords);
-          }
-
-          if (result.finalResult && result.recognizedWords.isNotEmpty) {
-            setState(() {
-              if (_transcribedText.isNotEmpty &&
-                  !_transcribedText.endsWith(' ')) {
-                _transcribedText += ' ';
-              }
-              _transcribedText += result.recognizedWords;
-              _currentWords = '';
-            });
-          }
-        },
-        listenFor: const Duration(days: 1), // Never stop on our own
-        pauseFor: const Duration(days: 1), // Never finalize on pause
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          cancelOnError: false,
-          listenMode: ListenMode.dictation,
-          autoPunctuation: true,
-        ),
-      );
-
-      if (mounted) {
-        setState(() => _isListening = true);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isListening = false);
-        // Retry after a short delay
-        if (_isMonitoring) {
-          Future.delayed(const Duration(milliseconds: 100), () {
-            if (mounted && _isMonitoring) {
-              _startListening();
-            }
-          });
-        }
-      }
-    }
-  }
-
-  Future<void> _stopListening() async {
-    try {
-      await _speech.stop();
-    } catch (e) {
-      // Ignore stop errors
-    }
-
-    if (mounted) {
-      setState(() => _isListening = false);
-    }
   }
 
   void _clearText() {
-    setState(() {
-      _transcribedText = '';
-      _currentWords = '';
-    });
+    _sttTranscriptService.clear();
   }
 
   bool get _hasTranscript {
@@ -365,7 +189,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
 
   @override
   void dispose() {
-    _speech.stop();
+    _transcriptSubscription?.cancel();
     super.dispose();
   }
 

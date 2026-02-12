@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
 
 import '../services/audio_classification_service.dart';
 import '../services/text_to_speech_service.dart';
@@ -17,6 +18,7 @@ import '../services/history_service.dart'; // For Saving STT
 import '../models/history_item.dart'; // For Saving STT
 import '../services/trigger_word_service.dart';
 import '../models/trigger_alert.dart';
+import '../services/stt_transcript_service.dart';
 
 class UnifiedHomePage extends StatefulWidget {
   const UnifiedHomePage({super.key});
@@ -48,11 +50,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   bool _isSpeechAvailable = false;
 
   StreamSubscription? _audioSubscription;
+  StreamSubscription<SttTranscriptSnapshot>? _transcriptSubscription;
   String _currentSpeechBuffer = '';
   final List<String> _speechTranscript = [];
   final TriggerWordService _triggerWordService = TriggerWordService();
-  final Map<String, DateTime> _lastTriggerAlertAt = {};
-  static const Duration _triggerCooldown = Duration(seconds: 2);
+  final SttTranscriptService _sttTranscriptService = SttTranscriptService();
+  final Set<String> _triggersAlertedInCurrentUtterance = {};
+  Timer? _speechRestartTimer;
+  Timer? _utteranceBoundaryTimer;
+  bool _isSpeechStarting = false;
 
   // Animations
   late final AnimationController _soundPulseController;
@@ -87,8 +93,34 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       if (mounted) setState(() {});
     });
 
+    _syncFromSharedTranscript(_sttTranscriptService.current, notify: false);
+    _transcriptSubscription = _sttTranscriptService.stream.listen((snapshot) {
+      if (!mounted) return;
+      _syncFromSharedTranscript(snapshot);
+    });
+
     _initSpeech();
     _initTTS();
+  }
+
+  void _syncFromSharedTranscript(
+    SttTranscriptSnapshot snapshot, {
+    bool notify = true,
+  }) {
+    if (!notify) {
+      _speechTranscript
+        ..clear()
+        ..addAll(snapshot.finalizedSegments);
+      _currentSpeechBuffer = snapshot.partialWords;
+      return;
+    }
+
+    setState(() {
+      _speechTranscript
+        ..clear()
+        ..addAll(snapshot.finalizedSegments);
+      _currentSpeechBuffer = snapshot.partialWords;
+    });
   }
 
   Future<void> _initTTS() async {
@@ -98,22 +130,58 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   Future<void> _initSpeech() async {
     try {
       _isSpeechAvailable = await _speech.initialize(
-        onError: (e) => debugPrint('STT Error: $e'),
-        onStatus: (status) {
-          if (status == 'done' && _isSpeechMonitoring) {
-            _startSpeechListening();
-          }
-        },
+        onError: _onSpeechError,
+        onStatus: _onSpeechStatus,
       );
       if (mounted) setState(() {});
+
+      if (_isSpeechAvailable && _isSpeechMonitoring) {
+        await _startSpeechListening();
+      }
     } catch (e) {
       debugPrint('STT Init Failed: $e');
     }
   }
 
+  void _onSpeechStatus(String status) {
+    if (!_isSpeechMonitoring) return;
+    if (status == 'done' || status == 'notListening') {
+      _scheduleSpeechRestart(const Duration(milliseconds: 40));
+    }
+  }
+
+  void _onSpeechError(SpeechRecognitionError error) {
+    debugPrint('STT Error: $error');
+    if (!_isSpeechMonitoring || error.errorMsg == 'error_permission') return;
+
+    final restartDelay = error.errorMsg == 'error_listen_failed'
+        ? const Duration(milliseconds: 350)
+        : const Duration(milliseconds: 80);
+    _scheduleSpeechRestart(restartDelay);
+  }
+
+  void _scheduleSpeechRestart(Duration delay) {
+    _speechRestartTimer?.cancel();
+    _speechRestartTimer = Timer(delay, () {
+      if (mounted && _isSpeechMonitoring) {
+        _startSpeechListening();
+      }
+    });
+  }
+
+  void _markUtteranceActivity() {
+    _utteranceBoundaryTimer?.cancel();
+    _utteranceBoundaryTimer = Timer(const Duration(milliseconds: 1400), () {
+      _triggersAlertedInCurrentUtterance.clear();
+    });
+  }
+
   @override
   void dispose() {
     _audioSubscription?.cancel();
+    _transcriptSubscription?.cancel();
+    _speechRestartTimer?.cancel();
+    _utteranceBoundaryTimer?.cancel();
 
     _speech.stop();
     _ttsService.stop();
@@ -158,6 +226,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         _startSpeechListening();
         _speechPulseController.repeat(reverse: true);
       } else {
+        _speechRestartTimer?.cancel();
+        _utteranceBoundaryTimer?.cancel();
+        _triggersAlertedInCurrentUtterance.clear();
         _stopSpeechException();
         _speechPulseController.stop();
         _speechPulseController.reset();
@@ -165,26 +236,36 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     });
   }
 
+  void _toggleSpeechMonitoringFromDetail() {
+    _toggleSpeechMonitoring();
+  }
+
   Future<void> _startSpeechListening() async {
-    if (!_isSpeechAvailable || _speech.isListening) return;
+    if (!_isSpeechAvailable || _speech.isListening || _isSpeechStarting) {
+      return;
+    }
+    _isSpeechStarting = true;
     try {
       await _speech.listen(
         onResult: (result) {
-          setState(() {
-            _currentSpeechBuffer = result.recognizedWords;
-            if (result.finalResult) {
-              _speechTranscript.add(_currentSpeechBuffer);
-              _currentSpeechBuffer = '';
-              _scrollToBottom();
-            }
-          });
-
           if (result.recognizedWords.isNotEmpty) {
-            _checkAndNotifyTriggers(result.recognizedWords);
+            _markUtteranceActivity();
+          }
+
+          _sttTranscriptService.setPartialWords(result.recognizedWords);
+
+          if (!result.finalResult && result.recognizedWords.isNotEmpty) {
+            _checkAndNotifyPartialTriggers(result.recognizedWords);
+          }
+
+          if (result.finalResult && result.recognizedWords.isNotEmpty) {
+            _sttTranscriptService.commitFinalWords(result.recognizedWords);
+            _scrollToBottom();
+            _triggersAlertedInCurrentUtterance.clear();
           }
         },
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 5),
+        listenFor: const Duration(minutes: 10),
+        pauseFor: const Duration(seconds: 45),
         listenOptions: SpeechListenOptions(
           partialResults: true,
           cancelOnError: false,
@@ -193,10 +274,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       );
     } catch (e) {
       debugPrint('STT Listen Error: $e');
+      if (_isSpeechMonitoring) {
+        _scheduleSpeechRestart(const Duration(milliseconds: 350));
+      }
+    } finally {
+      _isSpeechStarting = false;
     }
   }
 
-  Future<void> _checkAndNotifyTriggers(String recognizedText) async {
+  Future<void> _checkAndNotifyPartialTriggers(String recognizedText) async {
     final text = recognizedText.trim();
     if (text.isEmpty || !mounted) return;
 
@@ -204,16 +290,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       final detected = await _triggerWordService.checkForTriggers(text);
       if (detected.isEmpty || !mounted) return;
 
-      final now = DateTime.now();
       final newlyNotified = <String>[];
 
       for (final trigger in detected) {
-        final lastAt = _lastTriggerAlertAt[trigger];
-        final canNotify =
-            lastAt == null || now.difference(lastAt) >= _triggerCooldown;
-        if (!canNotify) continue;
-
-        _lastTriggerAlertAt[trigger] = now;
+        if (_triggersAlertedInCurrentUtterance.contains(trigger)) continue;
+        _triggersAlertedInCurrentUtterance.add(trigger);
         newlyNotified.add(trigger);
 
         await _triggerWordService.addAlert(
@@ -267,10 +348,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   // --- STT Saving ---
   Future<void> _saveSTTTranscript() async {
-    if (_speechTranscript.isEmpty && _currentSpeechBuffer.isEmpty) return;
-
-    final fullText = _speechTranscript.join(' ') +
-        (_currentSpeechBuffer.isNotEmpty ? ' $_currentSpeechBuffer' : '');
+    final fullText = _sttTranscriptService.current.fullText;
     if (fullText.trim().isEmpty) return;
 
     final service = HistoryService();
@@ -296,10 +374,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   void _clearSTT() {
-    setState(() {
-      _speechTranscript.clear();
-      _currentSpeechBuffer = '';
-    });
+    _sttTranscriptService.clear();
   }
 
   void _clearTTS() {
@@ -312,12 +387,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   Future<void> _openExpandedSpeechPage() async {
-    final wasMonitoring = _isSpeechMonitoring;
-
-    if (wasMonitoring && _speech.isListening) {
-      await _stopSpeechException();
-    }
-
     if (!mounted) return;
 
     await Navigator.of(context).push(
@@ -325,16 +394,10 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         builder: (context) => SpeechToTextPage(
           isMonitoring: _isSpeechMonitoring,
           pulseController: _speechPulseController,
-          onToggleMonitoring: _toggleSpeechMonitoring,
+          onToggleMonitoring: _toggleSpeechMonitoringFromDetail,
         ),
       ),
     );
-
-    if (!mounted) return;
-
-    if (_isSpeechMonitoring && !_speech.isListening) {
-      _startSpeechListening();
-    }
   }
 
   @override

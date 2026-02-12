@@ -7,7 +7,7 @@ import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
 
 void main() {
-  GoogleFonts.config.allowRuntimeFetching = false;
+  GoogleFonts.config.allowRuntimeFetching = true;
   runApp(const SenScribeApp());
 }
 

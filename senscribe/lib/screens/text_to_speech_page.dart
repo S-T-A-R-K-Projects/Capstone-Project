@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../services/text_to_speech_service.dart';
 
 class TextToSpeechPage extends StatefulWidget {
@@ -65,6 +66,14 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
+            leading: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: AdaptiveButton.icon(
+                icon: Icons.arrow_back_ios_new_rounded,
+                onPressed: () => Navigator.of(context).pop(),
+                style: AdaptiveButtonStyle.glass,
+              ),
+            ),
             expandedHeight: 120, // Reduced height since monitoring is gone
             floating: false,
             pinned: true,

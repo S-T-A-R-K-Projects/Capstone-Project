@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 
@@ -159,7 +160,8 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
             // Check for trigger words in the finalized segment
             () async {
               try {
-                final detected = await _triggerWordService.checkForTriggers(result.recognizedWords);
+                final detected = await _triggerWordService
+                    .checkForTriggers(result.recognizedWords);
                 if (detected.isNotEmpty) {
                   for (final trigger in detected) {
                     await _triggerWordService.addAlert(
@@ -174,7 +176,8 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Trigger detected: ${detected.join(', ')}'),
+                        content:
+                            Text('Trigger detected: ${detected.join(', ')}'),
                         backgroundColor: Colors.orange,
                       ),
                     );
@@ -339,6 +342,14 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
+            leading: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: AdaptiveButton.icon(
+                icon: Icons.arrow_back_ios_new_rounded,
+                onPressed: () => Navigator.of(context).pop(),
+                style: AdaptiveButtonStyle.glass,
+              ),
+            ),
             expandedHeight: 280,
             floating: false,
             pinned: true,
@@ -371,113 +382,109 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                       children: [
                         // Listening Status Card
                         Card(
-                              elevation: 4,
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Row(
-                                  children: [
-                                    AnimatedBuilder(
-                                      animation: widget.pulseController,
-                                      builder: (context, child) {
-                                        return Transform.scale(
-                                          scale: widget.isMonitoring
-                                              ? 1.0 +
-                                                    (widget
-                                                            .pulseController
-                                                            .value *
-                                                        0.2)
-                                              : 1.0,
-                                          child: Container(
-                                            width: 48,
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              color: widget.isMonitoring
-                                                  ? Colors.red.withValues(
-                                                      alpha: 0.2,
-                                                    )
-                                                  : Colors.grey.withValues(
-                                                      alpha: 0.2,
-                                                    ),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              widget.isMonitoring
-                                                  ? Icons.mic_rounded
-                                                  : Icons.mic_off_rounded,
-                                              size: 24,
-                                              color: widget.isMonitoring
-                                                  ? Colors.red
-                                                  : Colors.grey,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            widget.isMonitoring
-                                                ? 'Monitoring Active'
-                                                : 'Monitoring Stopped',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  color: widget.isMonitoring
-                                                      ? Colors.green
-                                                      : Colors.grey[600],
-                                                  fontWeight: FontWeight.bold,
+                          elevation: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                AnimatedBuilder(
+                                  animation: widget.pulseController,
+                                  builder: (context, child) {
+                                    return Transform.scale(
+                                      scale: widget.isMonitoring
+                                          ? 1.0 +
+                                              (widget.pulseController.value *
+                                                  0.2)
+                                          : 1.0,
+                                      child: Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: widget.isMonitoring
+                                              ? Colors.red.withValues(
+                                                  alpha: 0.2,
+                                                )
+                                              : Colors.grey.withValues(
+                                                  alpha: 0.2,
                                                 ),
-                                          ),
-                                          Text(
-                                            widget.isMonitoring
-                                                ? (_isListening
-                                                      ? 'Listening...'
-                                                      : 'Preparing...')
-                                                : 'Tap to start monitoring',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.copyWith(
-                                                  color: Colors.grey[600],
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    ElevatedButton(
-                                          onPressed: widget.onToggleMonitoring,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: widget.isMonitoring
-                                                ? Colors.red
-                                                : Colors.green,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 20,
-                                              vertical: 12,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            widget.isMonitoring
-                                                ? 'Stop'
-                                                : 'Start',
-                                          ),
-                                        )
-                                        .animate()
-                                        .scale(duration: 200.ms)
-                                        .then()
-                                        .shimmer(
-                                          duration: 1000.ms,
-                                          delay: 500.ms,
+                                          shape: BoxShape.circle,
                                         ),
-                                  ],
+                                        child: Icon(
+                                          widget.isMonitoring
+                                              ? Icons.mic_rounded
+                                              : Icons.mic_off_rounded,
+                                          size: 24,
+                                          color: widget.isMonitoring
+                                              ? Colors.red
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              ),
-                            )
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.isMonitoring
+                                            ? 'Monitoring Active'
+                                            : 'Monitoring Stopped',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              color: widget.isMonitoring
+                                                  ? Colors.green
+                                                  : Colors.grey[600],
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                      Text(
+                                        widget.isMonitoring
+                                            ? (_isListening
+                                                ? 'Listening...'
+                                                : 'Preparing...')
+                                            : 'Tap to start monitoring',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: Colors.grey[600],
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton(
+                                  onPressed: widget.onToggleMonitoring,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: widget.isMonitoring
+                                        ? Colors.red
+                                        : Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    widget.isMonitoring ? 'Stop' : 'Start',
+                                  ),
+                                )
+                                    .animate()
+                                    .scale(duration: 200.ms)
+                                    .then()
+                                    .shimmer(
+                                      duration: 1000.ms,
+                                      delay: 500.ms,
+                                    ),
+                              ],
+                            ),
+                          ),
+                        )
                             .animate()
                             .slideY(begin: 0.3, duration: 600.ms)
                             .fadeIn(),
@@ -515,9 +522,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                   Text(
                     'Speech to Text',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const Spacer(),
                   TextButton.icon(
@@ -552,14 +559,12 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                                _isListening
-                                    ? Icons.mic_rounded
-                                    : Icons.mic_none_rounded,
-                                size: 80,
-                                color: _isListening
-                                    ? Colors.red
-                                    : Colors.grey[400],
-                              )
+                            _isListening
+                                ? Icons.mic_rounded
+                                : Icons.mic_none_rounded,
+                            size: 80,
+                            color: _isListening ? Colors.red : Colors.grey[400],
+                          )
                               .animate()
                               .scale(duration: 600.ms)
                               .then()
@@ -569,7 +574,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                             _isListening
                                 ? 'Listening...'
                                 : 'No speech detected yet',
-                            style: Theme.of(context).textTheme.titleMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
                                 ?.copyWith(
                                   color: _isListening
                                       ? Colors.red
@@ -582,7 +589,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                             _isListening
                                 ? 'Speak now...'
                                 : 'Start monitoring to begin transcription',
-                            style: Theme.of(context).textTheme.bodyMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
                                 ?.copyWith(color: Colors.grey[500]),
                           ),
                         ],
@@ -600,18 +609,21 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                                 if (_transcribedText.isNotEmpty)
                                   TextSpan(
                                     text: _transcribedText,
-                                    style: Theme.of(context).textTheme.bodyLarge
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
                                         ?.copyWith(height: 1.5),
                                   ),
                                 if (_currentWords.isNotEmpty)
                                   TextSpan(
-                                    text:
-                                        _currentWords.isNotEmpty &&
+                                    text: _currentWords.isNotEmpty &&
                                             _transcribedText.isNotEmpty &&
                                             !_transcribedText.endsWith(' ')
                                         ? ' $_currentWords'
                                         : _currentWords,
-                                    style: Theme.of(context).textTheme.bodyLarge
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
                                         ?.copyWith(
                                           height: 1.5,
                                           color: Colors.grey[600],

@@ -212,10 +212,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     _ttsController.clear();
     _ttsService.speak(text);
 
-    setState(() {
-      // _speechTranscript.add("You: $text");
-      // _scrollToBottom();
-    });
+    setState(() {});
   }
 
   // --- STT Saving ---
@@ -267,10 +264,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
-      // appBar: AdaptiveAppBar(
-      //   title: 'Unified Dashboard',
-      //   useNativeToolbar: true,
-      // ),
       body: Material(
         color: Colors.transparent,
         child: SafeArea(
@@ -278,6 +271,29 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
             padding: const EdgeInsets.only(bottom: 120),
             child: Column(
               children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'assets/images/real_logo.png',
+                          height: 32,
+                          width: 32,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text("SenScribe",
+                          style: GoogleFonts.outfit(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5)),
+                    ],
+                  ),
+                ),
+
                 // 1. Sound Recognition Section (Top)
                 _buildSectionContainer(
                   title: "Sound Recognition",
@@ -320,7 +336,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                 _buildSectionContainer(
                   title: "Text to Speech",
                   icon: Icons.record_voice_over_rounded,
-                  height: 180,
+                  height: 150, // Increased to fix overflow
                   isExpanded: _isTTSExpanded,
                   isMonitoring: false, // TTS doesn't monitor
                   showToggle: false,
@@ -355,73 +371,94 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
-      height: isExpanded
-          ? height
-          : 72, // Collapsed height increased to fix overflow
-      margin: const EdgeInsets.all(8),
+      height: isExpanded ? height : 80,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.transparent,
       ),
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
-              children: [
-                AdaptiveButton.icon(
-                  icon: isExpanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  onPressed: onCollapseToggle,
-                  style: AdaptiveButtonStyle.glass,
-                ),
-                const SizedBox(width: 8),
-                Icon(icon,
-                    size: 24, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(title,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w600, fontSize: 16)),
-                ),
-                if (showToggle && onToggle != null)
-                  IconButton(
-                    icon: Icon(isMonitoring
-                        ? Icons.stop_circle_rounded
-                        : Icons.play_circle_fill_rounded),
-                    color: isMonitoring ? Colors.red : Colors.green,
-                    iconSize: 32,
-                    onPressed: onToggle,
+      child: AdaptiveCard(
+        padding: EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                children: [
+                  // Oval Expand/Collapse Button
+                  SizedBox(
+                    height: 48,
+                    width: 36,
+                    child: AdaptiveButton.child(
+                      onPressed: onCollapseToggle,
+                      style: AdaptiveButtonStyle.glass,
+                      child: Center(
+                        child: Icon(
+                          isExpanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                        ),
+                      ),
+                    ),
                   ),
-                const SizedBox(width: 8),
-                AdaptiveButton.icon(
-                  icon: Icons.arrow_forward_ios_rounded,
-                  onPressed: onExpand,
-                  style: AdaptiveButtonStyle.glass,
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Icon(icon,
+                      size: 24, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(title,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600, fontSize: 16)),
+                  ),
+                  if (showToggle && onToggle != null)
+                    IconButton(
+                      icon: Icon(isMonitoring
+                          ? Icons.stop_circle_rounded
+                          : Icons.play_circle_fill_rounded),
+                      color: isMonitoring ? Colors.red : Colors.green,
+                      iconSize: 32,
+                      onPressed: onToggle,
+                    ),
+                  const SizedBox(width: 8),
+                  // Oval Forward Button
+                  SizedBox(
+                    height: 48,
+                    width: 36,
+                    child: AdaptiveButton.child(
+                      onPressed: onExpand,
+                      style: AdaptiveButtonStyle.glass,
+                      child: Center(
+                        child: Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          if (isExpanded) ...[
-            const Divider(height: 1),
-            // Content
-            Expanded(
-                child:
-                    Padding(padding: const EdgeInsets.all(8.0), child: child)),
+            if (isExpanded) ...[
+              const Divider(height: 1, thickness: 0.5),
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: child,
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -433,7 +470,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
               style: GoogleFonts.inter(color: Colors.grey)));
     }
     return ListView.builder(
-      itemCount: _soundEvents.length,
+      physics: const NeverScrollableScrollPhysics(), // Nested scrolling
+      shrinkWrap: true, // Needed inside SingleChildScrollView
+      itemCount: _soundEvents.length > 3
+          ? 3
+          : _soundEvents.length, // Show limited items
       itemBuilder: (context, index) {
         final event = _soundEvents[index];
         return ListTile(
@@ -489,26 +530,27 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
             ],
           ),
         ),
-        Expanded(
-          child: ListView(
-            controller: _sttScrollController,
-            children: [
-              ..._speechTranscript.map((t) => Padding(
-                    padding: const EdgeInsets.only(
-                        bottom: 8.0, left: 8.0, right: 8.0),
-                    child: Text(t, style: GoogleFonts.inter(fontSize: 16)),
-                  )),
-              if (_currentSpeechBuffer.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(_currentSpeechBuffer,
-                      style: GoogleFonts.inter(
-                          fontSize: 16,
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic)),
-                ),
-            ],
-          ),
+
+        ListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          controller: _sttScrollController,
+          children: [
+            ..._speechTranscript.map((t) => Padding(
+                  padding:
+                      const EdgeInsets.only(bottom: 8.0, left: 8.0, right: 8.0),
+                  child: Text(t, style: GoogleFonts.inter(fontSize: 16)),
+                )),
+            if (_currentSpeechBuffer.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(_currentSpeechBuffer,
+                    style: GoogleFonts.inter(
+                        fontSize: 16,
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic)),
+              ),
+          ],
         ),
       ],
     );
@@ -516,8 +558,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   Widget _buildTTSContent() {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center, // Changed from end to center
       children: [
-        const Spacer(),
         Row(
           children: [
             Expanded(
@@ -525,6 +567,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                 alignment: Alignment.centerRight,
                 children: [
                   AdaptiveTextField(
+                    // Reverted to AdaptiveTextField for onSubmitted support
                     controller: _ttsController,
                     placeholder: "Type to speak...",
                     onSubmitted: (_) => _handleTTSSubmit(),

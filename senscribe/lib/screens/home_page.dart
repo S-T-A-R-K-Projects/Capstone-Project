@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/sound_caption.dart';
 import '../widgets/sound_caption_card.dart';
 import '../services/audio_classification_service.dart';
@@ -121,6 +122,14 @@ class _HomePageState extends State<HomePage> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
+            leading: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: AdaptiveButton.icon(
+                icon: Icons.arrow_back_ios_new_rounded,
+                onPressed: () => Navigator.of(context).pop(),
+                style: AdaptiveButtonStyle.glass,
+              ),
+            ),
             expandedHeight: 280,
             floating: false,
             pinned: true,

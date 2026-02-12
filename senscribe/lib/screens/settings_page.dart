@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../main.dart';
@@ -23,7 +24,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = ThemeProvider();
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -53,7 +53,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.only(
+                  left: 16, right: 16, top: 16, bottom: 120),
               children: [
                 // Appearance Section
                 Card(
@@ -83,39 +84,29 @@ class _SettingsPageState extends State<SettingsPage> {
                         const SizedBox(height: 16),
                         ListTile(
                           leading: Icon(
-                            isDarkMode
-                                ? Icons.dark_mode_rounded
-                                : Icons.light_mode_rounded,
+                            Icons.brightness_auto_rounded,
                             color: Theme.of(context).colorScheme.primary,
                           ),
                           title: Text(
-                            'Dark Mode',
+                            'App Theme',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                          subtitle: Text(
-                            isDarkMode
-                                ? 'Dark theme enabled'
-                                : 'Light theme enabled',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.color,
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: AdaptiveSegmentedControl(
+                                labels: const ['System', 'Light', 'Dark'],
+                                selectedIndex: themeProvider.themeMode.index,
+                                onValueChanged: (int index) {
+                                  themeProvider
+                                      .setTheme(ThemeMode.values[index]);
+                                },
+                              ),
                             ),
-                          ),
-                          trailing: Switch(
-                            value: isDarkMode,
-                            onChanged: (value) {
-                              themeProvider.setTheme(
-                                value ? ThemeMode.dark : ThemeMode.light,
-                              );
-                            },
-                            activeTrackColor: Theme.of(
-                              context,
-                            ).colorScheme.primary,
                           ),
                           contentPadding: EdgeInsets.zero,
                         ),

@@ -1,0 +1,577 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+
+import '../services/audio_classification_service.dart';
+import '../services/text_to_speech_service.dart';
+import '../models/sound_caption.dart';
+
+// Import full pages for navigation
+import 'speech_to_text_page.dart';
+import 'text_to_speech_page.dart';
+import 'home_page.dart'; // For Sound Recognition Expanded View
+import '../services/history_service.dart'; // For Saving STT
+import '../models/history_item.dart'; // For Saving STT
+
+class UnifiedHomePage extends StatefulWidget {
+  const UnifiedHomePage({super.key});
+
+  @override
+  State<UnifiedHomePage> createState() => _UnifiedHomePageState();
+}
+
+class _UnifiedHomePageState extends State<UnifiedHomePage>
+    with TickerProviderStateMixin {
+  // Services
+  final AudioClassificationService _audioService = AudioClassificationService();
+  final SpeechToText _speech = SpeechToText();
+  final TextToSpeechService _ttsService = TextToSpeechService();
+
+  // State
+  List<SoundCaption> _soundEvents = [];
+  final TextEditingController _ttsController = TextEditingController();
+  final ScrollController _sttScrollController = ScrollController();
+
+  // Expansion State
+  bool _isSoundExpanded = true;
+  bool _isSTTExpanded =
+      true; // User might want this smaller by default? keeping true as per request "expandable" implies it's open or closed.
+  bool _isTTSExpanded = true;
+
+  // Simultaneous Monitoring States
+  bool _isSoundMonitoring = false;
+  bool _isSpeechMonitoring = false;
+  bool _isSpeechAvailable = false;
+
+  StreamSubscription? _audioSubscription;
+  String _currentSpeechBuffer = '';
+  final List<String> _speechTranscript = [];
+
+  // Animations
+  late final AnimationController _soundPulseController;
+  late final AnimationController _speechPulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sync initial state
+    _isSoundMonitoring = _audioService.isMonitoring;
+    _soundEvents = List.from(_audioService.history);
+
+    // Subscribe to shared history
+    _audioSubscription = _audioService.historyStream.listen((events) {
+      if (mounted) {
+        setState(() {
+          _soundEvents = events;
+        });
+      }
+    });
+
+    _soundPulseController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 2));
+    _speechPulseController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 2));
+
+    if (_isSoundMonitoring) {
+      _soundPulseController.repeat(reverse: true);
+    }
+
+    _ttsController.addListener(() {
+      if (mounted) setState(() {});
+    });
+
+    _initSpeech();
+    _initTTS();
+  }
+
+  Future<void> _initTTS() async {
+    await _ttsService.init();
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      _isSpeechAvailable = await _speech.initialize(
+        onError: (e) => debugPrint('STT Error: $e'),
+        onStatus: (status) {
+          if (status == 'done' && _isSpeechMonitoring) {
+            _startSpeechListening();
+          }
+        },
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('STT Init Failed: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioSubscription?.cancel();
+    // Do NOT stop audio service here if we want it to persist across pages,
+    // BUT we should stop it if the app is closing?
+    // User logic: "Think of memory; we won’t store the same data twice. But we display it on two different locations on demand."
+    // If we leave this page, we might want to keep monitoring if it's "Unified Home".
+    // Usually home page dispose means app exit or tab switch.
+    // I will NOT stop audio service here to allow background monitoring if implemented.
+    // actually, if we navigate away, we might want to keep it running.
+
+    _speech.stop();
+    _ttsService.stop();
+    _soundPulseController.dispose();
+    _speechPulseController.dispose();
+    _ttsController.dispose();
+    _sttScrollController.dispose();
+    super.dispose();
+  }
+
+  // --- Sound Monitoring ---
+  void _toggleSoundMonitoring() {
+    setState(() {
+      _isSoundMonitoring = !_isSoundMonitoring;
+      if (_isSoundMonitoring) {
+        _startSoundMonitoring();
+      } else {
+        _stopSoundMonitoring();
+      }
+    });
+  }
+
+  Future<void> _startSoundMonitoring() async {
+    await _audioService.start();
+    _soundPulseController.repeat(reverse: true);
+  }
+
+  Future<void> _stopSoundMonitoring() async {
+    await _audioService.stop();
+    _soundPulseController.stop();
+    _soundPulseController.reset();
+  }
+
+  // _handleSoundEvent removed as it's handled by service
+  // _isCriticalSound removed as it's handled by service/model
+
+  // --- Speech Monitoring ---
+  void _toggleSpeechMonitoring() {
+    setState(() {
+      _isSpeechMonitoring = !_isSpeechMonitoring;
+      if (_isSpeechMonitoring) {
+        _startSpeechListening();
+        _speechPulseController.repeat(reverse: true);
+      } else {
+        _stopSpeechException();
+        _speechPulseController.stop();
+        _speechPulseController.reset();
+      }
+    });
+  }
+
+  Future<void> _startSpeechListening() async {
+    if (!_isSpeechAvailable || _speech.isListening) return;
+    try {
+      await _speech.listen(
+        onResult: (result) {
+          setState(() {
+            _currentSpeechBuffer = result.recognizedWords;
+            if (result.finalResult) {
+              _speechTranscript.add(_currentSpeechBuffer);
+              _currentSpeechBuffer = '';
+              _scrollToBottom();
+            }
+          });
+        },
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 5),
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+        ),
+      );
+    } catch (e) {
+      debugPrint('STT Listen Error: $e');
+    }
+  }
+
+  Future<void> _stopSpeechException() async {
+    await _speech.stop();
+  }
+
+  void _scrollToBottom() {
+    if (_sttScrollController.hasClients) {
+      // Small delay to allow render
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _sttScrollController.animateTo(
+          _sttScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  // --- TTS ---
+  void _handleTTSSubmit() {
+    final text = _ttsController.text.trim();
+    if (text.isEmpty) return;
+
+    // _ttsController.clear(); // Don't clear automatically as per user request (or maybe I misunderstood? "when you write something and press enter, it clears its type box automatically. Add a clear button for it as well.")
+    // Actually user said: "when you write something and press enter, it clears its type box automatically. Add a clear button for it as well."
+    // Implies: It currently clears automatically (which is annoying?), OR they just want a manual clear button.
+    // Usually chatting apps clear on send. But for TTS, maybe they want to repeat it?
+    // "Add a clear button for it as well" implies manual control.
+    // I will KEEP the auto-clear for now as it's standard "submit" behavior, but surely adding a clear button helps if they want to clear without sending?
+    // Wait, "when you write something and press enter, it clears its type box automatically." -> Sounds like a complaint?
+    // "Add a clear button for it as well."
+    // I'll assume they want to PREVENT auto-clear or just want the utility.
+    // I will REMOVE auto-clear to be safe, and let them use the clear button?
+    // Or maybe keep auto-clear on Submit, but definitely add Clear button.
+    // Le'ts keep auto-clear on SUBMIT (Enter), because that's what "Submitted" usually means.
+    // But I will add the Clear button as requested.
+
+    _ttsController.clear();
+    _ttsService.speak(text);
+
+    setState(() {
+      // _speechTranscript.add("You: $text");
+      // _scrollToBottom();
+    });
+  }
+
+  // --- STT Saving ---
+  Future<void> _saveSTTTranscript() async {
+    if (_speechTranscript.isEmpty && _currentSpeechBuffer.isEmpty) return;
+
+    final fullText = _speechTranscript.join(' ') +
+        (_currentSpeechBuffer.isNotEmpty ? ' $_currentSpeechBuffer' : '');
+    if (fullText.trim().isEmpty) return;
+
+    final service = HistoryService();
+    final nextIndex = await service.nextTextIndex();
+    if (!mounted) return;
+
+    final defaultTitle = 'Text-${nextIndex.toString().padLeft(4, '0')}';
+    // Simplified save to avoid complex dialogs here, or just save with default?
+    // User asked for "Save button that saves the STT to history".
+    // I'll try to show a simple dialog or just save immediately.
+    // Let's do a simple save for speed/UX in this unified view.
+
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final item = HistoryItem(
+      id: id,
+      title: defaultTitle,
+      subtitle: 'Unified STT',
+      content: fullText,
+      timestamp: DateTime.now(),
+      metadata: {'source': 'unified_stt'},
+    );
+
+    await service.add(item);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("Saved to history")));
+  }
+
+  void _clearSTT() {
+    setState(() {
+      _speechTranscript.clear();
+      _currentSpeechBuffer = '';
+    });
+  }
+
+  void _clearTTS() {
+    _ttsController.clear();
+  }
+
+  // --- Navigation Helpers ---
+  void _navigateToExpanded(Widget page) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdaptiveScaffold(
+      // appBar: AdaptiveAppBar(
+      //   title: 'Unified Dashboard',
+      //   useNativeToolbar: true,
+      // ),
+      body: Material(
+        color: Colors.transparent,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 120),
+            child: Column(
+              children: [
+                // 1. Sound Recognition Section (Top)
+                _buildSectionContainer(
+                  title: "Sound Recognition",
+                  icon: Icons.hearing_rounded,
+                  height: 250,
+                  isExpanded: _isSoundExpanded,
+                  isMonitoring: _isSoundMonitoring,
+                  onToggle: _toggleSoundMonitoring,
+                  onCollapseToggle: () =>
+                      setState(() => _isSoundExpanded = !_isSoundExpanded),
+                  onExpand: () {
+                    // Navigate to detailed Sound page (HomePage)
+                    _navigateToExpanded(HomePage(
+                      isMonitoring: _isSoundMonitoring,
+                      pulseController: _soundPulseController,
+                      onToggleMonitoring: _toggleSoundMonitoring,
+                    ));
+                  },
+                  child: _buildSoundContent(),
+                ),
+
+                // 2. STT Section (Middle)
+                _buildSectionContainer(
+                  title: "Speech to Text",
+                  icon: Icons.mic_rounded,
+                  height: 280, // Reduced from 400 as requested
+                  isExpanded: _isSTTExpanded,
+                  isMonitoring: _isSpeechMonitoring,
+                  onToggle: _toggleSpeechMonitoring,
+                  onCollapseToggle: () =>
+                      setState(() => _isSTTExpanded = !_isSTTExpanded),
+                  onExpand: () => _navigateToExpanded(SpeechToTextPage(
+                      isMonitoring: _isSpeechMonitoring,
+                      pulseController: _speechPulseController,
+                      onToggleMonitoring: _toggleSpeechMonitoring)),
+                  child: _buildSTTContent(),
+                ),
+
+                // 3. TTS Section (Bottom)
+                _buildSectionContainer(
+                  title: "Text to Speech",
+                  icon: Icons.record_voice_over_rounded,
+                  height: 180,
+                  isExpanded: _isTTSExpanded,
+                  isMonitoring: false, // TTS doesn't monitor
+                  showToggle: false,
+                  onCollapseToggle: () =>
+                      setState(() => _isTTSExpanded = !_isTTSExpanded),
+                  onExpand: () => _navigateToExpanded(TextToSpeechPage(
+                      isMonitoring: false,
+                      pulseController: _speechPulseController,
+                      onToggleMonitoring: () {})),
+                  child: _buildTTSContent(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionContainer({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    required double height,
+    required bool isExpanded,
+    required VoidCallback onCollapseToggle,
+    bool isMonitoring = false,
+    bool showToggle = true,
+    required VoidCallback onExpand,
+    VoidCallback? onToggle,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      height: isExpanded ? height : 60, // Collapsed height
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(isExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded),
+                  onPressed: onCollapseToggle,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  iconSize: 20,
+                  color: Colors.grey,
+                ),
+                const SizedBox(width: 8),
+                Icon(icon,
+                    size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(title,
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600, fontSize: 16)),
+                const Spacer(),
+                if (showToggle && onToggle != null)
+                  IconButton(
+                    icon: Icon(isMonitoring
+                        ? Icons.stop_circle_rounded
+                        : Icons.play_circle_fill_rounded),
+                    color: isMonitoring ? Colors.red : Colors.green,
+                    onPressed: onToggle,
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  onPressed: onExpand,
+                ),
+              ],
+            ),
+          ),
+          if (isExpanded) ...[
+            const Divider(height: 1),
+            // Content
+            Expanded(
+                child:
+                    Padding(padding: const EdgeInsets.all(8.0), child: child)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSoundContent() {
+    if (_soundEvents.isEmpty) {
+      return Center(
+          child: Text("No sounds detected",
+              style: GoogleFonts.inter(color: Colors.grey)));
+    }
+    return ListView.builder(
+      itemCount: _soundEvents.length,
+      itemBuilder: (context, index) {
+        final event = _soundEvents[index];
+        return ListTile(
+          leading: Icon(
+            event.isCritical
+                ? Icons.warning_amber_rounded
+                : Icons.music_note_rounded,
+            color: event.isCritical ? Colors.red : Colors.blue,
+          ),
+          title: Text(event.sound,
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+          subtitle: Text("${event.confidence.toStringAsFixed(2)} confidence",
+              style: GoogleFonts.inter(fontSize: 12)),
+          dense: true,
+        );
+      },
+    );
+  }
+
+  Widget _buildSTTContent() {
+    if (_speechTranscript.isEmpty && _currentSpeechBuffer.isEmpty) {
+      return Center(
+          child: Text("Tap play to listen...",
+              style: GoogleFonts.inter(color: Colors.grey)));
+    }
+    return Column(
+      children: [
+        // Action Bar for STT
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.save_alt_rounded, size: 16),
+                label: const Text("Save"),
+                onPressed: _saveSTTTranscript,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(60, 30),
+                ),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.clear_all_rounded, size: 16),
+                label: const Text("Clear"),
+                onPressed: _clearSTT,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(60, 30),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            controller: _sttScrollController,
+            children: [
+              ..._speechTranscript.map((t) => Padding(
+                    padding: const EdgeInsets.only(
+                        bottom: 8.0, left: 8.0, right: 8.0),
+                    child: Text(t, style: GoogleFonts.inter(fontSize: 16)),
+                  )),
+              if (_currentSpeechBuffer.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(_currentSpeechBuffer,
+                      style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic)),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTTSContent() {
+    return Column(
+      children: [
+        const Spacer(),
+        Row(
+          children: [
+            Expanded(
+              child: Stack(
+                alignment: Alignment.centerRight,
+                children: [
+                  AdaptiveTextField(
+                    controller: _ttsController,
+                    placeholder: "Type to speak...",
+                    onSubmitted: (_) => _handleTTSSubmit(),
+                  ),
+                  if (_ttsController.text.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: _clearTTS,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.volume_up_rounded),
+              style: IconButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Colors.white),
+              onPressed: _handleTTSSubmit,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

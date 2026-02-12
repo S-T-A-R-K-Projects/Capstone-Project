@@ -11,7 +11,7 @@ class SoundCaptionCard extends StatelessWidget {
   String _formatTimestamp(DateTime timestamp) {
     final now = DateTime.now();
     final difference = now.difference(timestamp);
-    
+
     if (difference.inMinutes < 1) {
       return '${difference.inSeconds}s ago';
     } else if (difference.inHours < 1) {
@@ -23,11 +23,16 @@ class SoundCaptionCard extends StatelessWidget {
 
   IconData _getDirectionIcon(String direction) {
     switch (direction.toLowerCase()) {
-      case 'front': return Icons.arrow_upward_rounded;
-      case 'back': return Icons.arrow_downward_rounded;
-      case 'left': return Icons.arrow_back_rounded;
-      case 'right': return Icons.arrow_forward_rounded;
-      default: return Icons.my_location_rounded;
+      case 'front':
+        return Icons.arrow_upward_rounded;
+      case 'back':
+        return Icons.arrow_downward_rounded;
+      case 'left':
+        return Icons.arrow_back_rounded;
+      case 'right':
+        return Icons.arrow_forward_rounded;
+      default:
+        return Icons.my_location_rounded;
     }
   }
 
@@ -35,23 +40,24 @@ class SoundCaptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: caption.isCritical ? 6 : 3,
-      shadowColor: caption.isCritical ? Colors.red.withValues(alpha: 0.3) : null,
+      shadowColor:
+          caption.isCritical ? Colors.red.withValues(alpha: 0.3) : null,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: caption.isCritical
-            ? Border.all(color: Colors.red, width: 2)
-            : null,
-          gradient: caption.isCritical 
-            ? LinearGradient(
-                colors: [
-                  Colors.red.withValues(alpha: 0.05),
-                  Colors.red.withValues(alpha: 0.02),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
+              ? Border.all(color: Colors.red, width: 2)
+              : null,
+          gradient: caption.isCritical
+              ? LinearGradient(
+                  colors: [
+                    Colors.red.withValues(alpha: 0.05),
+                    Colors.red.withValues(alpha: 0.02),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -63,25 +69,36 @@ class SoundCaptionCard extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: caption.isCritical 
-                      ? [Colors.red.withValues(alpha: 0.2), Colors.red.withValues(alpha: 0.1)]
-                      : [
-                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                        ],
+                    colors: caption.isCritical
+                        ? [
+                            Colors.red.withValues(alpha: 0.2),
+                            Colors.red.withValues(alpha: 0.1)
+                          ]
+                        : [
+                            Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.2),
+                            Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.1),
+                          ],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  caption.isCritical ? Icons.warning_rounded : _getDirectionIcon(caption.direction),
-                  color: caption.isCritical 
-                    ? Colors.red 
-                    : Theme.of(context).colorScheme.primary,
+                  caption.isCritical
+                      ? Icons.warning_rounded
+                      : _getDirectionIcon(caption.direction),
+                  color: caption.isCritical
+                      ? Colors.red
+                      : Theme.of(context).colorScheme.primary,
                   size: 24,
                 ),
               ),
               const SizedBox(width: 16),
-              
+
               // Caption Content
               Expanded(
                 child: Column(
@@ -95,7 +112,9 @@ class SoundCaptionCard extends StatelessWidget {
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: caption.isCritical ? Colors.red[700] : Colors.black87,
+                              color: caption.isCritical
+                                  ? Colors.red[700]
+                                  : Colors.black87,
                             ),
                           ),
                         ),
@@ -119,10 +138,11 @@ class SoundCaptionCard extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ).animate()
-                            .scale(duration: 300.ms)
-                            .then()
-                            .shimmer(duration: 1000.ms),
+                          )
+                              .animate()
+                              .scale(duration: 300.ms)
+                              .then()
+                              .shimmer(duration: 1000.ms),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -150,7 +170,7 @@ class SoundCaptionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Quick Actions
               PopupMenuButton<String>(
                 icon: Icon(
@@ -162,14 +182,15 @@ class SoundCaptionCard extends StatelessWidget {
                 ),
                 elevation: 8,
                 onSelected: (value) {
-                  // TODO: Implement quick actions
+                  //
                 },
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'details',
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline_rounded, color: Colors.blue[600]),
+                        Icon(Icons.info_outline_rounded,
+                            color: Colors.blue[600]),
                         const SizedBox(width: 12),
                         const Text('View Details'),
                       ],
@@ -179,7 +200,8 @@ class SoundCaptionCard extends StatelessWidget {
                     value: 'alert',
                     child: Row(
                       children: [
-                        Icon(Icons.add_alert_rounded, color: Colors.orange[600]),
+                        Icon(Icons.add_alert_rounded,
+                            color: Colors.orange[600]),
                         const SizedBox(width: 12),
                         const Text('Create Alert'),
                       ],
@@ -189,7 +211,8 @@ class SoundCaptionCard extends StatelessWidget {
                     value: 'train',
                     child: Row(
                       children: [
-                        Icon(Icons.model_training_rounded, color: Colors.green[600]),
+                        Icon(Icons.model_training_rounded,
+                            color: Colors.green[600]),
                         const SizedBox(width: 12),
                         const Text('Train Custom'),
                       ],

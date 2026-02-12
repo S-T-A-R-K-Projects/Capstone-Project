@@ -87,24 +87,29 @@ class _AlertsPageState extends State<AlertsPage> {
               onPressed: () async {
                 if (_newWordController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a trigger word')),
+                    const SnackBar(
+                        content: Text('Please enter a trigger word')),
                   );
                   return;
                 }
 
+                final wordToAdd = _newWordController.text.trim();
+                final navigator = Navigator.of(context);
+                final messenger = ScaffoldMessenger.of(context);
+
                 await _triggerWordService.addTriggerWord(
                   TriggerWord(
-                    word: _newWordController.text.trim(),
+                    word: wordToAdd,
                     caseSensitive: caseSensitive,
                     exactMatch: exactMatch,
                   ),
                 );
 
                 if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  navigator.pop();
+                  messenger.showSnackBar(
                     SnackBar(
-                      content: Text('Added trigger word: ${_newWordController.text}'),
+                      content: Text('Added trigger word: $wordToAdd'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -345,10 +350,7 @@ class _AlertsPageState extends State<AlertsPage> {
                       },
                     ),
                   ),
-                )
-                    .animate()
-                    .fadeIn(duration: 400.ms)
-                    .slideX(begin: 0.1);
+                ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1);
               },
             );
           },
@@ -370,7 +372,8 @@ class _AlertsPageState extends State<AlertsPage> {
         return StreamBuilder<List<TriggerWord>>(
           stream: _triggerWordService.triggerWordsStream,
           builder: (context, streamSnapshot) {
-            final displayWords = streamSnapshot.hasData ? streamSnapshot.data ?? words : words;
+            final displayWords =
+                streamSnapshot.hasData ? streamSnapshot.data ?? words : words;
 
             if (displayWords.isEmpty) {
               return Center(
@@ -437,7 +440,9 @@ class _AlertsPageState extends State<AlertsPage> {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
                     leading: Icon(
-                      word.enabled ? Icons.label_rounded : Icons.label_off_rounded,
+                      word.enabled
+                          ? Icons.label_rounded
+                          : Icons.label_off_rounded,
                       color: word.enabled ? Colors.blue : Colors.grey,
                     ),
                     title: Text(
@@ -478,17 +483,15 @@ class _AlertsPageState extends State<AlertsPage> {
                         ),
                         PopupMenuItem(
                           onTap: () async {
-                            await _triggerWordService.removeTriggerWord(word.word);
+                            await _triggerWordService
+                                .removeTriggerWord(word.word);
                           },
                           child: const Text('Delete'),
                         ),
                       ],
                     ),
                   ),
-                )
-                    .animate()
-                    .fadeIn(duration: 400.ms)
-                    .slideX(begin: 0.1);
+                ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1);
               },
             );
           },

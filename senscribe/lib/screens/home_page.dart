@@ -29,12 +29,24 @@ class _HomePageState extends State<HomePage> {
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
   final AudioClassificationService _audioService = AudioClassificationService();
-  final List<SoundCaption> _captions = [];
-  StreamSubscription<Map<String, dynamic>>? _classificationSubscription;
+  List<SoundCaption> _captions = [];
+  StreamSubscription<List<SoundCaption>>? _classificationSubscription;
 
   @override
   void initState() {
     super.initState();
+    // Sync initial state
+    _captions = List.from(_audioService.history);
+
+    // Subscribe to shared history
+    _classificationSubscription = _audioService.historyStream.listen((events) {
+      if (mounted) {
+        setState(() {
+          _captions = events;
+        });
+      }
+    });
+
     if (widget.isMonitoring) {
       _startMonitoring();
     }
@@ -55,9 +67,11 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _classificationSubscription?.cancel();
-    if (widget.isMonitoring) {
-      _audioService.stop();
-    }
+    // Do NOT stop audio service if we want background monitoring or shared state consistency
+    // However, if the user explicitly toggles it off, they do it via the prop.
+    // The widget.isMonitoring determines if this page *thinks* it's monitoring.
+    // But since state is shared, we should probably respect the global state?
+    // User passed `isMonitoring` from parent (Unified).
     super.dispose();
   }
 
@@ -78,19 +92,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _startMonitoring() async {
-    _classificationSubscription ??= _audioService.classificationStream.listen(
-      _handleClassificationEvent,
-      onError: (error) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Audio classification error: $error')),
-        );
-        if (widget.isMonitoring) {
-          widget.onToggleMonitoring();
-        }
-      },
-    );
-
     try {
       await _audioService.start();
     } catch (error) {
@@ -108,61 +109,7 @@ class _HomePageState extends State<HomePage> {
     await _audioService.stop();
   }
 
-  void _handleClassificationEvent(Map<String, dynamic> data) {
-    final type = data['type'] as String?;
-    if (type == 'status') {
-      final status = data['status'] as String?;
-      if (status == 'stopped' && mounted && widget.isMonitoring) {
-        widget.onToggleMonitoring();
-      }
-      return;
-    }
-    if (type != null && type != 'result') {
-      return;
-    }
-
-    final label = data['label'] as String? ?? 'Unknown sound';
-    final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
-    final timestampMs = (data['timestampMs'] as num?)?.toInt();
-    final DateTime timestamp;
-    if (timestampMs != null) {
-      timestamp = DateTime.fromMillisecondsSinceEpoch(
-        timestampMs,
-        isUtc: true,
-      ).toLocal();
-    } else {
-      timestamp = DateTime.now();
-    }
-
-    const criticalLabels = {
-      'siren',
-      'fire_alarm',
-      'smoke_alarm',
-      'scream',
-      'baby_crying',
-      'dog_bark',
-      'gunshot',
-      'glass_breaking',
-    };
-    final normalizedLabel = label.toLowerCase().replaceAll(' ', '_');
-    final isCritical = criticalLabels.contains(normalizedLabel);
-
-    setState(() {
-      _captions.insert(
-        0,
-        SoundCaption(
-          sound: label,
-          timestamp: timestamp,
-          isCritical: isCritical,
-          direction: 'Unknown',
-          confidence: confidence,
-        ),
-      );
-      if (_captions.length > 50) {
-        _captions.removeRange(50, _captions.length);
-      }
-    });
-  }
+  // _handleClassificationEvent removed as it's handled by service
 
   List<SoundCaption> get _filteredCaptions {
     if (_selectedFilter == 'Critical') {
@@ -211,107 +158,107 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         // Monitoring Status Card
                         Card(
-                              elevation: 4,
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Row(
-                                  children: [
-                                    AnimatedBuilder(
-                                      animation: widget.pulseController,
-                                      builder: (context, child) {
-                                        return Transform.scale(
-                                          scale: widget.isMonitoring
-                                              ? 1.0 +
-                                                    (widget.pulseController.value *
-                                                        0.2)
-                                              : 1.0,
-                                          child: Container(
-                                            width: 48,
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              color: widget.isMonitoring
-                                                  ? Colors.green.withValues(
-                                                      alpha: 0.2,
-                                                    )
-                                                  : Colors.grey.withValues(
-                                                      alpha: 0.2,
-                                                    ),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              widget.isMonitoring
-                                                  ? Icons.mic_rounded
-                                                  : Icons.mic_off_rounded,
-                                              size: 24,
+                          elevation: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                AnimatedBuilder(
+                                  animation: widget.pulseController,
+                                  builder: (context, child) {
+                                    return Transform.scale(
+                                      scale: widget.isMonitoring
+                                          ? 1.0 +
+                                              (widget.pulseController.value *
+                                                  0.2)
+                                          : 1.0,
+                                      child: Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: widget.isMonitoring
+                                              ? Colors.green.withValues(
+                                                  alpha: 0.2,
+                                                )
+                                              : Colors.grey.withValues(
+                                                  alpha: 0.2,
+                                                ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          widget.isMonitoring
+                                              ? Icons.mic_rounded
+                                              : Icons.mic_off_rounded,
+                                          size: 24,
+                                          color: widget.isMonitoring
+                                              ? Colors.green
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.isMonitoring
+                                            ? 'Monitoring Active'
+                                            : 'Monitoring Stopped',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
                                               color: widget.isMonitoring
                                                   ? Colors.green
-                                                  : Colors.grey,
+                                                  : Colors.grey[600],
+                                              fontWeight: FontWeight.bold,
                                             ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            widget.isMonitoring
-                                                ? 'Monitoring Active'
-                                                : 'Monitoring Stopped',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  color: widget.isMonitoring
-                                                      ? Colors.green
-                                                      : Colors.grey[600],
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                          ),
-                                          Text(
-                                            widget.isMonitoring
-                                                ? 'Listening for sounds...'
-                                                : 'Tap to start monitoring',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.copyWith(
-                                                  color: Colors.grey[600],
-                                                ),
-                                          ),
-                                        ],
                                       ),
-                                    ),
-                                    ElevatedButton(
-                                          onPressed: _toggleMonitoring,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: widget.isMonitoring
-                                                ? Colors.red
-                                                : Colors.green,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 20,
-                                              vertical: 12,
+                                      Text(
+                                        widget.isMonitoring
+                                            ? 'Listening for sounds...'
+                                            : 'Tap to start monitoring',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: Colors.grey[600],
                                             ),
-                                          ),
-                                          child: Text(
-                                            widget.isMonitoring ? 'Stop' : 'Start',
-                                          ),
-                                        )
-                                        .animate()
-                                        .scale(duration: 200.ms)
-                                        .then()
-                                        .shimmer(
-                                          duration: 1000.ms,
-                                          delay: 500.ms,
-                                        ),
-                                  ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            )
+                                ElevatedButton(
+                                  onPressed: _toggleMonitoring,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: widget.isMonitoring
+                                        ? Colors.red
+                                        : Colors.green,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    widget.isMonitoring ? 'Stop' : 'Start',
+                                  ),
+                                )
+                                    .animate()
+                                    .scale(duration: 200.ms)
+                                    .then()
+                                    .shimmer(
+                                      duration: 1000.ms,
+                                      delay: 500.ms,
+                                    ),
+                              ],
+                            ),
+                          ),
+                        )
                             .animate()
                             .slideY(begin: 0.3, duration: 600.ms)
                             .fadeIn(),
@@ -397,9 +344,9 @@ class _HomePageState extends State<HomePage> {
                   Text(
                     'Real-time Sound Feed',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                 ],
               ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
@@ -414,10 +361,10 @@ class _HomePageState extends State<HomePage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                              Icons.volume_off_rounded,
-                              size: 80,
-                              color: Colors.grey[400],
-                            )
+                          Icons.volume_off_rounded,
+                          size: 80,
+                          color: Colors.grey[400],
+                        )
                             .animate()
                             .scale(duration: 600.ms)
                             .then()
@@ -425,16 +372,18 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 24),
                         Text(
                           'No sounds detected yet',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w600,
+                                  ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Start monitoring to see live captions',
-                          style: Theme.of(context).textTheme.bodyMedium
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
                               ?.copyWith(color: Colors.grey[500]),
                         ),
                       ],

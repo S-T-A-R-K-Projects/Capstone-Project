@@ -1,22 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:vibration/vibration.dart';
-import '../services/trigger_word_service.dart';
-import '../models/trigger_alert.dart';
-import '../widgets/trigger_alert_dialog.dart';
+import '../services/text_to_speech_service.dart';
 
 class TextToSpeechPage extends StatefulWidget {
-  final bool isMonitoring;
-  final AnimationController pulseController;
-  final VoidCallback onToggleMonitoring;
-
+  // Removed monitoring parameters as this page should focus on TTS
   const TextToSpeechPage({
     super.key,
-    required this.isMonitoring,
-    required this.pulseController,
-    required this.onToggleMonitoring,
+    // Keep parameters optional/named but ignore them if passed from old code to avoid breakage immediately,
+    // OR better, update call sites.
+    // I already updated UnifiedHomePage to pass dummy values, but I can just make them optional or remove them.
+    // UnifiedHomePage passes: isMonitoring: false, pulseController: ..., onToggle: ...
+    // I should probably clean up UnifiedHomePage call too, but standard practice is to clean the class first.
+    // I will remove them and let the caller break, then I'll fix the caller (UnifiedHomePage) in the previous step I already did?
+    // Wait, in UnifiedHomePage I wrote:
+    // onExpand: () => _navigateToExpanded(TextToSpeechPage(isMonitoring: false, pulseController: _speechPulseController, onToggleMonitoring: () {})),
+    // So I need to keep the constructor compatible OR update UnifiedHomePage again.
+    // I'll update the constructor to be compatible but deprecated/unused, OR just update UnifiedHomePage's call.
+    // Updating UnifiedHomePage again is annoying.
+    // I'll keep the constructor signature for now but mark as ignored, or optional.
+    // Actually, I can just change the constructor to named optional and ignore them.
+    this.isMonitoring = false,
+    this.pulseController,
+    this.onToggleMonitoring,
   });
+
+  final bool isMonitoring;
+  final AnimationController? pulseController;
+  final VoidCallback? onToggleMonitoring;
 
   @override
   State<TextToSpeechPage> createState() => _TextToSpeechPageState();
@@ -24,76 +35,42 @@ class TextToSpeechPage extends StatefulWidget {
 
 class _TextToSpeechPageState extends State<TextToSpeechPage> {
   final TextEditingController _textController = TextEditingController();
-  final TriggerWordService _triggerWordService = TriggerWordService();
+  final TextToSpeechService _ttsService = TextToSpeechService();
+  bool _isSpeaking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initTTS();
+  }
+
+  Future<void> _initTTS() async {
+    await _ttsService.init();
+  }
 
   @override
   void dispose() {
     _textController.dispose();
+    _ttsService.stop();
     super.dispose();
   }
 
+  void _speak() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() => _isSpeaking = true);
+    await _ttsService.speak(text);
+    setState(() => _isSpeaking = false);
+  }
+
+  void _stop() async {
+    await _ttsService.stop();
+    setState(() => _isSpeaking = false);
+  }
+
   void _clearText() {
-    setState(() {
-      _textController.clear();
-    });
-  }
-
-  Future<void> _checkTriggerWordsAndSpeak() async {
-    if (_textController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter text to speak')),
-      );
-      return;
-    }
-
-    // Check for trigger words
-    final detectedTriggers = 
-        await _triggerWordService.checkForTriggers(_textController.text);
-
-    // If triggers found, create alerts and notify user
-    if (detectedTriggers.isNotEmpty) {
-      // Create alerts for each trigger
-      for (final trigger in detectedTriggers) {
-        await _triggerWordService.addAlert(
-          TriggerAlert(
-            triggerWord: trigger,
-            detectedText: _textController.text,
-            source: 'text_to_speech',
-          ),
-        );
-      }
-
-      // Haptic feedback - vibrate with pattern for accessibility
-      await _vibrateForTrigger();
-
-      // Show prominent visual notification dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => TriggerAlertDialog(
-            detectedTriggers: detectedTriggers,
-            detectedText: _textController.text,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _vibrateForTrigger() async {
-    final hasVibrator = await Vibration.hasVibrator();
-    if (hasVibrator == true) {
-      // Vibrate with pattern: 500ms on, 200ms off, 500ms on
-      // This creates a distinctive double vibration for alarm/alert
-      await Vibration.vibrate(
-        duration: 500,
-        intensities: [0, 255],
-      );
-      await Future.delayed(const Duration(milliseconds: 200));
-      await Vibration.vibrate(
-        duration: 500,
-        intensities: [0, 255],
-      );
-    }
+    _textController.clear();
   }
 
   @override
@@ -102,13 +79,13 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 280,
+            expandedHeight: 120, // Reduced height since monitoring is gone
             floating: false,
             pinned: true,
             backgroundColor: Theme.of(context).colorScheme.primary,
             foregroundColor: Colors.white,
             title: Text(
-              'SenScribe',
+              'Text to Speech',
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -126,233 +103,71 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                     ],
                   ),
                 ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        // Speaking Status Card
-                        Card(
-                          elevation: 4,
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Row(
-                              children: [
-                                AnimatedBuilder(
-                                  animation: widget.pulseController,
-                                  builder: (context, child) {
-                                    return Transform.scale(
-                                      scale: widget.isMonitoring
-                                          ? 1.0 + (widget.pulseController.value * 0.2)
-                                          : 1.0,
-                                      child: Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          color: widget.isMonitoring
-                                              ? Colors.green.withValues(alpha: 0.2)
-                                              : Colors.grey.withValues(alpha: 0.2),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          widget.isMonitoring
-                                              ? Icons.volume_up_rounded
-                                              : Icons.volume_off_rounded,
-                                          size: 24,
-                                          color: widget.isMonitoring
-                                              ? Colors.green
-                                              : Colors.grey,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        widget.isMonitoring
-                                            ? 'Monitoring Active'
-                                            : 'Monitoring Stopped',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: widget.isMonitoring
-                                                  ? Colors.green
-                                                  : Colors.grey[600],
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                      Text(
-                                        widget.isMonitoring
-                                            ? 'Listening for text...'
-                                            : 'Tap to start monitoring',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: Colors.grey[600],
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  onPressed: widget.onToggleMonitoring,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: widget.isMonitoring
-                                        ? Colors.red
-                                        : Colors.green,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 12,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    widget.isMonitoring ? 'Stop' : 'Start',
-                                  ),
-                                )
-                                    .animate()
-                                    .scale(duration: 200.ms)
-                                    .then()
-                                    .shimmer(duration: 1000.ms, delay: 500.ms),
-                              ],
-                            ),
-                          ),
-                        )
-                            .animate()
-                            .slideY(begin: 0.3, duration: 600.ms)
-                            .fadeIn(),
-
-                        const SizedBox(height: 64),
-                      ],
-                    ),
-                  ),
-                ),
               ),
             ),
           ),
 
-          // Text to Speech Header
+          // Input Area
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.volume_up_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Text to Speech',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const Spacer(),
-                  if (_textController.text.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: _clearText,
-                      tooltip: 'Clear text',
-                    ),
-                ],
-              ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
-            ),
-          ),
-
-          // Text Input Area
-          SliverFillRemaining(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Card(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Enter text to convert to speech',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: TextField(
-                          controller: _textController,
-                          maxLines: null,
-                          expands: true,
-                          decoration: InputDecoration(
-                            hintText: 'Type or paste your text here...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: Theme.of(context).colorScheme.primary,
-                                width: 2,
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _textController,
+                            maxLines: 5,
+                            decoration: InputDecoration(
+                              hintText: 'Enter text to speak...',
+                              border: InputBorder.none,
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: _clearText,
+                                tooltip: 'Clear text',
                               ),
                             ),
+                            style: GoogleFonts.inter(fontSize: 18),
                           ),
-                          textAlignVertical: TextAlignVertical.top,
-                        ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              if (_isSpeaking)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 16.0),
+                                  child: OutlinedButton.icon(
+                                    onPressed: _stop,
+                                    icon: const Icon(Icons.stop_rounded),
+                                    label: const Text('Stop'),
+                                    style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.red),
+                                  ),
+                                ),
+                              FilledButton.icon(
+                                onPressed: _speak,
+                                icon: const Icon(Icons.volume_up_rounded),
+                                label: const Text('Speak'),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _checkTriggerWordsAndSpeak,
-                          icon: const Icon(Icons.volume_up_rounded),
-                          label: Text(
-                            'Speak & Check Triggers',
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-                  .animate()
-                  .fadeIn(duration: 400.ms)
-                  .slideY(begin: 0.1),
+                    ),
+                  ).animate().fadeIn().slideY(begin: 0.1),
+                ],
+              ),
             ),
           ),
-
-          // Bottom padding for FAB
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );

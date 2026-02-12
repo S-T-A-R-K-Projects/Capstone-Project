@@ -5,18 +5,21 @@ SenScribe is a Flutter-based mobile application designed for individuals with he
 ## Prerequisites
 
 ### System Requirements
+
 - **Flutter SDK**: 3.35.0 or higher
 - **Dart**: 3.9.2 or higher
-- **iOS**: iOS 13.0+ (for iOS development)
-- **Android**: API level determined by Flutter SDK (typically 21+)
+- **iOS**: iOS 17.0+ (for iOS development)
+- **Android**: API Level 31+ (Android 12) or higher
 
 ### Development Tools
+
 - **Git**: Version control system
 - **Flutter**: UI toolkit for cross-platform development
 - **Android Studio** or **Xcode**: For device testing
 - **VS Code** (optional): Recommended code editor
 
 ### Installation Links
+
 - Git: [https://git-scm.com/downloads](https://git-scm.com/downloads)
 - Flutter: [https://docs.flutter.dev/get-started/install](https://docs.flutter.dev/get-started/install)
 - Android Studio: [https://developer.android.com/studio](https://developer.android.com/studio)
@@ -25,6 +28,7 @@ SenScribe is a Flutter-based mobile application designed for individuals with he
 ## Setup Instructions
 
 ### 1. Verify Flutter Installation
+
 First, check if Flutter is properly installed and configured:
 
 ```bash
@@ -34,6 +38,7 @@ flutter doctor
 This command will show you if there are any missing dependencies or configuration issues. Follow the suggestions to resolve any problems.
 
 ### 2. Clone the Repository
+
 Clone this project to your local machine:
 
 ```bash
@@ -42,6 +47,7 @@ cd Capstone-Project
 ```
 
 ### 3. Navigate to Flutter Project
+
 Navigate to the Flutter project directory:
 
 ```bash
@@ -49,6 +55,7 @@ cd senscribe
 ```
 
 ### 4. Clean and Install Dependencies
+
 Clean any previous builds and install project dependencies:
 
 ```bash
@@ -57,6 +64,7 @@ flutter pub get
 ```
 
 ### 5. Check Connected Devices
+
 Verify that you have a device or emulator available:
 
 ```bash
@@ -64,17 +72,21 @@ flutter devices
 ```
 
 ### 6. Connect a Device
+
 You can run the app on:
 
 #### Physical Device:
+
 - **Android**: Enable Developer Options and USB Debugging
 - **iOS**: Register device in Xcode and trust the developer certificate
 
 #### Emulator:
+
 - **Android**: Launch Android emulator from Android Studio
 - **iOS**: Launch iOS Simulator from Xcode
 
 ### 7. Run the Application
+
 Launch the app on your connected device:
 
 ```bash
@@ -87,33 +99,56 @@ For release builds (optimized performance):
 flutter run --release
 ```
 
+## Features
+
+- **Real-time Audio Classification**: Detects and identifies sounds in the environment.
+- **Speech-to-Text (STT)**: Converts spoken language into text for easier communication.
+- **Text-to-Speech (TTS)**: Converts typed text into audible speech.
+- **Sound Direction Detection**: Visualizes the direction of detected sounds.
+- **Name Recognition**: Alerts the user when their name is called.
+- **AI-Powered Summarization**: Summarizes conversations using on-device AI models (via Flutter Leap SDK).
+- **Customizable Alerts**: Trigger word alerts with vibration feedback.
+- **Accessible UI**: High contrast themes and large text options.
+
 ## Project Structure
 
 ```
 senscribe/
 ├── lib/
 │   ├── main.dart                 # App entry point
-│   ├── models/
-│   │   └── sound_caption.dart    # Data models
-│   ├── screens/
-│   │   ├── home_page.dart        # Main home screen
-│   │   ├── history_page.dart     # Sound history
-│   │   ├── alerts_page.dart      # Alert management
-│   │   └── settings_page.dart    # App settings
-│   ├── widgets/
-│   │   └── sound_caption_card.dart # Reusable UI components
+│   ├── models/                   # Data models
+│   │   ├── sound_caption.dart
+│   │   ├── trigger_word.dart
+│   │   └── history_item.dart
+│   ├── screens/                  # Application screens
+│   │   ├── unified_home_page.dart      # Main dashboard
+│   │   ├── speech_to_text_page.dart    # STT interface
+│   │   ├── text_to_speech_page.dart    # TTS interface
+│   │   ├── sound_direction_page.dart   # Directionality UI
+│   │   ├── name_recognition_page.dart  # Name alerts
+│   │   ├── settings_page.dart          # Configuration
+│   │   └── history_page.dart           # Event logs
+│   ├── services/                 # Background services & Logic
+│   │   ├── audio_classification_service.dart
+│   │   ├── summarization_service.dart  # AI Summarization
+│   │   ├── leap_service.dart           # Leap SDK integration
+│   │   └── text_to_speech_service.dart
+│   ├── widgets/                  # Reusable UI components
+│   │   ├── sound_caption_card.dart
+│   │   └── trigger_alert_dialog.dart
 │   ├── navigation/
-│   │   └── main_navigation.dart  # Bottom navigation
+│   │   └── main_navigation.dart  # Bottom navigation logic
 │   └── theme/
-│       └── app_theme.dart        # Light/Dark themes
-├── android/                      # Android-specific files
-├── ios/                          # iOS-specific files
-└── pubspec.yaml                  # Dependencies configuration
+│       └── app_theme.dart        # Light/Dark theme definitions
+├── android/                      # Android-specific configuration
+├── ios/                          # iOS-specific configuration
+└── pubspec.yaml                  # Project dependencies
 ```
 
 ## Development Commands
 
 ### Useful Flutter Commands:
+
 ```bash
 # Check for code issues
 flutter analyze
@@ -164,7 +199,8 @@ flutter clean
 ## Development Team
 
 **Team STARK:**
+
 - Kaushik Naik
-- Tamerlan Khalilbayov  
+- Tamerlan Khalilbayov
 - Spencer Russel
 - Reewaz Rijal

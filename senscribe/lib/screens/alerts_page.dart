@@ -17,6 +17,8 @@ class _AlertsPageState extends State<AlertsPage> {
   final TriggerWordService _triggerWordService = TriggerWordService();
   final TextEditingController _newWordController = TextEditingController();
   int _selectedTabIndex = 0; // 0 = Alerts, 1 = Trigger Words
+  bool _isAlertSelectionMode = false;
+  final Set<String> _selectedAlertIds = <String>{};
 
   @override
   void dispose() {
@@ -237,6 +239,85 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
+  void _startAlertSelection(String alertId) {
+    setState(() {
+      _isAlertSelectionMode = true;
+      _selectedAlertIds.add(alertId);
+    });
+  }
+
+  void _toggleAlertSelection(String alertId) {
+    setState(() {
+      if (_selectedAlertIds.contains(alertId)) {
+        _selectedAlertIds.remove(alertId);
+      } else {
+        _selectedAlertIds.add(alertId);
+      }
+
+      if (_selectedAlertIds.isEmpty) {
+        _isAlertSelectionMode = false;
+      }
+    });
+  }
+
+  void _selectAllAlerts(List<TriggerAlert> alerts) {
+    setState(() {
+      _selectedAlertIds
+        ..clear()
+        ..addAll(alerts.map((alert) => alert.id));
+      _isAlertSelectionMode = _selectedAlertIds.isNotEmpty;
+    });
+  }
+
+  void _clearAlertSelection() {
+    setState(() {
+      _selectedAlertIds.clear();
+      _isAlertSelectionMode = false;
+    });
+  }
+
+  Future<void> _deleteSelectedAlerts() async {
+    if (_selectedAlertIds.isEmpty) return;
+
+    final count = _selectedAlertIds.length;
+    var shouldDelete = false;
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: 'Delete selected alerts?',
+      message: 'Are you sure you want to delete $count alert(s)?',
+      icon: PlatformInfo.isIOS26OrHigher() ? 'trash' : null,
+      actions: [
+        AlertAction(
+          title: 'Cancel',
+          style: AlertActionStyle.cancel,
+          onPressed: () {},
+        ),
+        AlertAction(
+          title: 'Delete',
+          style: AlertActionStyle.destructive,
+          onPressed: () {
+            shouldDelete = true;
+          },
+        ),
+      ],
+    );
+
+    if (!shouldDelete) return;
+
+    final ids = _selectedAlertIds.toList(growable: false);
+    for (final id in ids) {
+      await _triggerWordService.removeAlert(id);
+    }
+
+    if (!mounted) return;
+    _clearAlertSelection();
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Deleted $count alert(s)',
+      type: AdaptiveSnackBarType.success,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
@@ -260,7 +341,12 @@ class _AlertsPageState extends State<AlertsPage> {
                   labels: const ['Recent Alerts', 'Trigger Words'],
                   selectedIndex: _selectedTabIndex,
                   onValueChanged: (index) {
-                    setState(() => _selectedTabIndex = index);
+                    setState(() {
+                      _selectedTabIndex = index;
+                      if (_selectedTabIndex != 0) {
+                        _clearAlertSelection();
+                      }
+                    });
                   },
                 ),
               ),
@@ -290,6 +376,12 @@ class _AlertsPageState extends State<AlertsPage> {
             }
 
             final alerts = snapshot.data ?? [];
+
+            if (alerts.isEmpty && _isAlertSelectionMode) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _clearAlertSelection();
+              });
+            }
 
             if (alerts.isEmpty) {
               return Center(
@@ -323,55 +415,118 @@ class _AlertsPageState extends State<AlertsPage> {
               );
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: alerts.length,
-              itemBuilder: (context, index) {
-                final alert = alerts[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: AdaptiveCard(
-                    padding: EdgeInsets.zero,
-                    child: AdaptiveListTile(
-                      leading: const Icon(
-                        Icons.warning_rounded,
-                        color: Colors.orange,
-                      ),
-                      title: Text(
-                        'Trigger: "${alert.triggerWord}"',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text(
-                            alert.detectedText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(fontSize: 12),
+            return Column(
+              children: [
+                if (_isAlertSelectionMode)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 110,
+                          child: AdaptiveButton(
+                            onPressed: () => _selectAllAlerts(alerts),
+                            label: 'Select All',
+                            style: AdaptiveButtonStyle.plain,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatTime(alert.timestamp),
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: Colors.grey[500],
-                            ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 88,
+                          child: AdaptiveButton(
+                            onPressed: _selectedAlertIds.isEmpty
+                                ? null
+                                : _deleteSelectedAlerts,
+                            label: 'Delete',
+                            style: AdaptiveButtonStyle.plain,
+                            color: Colors.red,
                           ),
-                        ],
-                      ),
-                      trailing: AdaptiveButton.icon(
-                        icon: Icons.delete_outline,
-                        onPressed: () async {
-                          await _triggerWordService.removeAlert(alert.id);
-                        },
-                        style: AdaptiveButtonStyle.plain,
-                      ),
+                        ),
+                        const Spacer(),
+                        SizedBox(
+                          width: 88,
+                          child: AdaptiveButton(
+                            onPressed: _clearAlertSelection,
+                            label: 'Cancel',
+                            style: AdaptiveButtonStyle.plain,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1);
-              },
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: alerts.length,
+                    itemBuilder: (context, index) {
+                      final alert = alerts[index];
+                      final isSelected = _selectedAlertIds.contains(alert.id);
+
+                      return GestureDetector(
+                        onLongPress: () => _startAlertSelection(alert.id),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AdaptiveCard(
+                            padding: EdgeInsets.zero,
+                            child: AdaptiveListTile(
+                              leading: Icon(
+                                _isAlertSelectionMode
+                                    ? (isSelected
+                                        ? Icons.check_circle
+                                        : Icons.radio_button_unchecked)
+                                    : Icons.warning_rounded,
+                                color: _isAlertSelectionMode
+                                    ? (isSelected ? Colors.blue : Colors.grey)
+                                    : Colors.orange,
+                              ),
+                              title: Text(
+                                'Trigger: "${alert.triggerWord}"',
+                                style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    alert.detectedText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatTime(alert.timestamp),
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              trailing: _isAlertSelectionMode
+                                  ? null
+                                  : AdaptiveButton.icon(
+                                      icon: Icons.delete_outline,
+                                      onPressed: () async {
+                                        await _triggerWordService
+                                            .removeAlert(alert.id);
+                                      },
+                                      style: AdaptiveButtonStyle.plain,
+                                    ),
+                              onTap: () {
+                                if (_isAlertSelectionMode) {
+                                  _toggleAlertSelection(alert.id);
+                                }
+                              },
+                            ),
+                          ),
+                        ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1),
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           },
         );

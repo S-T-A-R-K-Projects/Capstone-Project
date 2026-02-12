@@ -18,6 +18,7 @@ import '../services/history_service.dart'; // For Saving STT
 import '../models/history_item.dart'; // For Saving STT
 import '../services/trigger_word_service.dart';
 import '../models/trigger_alert.dart';
+import '../models/trigger_word.dart';
 import '../services/stt_transcript_service.dart';
 
 class UnifiedHomePage extends StatefulWidget {
@@ -55,9 +56,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   final List<String> _speechTranscript = [];
   final TriggerWordService _triggerWordService = TriggerWordService();
   final SttTranscriptService _sttTranscriptService = SttTranscriptService();
-  final Set<String> _triggersAlertedInCurrentUtterance = {};
+  final Map<String, int> _lastAlertedTriggerCount = {};
   Timer? _speechRestartTimer;
-  Timer? _utteranceBoundaryTimer;
   bool _isSpeechStarting = false;
 
   // Animations
@@ -169,19 +169,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     });
   }
 
-  void _markUtteranceActivity() {
-    _utteranceBoundaryTimer?.cancel();
-    _utteranceBoundaryTimer = Timer(const Duration(milliseconds: 1400), () {
-      _triggersAlertedInCurrentUtterance.clear();
-    });
-  }
-
   @override
   void dispose() {
     _audioSubscription?.cancel();
     _transcriptSubscription?.cancel();
     _speechRestartTimer?.cancel();
-    _utteranceBoundaryTimer?.cancel();
 
     _speech.stop();
     _ttsService.stop();
@@ -227,8 +219,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         _speechPulseController.repeat(reverse: true);
       } else {
         _speechRestartTimer?.cancel();
-        _utteranceBoundaryTimer?.cancel();
-        _triggersAlertedInCurrentUtterance.clear();
+        _lastAlertedTriggerCount.clear();
         _stopSpeechException();
         _speechPulseController.stop();
         _speechPulseController.reset();
@@ -248,10 +239,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     try {
       await _speech.listen(
         onResult: (result) {
-          if (result.recognizedWords.isNotEmpty) {
-            _markUtteranceActivity();
-          }
-
           _sttTranscriptService.setPartialWords(result.recognizedWords);
 
           if (!result.finalResult && result.recognizedWords.isNotEmpty) {
@@ -261,7 +248,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           if (result.finalResult && result.recognizedWords.isNotEmpty) {
             _sttTranscriptService.commitFinalWords(result.recognizedWords);
             _scrollToBottom();
-            _triggersAlertedInCurrentUtterance.clear();
           }
         },
         listenFor: const Duration(minutes: 10),
@@ -287,14 +273,27 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     if (text.isEmpty || !mounted) return;
 
     try {
+      final triggerConfigs = await _triggerWordService.loadTriggerWords();
       final detected = await _triggerWordService.checkForTriggers(text);
       if (detected.isEmpty || !mounted) return;
 
       final newlyNotified = <String>[];
 
       for (final trigger in detected) {
-        if (_triggersAlertedInCurrentUtterance.contains(trigger)) continue;
-        _triggersAlertedInCurrentUtterance.add(trigger);
+        TriggerWord? config;
+        for (final word in triggerConfigs) {
+          if (word.word.toLowerCase() == trigger.toLowerCase()) {
+            config = word;
+            break;
+          }
+        }
+        if (config == null) continue;
+
+        final currentCount = _countTriggerOccurrences(text, config);
+        final lastCount = _lastAlertedTriggerCount[trigger.toLowerCase()] ?? 0;
+        if (currentCount <= lastCount) continue;
+
+        _lastAlertedTriggerCount[trigger.toLowerCase()] = currentCount;
         newlyNotified.add(trigger);
 
         await _triggerWordService.addAlert(
@@ -316,6 +315,34 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     } catch (_) {
       // Ignore trigger-check errors silently
     }
+  }
+
+  int _countTriggerOccurrences(String text, TriggerWord triggerWord) {
+    if (text.isEmpty) return 0;
+
+    if (triggerWord.exactMatch) {
+      final expression = RegExp(
+        r'\b' + RegExp.escape(triggerWord.word) + r'\b',
+        caseSensitive: triggerWord.caseSensitive,
+      );
+      return expression.allMatches(text).length;
+    }
+
+    final haystack = triggerWord.caseSensitive ? text : text.toLowerCase();
+    final needle = triggerWord.caseSensitive
+        ? triggerWord.word
+        : triggerWord.word.toLowerCase();
+    if (needle.isEmpty) return 0;
+
+    var count = 0;
+    var start = 0;
+    while (true) {
+      final index = haystack.indexOf(needle, start);
+      if (index == -1) break;
+      count++;
+      start = index + needle.length;
+    }
+    return count;
   }
 
   Future<void> _stopSpeechException() async {

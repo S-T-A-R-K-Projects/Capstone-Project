@@ -559,8 +559,13 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
     ThemeData theme,
     ScrollController scrollController,
   ) {
-    final transcriptColor =
-        theme.brightness == Brightness.dark ? Colors.white : Colors.black87;
+    final transcriptContainerColor = Color.alphaBlend(
+      theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      theme.scaffoldBackgroundColor,
+    );
+    final transcriptColor = transcriptContainerColor.computeLuminance() > 0.5
+        ? Colors.black87
+        : Colors.white;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -589,14 +594,22 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: _cancelEdit,
-                    child: const Text('Cancel'),
+                  SizedBox(
+                    width: 90,
+                    child: AdaptiveButton(
+                      onPressed: _cancelEdit,
+                      label: 'Cancel',
+                      style: AdaptiveButtonStyle.plain,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _saveTranscript,
-                    child: const Text('Save'),
+                  SizedBox(
+                    width: 90,
+                    child: AdaptiveButton(
+                      onPressed: _saveTranscript,
+                      label: 'Save',
+                      style: AdaptiveButtonStyle.filled,
+                    ),
                   ),
                 ],
               ),
@@ -607,9 +620,8 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.5,
-                ),
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: theme.colorScheme.outline.withValues(alpha: 0.2),
@@ -631,15 +643,20 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                         color: transcriptColor,
                       ),
                     )
-                  : SingleChildScrollView(
-                      controller: scrollController,
-                      child: SelectableText(
-                        _currentItem.content,
-                        style: GoogleFonts.inter(
-                          fontSize: 15,
-                          height: 1.6,
-                          color: transcriptColor,
-                        ),
+                  : TextField(
+                      controller: _transcriptController,
+                      readOnly: true,
+                      maxLines: null,
+                      expands: true,
+                      enableInteractiveSelection: true,
+                      textAlignVertical: TextAlignVertical.top,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                      ),
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        height: 1.6,
+                        color: transcriptColor,
                       ),
                     ),
             ),

@@ -130,6 +130,113 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
+  void _showEditTriggerWordDialog(TriggerWord existingWord) {
+    _newWordController.text = existingWord.word;
+    bool caseSensitive = existingWord.caseSensitive;
+    bool exactMatch = existingWord.exactMatch;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(
+            'Edit Trigger Word',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _newWordController,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter word to monitor',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: caseSensitive,
+                      onChanged: (value) {
+                        setState(() => caseSensitive = value ?? false);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Case Sensitive',
+                      style: GoogleFonts.inter(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: exactMatch,
+                      onChanged: (value) {
+                        setState(() => exactMatch = value ?? true);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Exact Word Match (whole word only)',
+                        style: GoogleFonts.inter(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final updatedWord = _newWordController.text.trim();
+                if (updatedWord.isEmpty) {
+                  AdaptiveSnackBar.show(
+                    context,
+                    message: 'Please enter a trigger word',
+                    type: AdaptiveSnackBarType.warning,
+                  );
+                  return;
+                }
+
+                final navigator = Navigator.of(context);
+
+                await _triggerWordService.updateTriggerWord(
+                  existingWord.word,
+                  existingWord.copyWith(
+                    word: updatedWord,
+                    caseSensitive: caseSensitive,
+                    exactMatch: exactMatch,
+                  ),
+                );
+
+                if (mounted) {
+                  navigator.pop();
+                  AdaptiveSnackBar.show(
+                    this.context,
+                    message: 'Updated trigger word: $updatedWord',
+                    type: AdaptiveSnackBarType.success,
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
@@ -383,6 +490,10 @@ class _AlertsPageState extends State<AlertsPage> {
                         icon: 'ellipsis.circle',
                         items: [
                           AdaptivePopupMenuItem(
+                            label: 'Edit',
+                            value: 'edit',
+                          ),
+                          AdaptivePopupMenuItem(
                             label: word.enabled ? 'Disable' : 'Enable',
                             value: 'toggle',
                           ),
@@ -392,7 +503,9 @@ class _AlertsPageState extends State<AlertsPage> {
                           ),
                         ],
                         onSelected: (index, item) async {
-                          if (item.value == 'toggle') {
+                          if (item.value == 'edit') {
+                            _showEditTriggerWordDialog(word);
+                          } else if (item.value == 'toggle') {
                             await _triggerWordService.updateTriggerWord(
                               word.word,
                               word.copyWith(enabled: !word.enabled),

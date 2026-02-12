@@ -32,10 +32,12 @@ class _HomePageState extends State<HomePage> {
   final AudioClassificationService _audioService = AudioClassificationService();
   List<SoundCaption> _captions = [];
   StreamSubscription<List<SoundCaption>>? _classificationSubscription;
+  late bool _isMonitoring;
 
   @override
   void initState() {
     super.initState();
+    _isMonitoring = widget.isMonitoring;
     // Sync initial state
     _captions = List.from(_audioService.history);
 
@@ -48,7 +50,7 @@ class _HomePageState extends State<HomePage> {
       }
     });
 
-    if (widget.isMonitoring) {
+    if (_isMonitoring) {
       _startMonitoring();
     }
   }
@@ -57,6 +59,7 @@ class _HomePageState extends State<HomePage> {
   void didUpdateWidget(HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isMonitoring != oldWidget.isMonitoring) {
+      _isMonitoring = widget.isMonitoring;
       if (widget.isMonitoring) {
         _startMonitoring();
       } else {
@@ -82,6 +85,9 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    setState(() {
+      _isMonitoring = !_isMonitoring;
+    });
     widget.onToggleMonitoring();
   }
 
@@ -97,6 +103,11 @@ class _HomePageState extends State<HomePage> {
       );
       if (widget.isMonitoring) {
         widget.onToggleMonitoring();
+        if (mounted) {
+          setState(() {
+            _isMonitoring = false;
+          });
+        }
       }
     }
   }
@@ -138,26 +149,24 @@ class _HomePageState extends State<HomePage> {
                       animation: widget.pulseController,
                       builder: (context, child) {
                         return Transform.scale(
-                          scale: widget.isMonitoring
+                          scale: _isMonitoring
                               ? 1.0 + (widget.pulseController.value * 0.2)
                               : 1.0,
                           child: Container(
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(
-                              color: widget.isMonitoring
+                              color: _isMonitoring
                                   ? Colors.green.withValues(alpha: 0.2)
                                   : Colors.grey.withValues(alpha: 0.2),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
-                              widget.isMonitoring
+                              _isMonitoring
                                   ? Icons.mic_rounded
                                   : Icons.mic_off_rounded,
                               size: 24,
-                              color: widget.isMonitoring
-                                  ? Colors.green
-                                  : Colors.grey,
+                              color: _isMonitoring ? Colors.green : Colors.grey,
                             ),
                           ),
                         );
@@ -169,18 +178,18 @@ class _HomePageState extends State<HomePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.isMonitoring
+                            _isMonitoring
                                 ? 'Monitoring Active'
                                 : 'Monitoring Stopped',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: widget.isMonitoring
+                              color: _isMonitoring
                                   ? Colors.green
                                   : Colors.grey[600],
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Text(
-                            widget.isMonitoring
+                            _isMonitoring
                                 ? 'Listening for sounds...'
                                 : 'Tap to start monitoring',
                             style: theme.textTheme.bodyMedium
@@ -193,7 +202,7 @@ class _HomePageState extends State<HomePage> {
                       width: 80,
                       child: AdaptiveButton(
                         onPressed: _toggleMonitoring,
-                        label: widget.isMonitoring ? 'Stop' : 'Start',
+                        label: _isMonitoring ? 'Stop' : 'Start',
                         style: AdaptiveButtonStyle.filled,
                       ),
                     ),

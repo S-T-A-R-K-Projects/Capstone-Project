@@ -34,6 +34,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   bool _isAvailable = false;
   bool _isListening = false;
   bool _isSaving = false;
+  late bool _isMonitoring;
+  final Map<String, DateTime> _lastTriggerAlertAt = {};
+  static const Duration _triggerCooldown = Duration(seconds: 2);
   final TriggerWordService _triggerWordService = TriggerWordService();
 
   // Helper method to safely show SnackBar
@@ -49,6 +52,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   @override
   void initState() {
     super.initState();
+    _isMonitoring = widget.isMonitoring;
     _initializeSpeech();
   }
 
@@ -56,7 +60,8 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   void didUpdateWidget(SpeechToTextPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isMonitoring != oldWidget.isMonitoring) {
-      if (widget.isMonitoring) {
+      _isMonitoring = widget.isMonitoring;
+      if (_isMonitoring) {
         _startListening();
       } else {
         _stopListening();
@@ -78,6 +83,10 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
       }
 
       if (mounted) setState(() {});
+
+      if (_isAvailable && _isMonitoring) {
+        await _startListening();
+      }
     } catch (e) {
       if (mounted) {
         _showSnackBar('Failed to initialize speech: $e');
@@ -106,7 +115,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
       }
 
       // Restart immediately if still monitoring
-      if (widget.isMonitoring) {
+      if (_isMonitoring) {
         _startListening();
       }
     }
@@ -124,13 +133,68 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
     }
 
     // Restart if still monitoring (unless permission error)
-    if (widget.isMonitoring && error.errorMsg != 'error_permission') {
+    if (_isMonitoring && error.errorMsg != 'error_permission') {
       _startListening();
     }
   }
 
+  Future<void> _checkAndNotifyTriggers(String recognizedText) async {
+    final text = recognizedText.trim();
+    if (text.isEmpty) return;
+
+    try {
+      final detected = await _triggerWordService.checkForTriggers(text);
+      if (detected.isEmpty || !mounted) return;
+
+      final now = DateTime.now();
+      final newlyNotified = <String>[];
+
+      for (final trigger in detected) {
+        final lastAt = _lastTriggerAlertAt[trigger];
+        final canNotify =
+            lastAt == null || now.difference(lastAt) >= _triggerCooldown;
+        if (!canNotify) continue;
+
+        _lastTriggerAlertAt[trigger] = now;
+        newlyNotified.add(trigger);
+
+        await _triggerWordService.addAlert(
+          TriggerAlert(
+            triggerWord: trigger,
+            detectedText: text,
+            source: 'speech_to_text',
+          ),
+        );
+      }
+
+      if (newlyNotified.isNotEmpty && mounted) {
+        AdaptiveSnackBar.show(
+          context,
+          message: 'Trigger detected: ${newlyNotified.join(', ')}',
+          type: AdaptiveSnackBarType.warning,
+        );
+      }
+    } catch (_) {
+      // Ignore trigger-check errors silently
+    }
+  }
+
+  Future<void> _handleToggleMonitoring() async {
+    final nextValue = !_isMonitoring;
+    setState(() {
+      _isMonitoring = nextValue;
+    });
+    widget.onToggleMonitoring();
+
+    if (nextValue) {
+      await _startListening();
+    } else {
+      await _stopListening();
+    }
+  }
+
   Future<void> _startListening() async {
-    if (!_isAvailable || !widget.isMonitoring) return;
+    if (!_isAvailable || !_isMonitoring) return;
 
     // Don't start if already listening
     if (_speech.isListening) return;
@@ -144,6 +208,10 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
             _currentWords = result.recognizedWords;
           });
 
+          if (result.recognizedWords.isNotEmpty) {
+            _checkAndNotifyTriggers(result.recognizedWords);
+          }
+
           if (result.finalResult && result.recognizedWords.isNotEmpty) {
             setState(() {
               if (_transcribedText.isNotEmpty &&
@@ -153,35 +221,6 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
               _transcribedText += result.recognizedWords;
               _currentWords = '';
             });
-
-            // Check for trigger words in the finalized segment
-            () async {
-              try {
-                final detected = await _triggerWordService
-                    .checkForTriggers(result.recognizedWords);
-                if (detected.isNotEmpty) {
-                  for (final trigger in detected) {
-                    await _triggerWordService.addAlert(
-                      TriggerAlert(
-                        triggerWord: trigger,
-                        detectedText: result.recognizedWords,
-                        source: 'speech_to_text',
-                      ),
-                    );
-                  }
-
-                  if (mounted) {
-                    AdaptiveSnackBar.show(
-                      context,
-                      message: 'Trigger detected: ${detected.join(', ')}',
-                      type: AdaptiveSnackBarType.warning,
-                    );
-                  }
-                }
-              } catch (_) {
-                // Ignore trigger-check errors silently
-              }
-            }();
           }
         },
         listenFor: const Duration(days: 1), // Never stop on our own
@@ -201,9 +240,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
       if (mounted) {
         setState(() => _isListening = false);
         // Retry after a short delay
-        if (widget.isMonitoring) {
+        if (_isMonitoring) {
           Future.delayed(const Duration(milliseconds: 100), () {
-            if (mounted && widget.isMonitoring) {
+            if (mounted && _isMonitoring) {
               _startListening();
             }
           });
@@ -358,26 +397,24 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                         animation: widget.pulseController,
                         builder: (context, child) {
                           return Transform.scale(
-                            scale: widget.isMonitoring
+                            scale: _isMonitoring
                                 ? 1.0 + (widget.pulseController.value * 0.2)
                                 : 1.0,
                             child: Container(
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
-                                color: widget.isMonitoring
+                                color: _isMonitoring
                                     ? Colors.red.withValues(alpha: 0.2)
                                     : Colors.grey.withValues(alpha: 0.2),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                widget.isMonitoring
+                                _isMonitoring
                                     ? Icons.mic_rounded
                                     : Icons.mic_off_rounded,
                                 size: 24,
-                                color: widget.isMonitoring
-                                    ? Colors.red
-                                    : Colors.grey,
+                                color: _isMonitoring ? Colors.red : Colors.grey,
                               ),
                             ),
                           );
@@ -389,18 +426,18 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.isMonitoring
+                              _isMonitoring
                                   ? 'Monitoring Active'
                                   : 'Monitoring Stopped',
                               style: theme.textTheme.titleMedium?.copyWith(
-                                color: widget.isMonitoring
+                                color: _isMonitoring
                                     ? Colors.green
                                     : Colors.grey[600],
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             Text(
-                              widget.isMonitoring
+                              _isMonitoring
                                   ? (_isListening
                                       ? 'Listening...'
                                       : 'Preparing...')
@@ -414,8 +451,8 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                       SizedBox(
                         width: 80,
                         child: AdaptiveButton(
-                          onPressed: widget.onToggleMonitoring,
-                          label: widget.isMonitoring ? 'Stop' : 'Start',
+                          onPressed: _handleToggleMonitoring,
+                          label: _isMonitoring ? 'Stop' : 'Start',
                           style: AdaptiveButtonStyle.filled,
                         ),
                       ),

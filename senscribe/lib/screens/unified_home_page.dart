@@ -15,6 +15,8 @@ import 'text_to_speech_page.dart';
 import 'home_page.dart'; // For Sound Recognition Expanded View
 import '../services/history_service.dart'; // For Saving STT
 import '../models/history_item.dart'; // For Saving STT
+import '../services/trigger_word_service.dart';
+import '../models/trigger_alert.dart';
 
 class UnifiedHomePage extends StatefulWidget {
   const UnifiedHomePage({super.key});
@@ -48,6 +50,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   StreamSubscription? _audioSubscription;
   String _currentSpeechBuffer = '';
   final List<String> _speechTranscript = [];
+  final TriggerWordService _triggerWordService = TriggerWordService();
+  final Map<String, DateTime> _lastTriggerAlertAt = {};
+  static const Duration _triggerCooldown = Duration(seconds: 2);
 
   // Animations
   late final AnimationController _soundPulseController;
@@ -173,6 +178,10 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
               _scrollToBottom();
             }
           });
+
+          if (result.recognizedWords.isNotEmpty) {
+            _checkAndNotifyTriggers(result.recognizedWords);
+          }
         },
         listenFor: const Duration(seconds: 30),
         pauseFor: const Duration(seconds: 5),
@@ -184,6 +193,47 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       );
     } catch (e) {
       debugPrint('STT Listen Error: $e');
+    }
+  }
+
+  Future<void> _checkAndNotifyTriggers(String recognizedText) async {
+    final text = recognizedText.trim();
+    if (text.isEmpty || !mounted) return;
+
+    try {
+      final detected = await _triggerWordService.checkForTriggers(text);
+      if (detected.isEmpty || !mounted) return;
+
+      final now = DateTime.now();
+      final newlyNotified = <String>[];
+
+      for (final trigger in detected) {
+        final lastAt = _lastTriggerAlertAt[trigger];
+        final canNotify =
+            lastAt == null || now.difference(lastAt) >= _triggerCooldown;
+        if (!canNotify) continue;
+
+        _lastTriggerAlertAt[trigger] = now;
+        newlyNotified.add(trigger);
+
+        await _triggerWordService.addAlert(
+          TriggerAlert(
+            triggerWord: trigger,
+            detectedText: text,
+            source: 'speech_to_text',
+          ),
+        );
+      }
+
+      if (newlyNotified.isNotEmpty && mounted) {
+        AdaptiveSnackBar.show(
+          context,
+          message: 'Trigger detected: ${newlyNotified.join(', ')}',
+          type: AdaptiveSnackBarType.warning,
+        );
+      }
+    } catch (_) {
+      // Ignore trigger-check errors silently
     }
   }
 
@@ -261,6 +311,32 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
   }
 
+  Future<void> _openExpandedSpeechPage() async {
+    final wasMonitoring = _isSpeechMonitoring;
+
+    if (wasMonitoring && _speech.isListening) {
+      await _stopSpeechException();
+    }
+
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SpeechToTextPage(
+          isMonitoring: _isSpeechMonitoring,
+          pulseController: _speechPulseController,
+          onToggleMonitoring: _toggleSpeechMonitoring,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (_isSpeechMonitoring && !_speech.isListening) {
+      _startSpeechListening();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
@@ -325,10 +401,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   onToggle: _toggleSpeechMonitoring,
                   onCollapseToggle: () =>
                       setState(() => _isSTTExpanded = !_isSTTExpanded),
-                  onExpand: () => _navigateToExpanded(SpeechToTextPage(
-                      isMonitoring: _isSpeechMonitoring,
-                      pulseController: _speechPulseController,
-                      onToggleMonitoring: _toggleSpeechMonitoring)),
+                  onExpand: _openExpandedSpeechPage,
                   child: _buildSTTContent(),
                 ),
 

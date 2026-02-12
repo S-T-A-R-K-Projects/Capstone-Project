@@ -156,6 +156,9 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(
@@ -169,63 +172,75 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _items.isEmpty
-              ? Center(
-                  child: Text(
-                    'No history yet',
-                    style: GoogleFonts.inter(color: Colors.grey[600]),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _items.length,
-                  itemBuilder: (context, index) {
-                    final entry = _items[index];
-                    return Dismissible(
-                      key: ValueKey(entry.id),
-                      direction: DismissDirection.endToStart,
-                      onDismissed: (_) => _remove(entry.id),
-                      background: Container(
-                        color: Colors.redAccent,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: const Icon(Icons.delete, color: Colors.white),
-                      ),
-                      child: AdaptiveListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: entry.hasSummary
-                              ? Colors.green[100]
-                              : theme.colorScheme.primaryContainer,
-                          child: Icon(
-                            entry.hasSummary ? Icons.summarize : Icons.mic,
-                            color: entry.hasSummary
-                                ? Colors.green[700]
-                                : theme.colorScheme.primary,
-                          ),
-                        ),
-                        title: Text(
-                          entry.title,
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${_previewContent(entry)} - ${_formatTimestamp(entry.timestamp)}',
-                          style: GoogleFonts.inter(),
-                        ),
-                        trailing: entry.hasSummary
-                            ? Icon(
-                                Icons.check_circle,
-                                color: Colors.green[600],
-                                size: 18,
-                              )
-                            : null,
-                        onTap: () => _showDetailModal(entry),
-                      ),
-                    );
-                  },
+      body: Material(
+        color: Colors.transparent,
+        child: _loading
+            ? Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: topInset),
+                  child: const CircularProgressIndicator(),
                 ),
+              )
+            : _items.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: topInset),
+                      child: Text(
+                        'No history yet',
+                        style: GoogleFonts.inter(color: Colors.grey[600]),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.fromLTRB(16, topInset + 8, 16, 16),
+                    itemCount: _items.length,
+                    itemBuilder: (context, index) {
+                      final entry = _items[index];
+                      return Dismissible(
+                        key: ValueKey(entry.id),
+                        direction: DismissDirection.endToStart,
+                        onDismissed: (_) => _remove(entry.id),
+                        background: Container(
+                          color: Colors.redAccent,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        child: AdaptiveListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: entry.hasSummary
+                                ? Colors.green[100]
+                                : theme.colorScheme.primaryContainer,
+                            child: Icon(
+                              entry.hasSummary ? Icons.summarize : Icons.mic,
+                              color: entry.hasSummary
+                                  ? Colors.green[700]
+                                  : theme.colorScheme.primary,
+                            ),
+                          ),
+                          title: Text(
+                            entry.title,
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${_previewContent(entry)} - ${_formatTimestamp(entry.timestamp)}',
+                            style: GoogleFonts.inter(),
+                          ),
+                          trailing: entry.hasSummary
+                              ? Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green[600],
+                                  size: 18,
+                                )
+                              : null,
+                          onTap: () => _showDetailModal(entry),
+                        ),
+                      );
+                    },
+                  ),
+      ),
     );
   }
 }
@@ -613,7 +628,11 @@ class _HistoryDetailModalState extends State<_HistoryDetailModal>
                       controller: scrollController,
                       child: SelectableText(
                         _currentItem.content,
-                        style: GoogleFonts.inter(fontSize: 15, height: 1.6),
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          height: 1.6,
+                          color: theme.colorScheme.onSurface,
+                        ),
                       ),
                     ),
             ),

@@ -81,20 +81,34 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 8.0),
-                      child: ClipRect(
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 40,
-                          child: AdaptiveSegmentedControl(
-                            labels: const ['System', 'Light', 'Dark'],
-                            color: Theme.of(context).colorScheme.surface,
-                            selectedIndex: themeProvider.themeMode.index,
-                            onValueChanged: (int index) {
-                              themeProvider.setTheme(ThemeMode.values[index]);
-                              if (mounted) setState(() {});
-                            },
-                          ),
-                        ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final segmented = SizedBox(
+                            height: 40,
+                            child: AdaptiveSegmentedControl(
+                              labels: const ['System', 'Light', 'Dark'],
+                              color: Theme.of(context).colorScheme.surface,
+                              shrinkWrap: !PlatformInfo.isIOS26OrHigher(),
+                              selectedIndex: themeProvider.themeMode.index,
+                              onValueChanged: (int index) {
+                                themeProvider.setTheme(ThemeMode.values[index]);
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                          );
+
+                          if (PlatformInfo.isIOS26OrHigher()) {
+                            return SizedBox(
+                              width: constraints.maxWidth,
+                              child: segmented,
+                            );
+                          }
+
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: segmented,
+                          );
+                        },
                       ),
                     ),
                   ),

@@ -199,7 +199,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     SizedBox(
-                      width: 80,
+                      width: 96,
                       child: AdaptiveButton(
                         onPressed: _toggleMonitoring,
                         label: _isMonitoring ? 'Stop' : 'Start',

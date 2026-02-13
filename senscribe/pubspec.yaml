@@ -54,7 +54,6 @@ dependencies:
   dio: ^5.9.0
   path_provider: ^2.1.5
   uuid: ^4.0.0
-  vibration: ^1.8.4
   adaptive_platform_ui: ^0.1.101
   flutter_tts: ^4.2.5
   flutter_localizations:

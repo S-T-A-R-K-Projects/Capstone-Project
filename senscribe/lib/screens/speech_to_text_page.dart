@@ -274,7 +274,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                         ),
                       ),
                       SizedBox(
-                        width: 80,
+                        width: 96,
                         child: AdaptiveButton(
                           onPressed: _handleToggleMonitoring,
                           label: _isMonitoring ? 'Stop' : 'Start',

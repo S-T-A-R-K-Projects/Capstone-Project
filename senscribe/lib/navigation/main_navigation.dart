@@ -61,7 +61,10 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           child: SlideAnimation(
             horizontalOffset: 50.0,
             child: FadeInAnimation(
-              child: IndexedStack(index: _selectedIndex, children: _pages),
+              child: HeroMode(
+                enabled: false,
+                child: IndexedStack(index: _selectedIndex, children: _pages),
+              ),
             ),
           ),
         ),
@@ -76,7 +79,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
             label: 'Home',
           ),
           AdaptiveNavigationDestination(
-            icon: Platform.isIOS ? 'clock.fill' : Icons.history_rounded,
+            icon: Platform.isIOS
+                ? 'clock.arrow.circlepath'
+                : Icons.history_rounded,
             label: 'History',
           ),
           AdaptiveNavigationDestination(

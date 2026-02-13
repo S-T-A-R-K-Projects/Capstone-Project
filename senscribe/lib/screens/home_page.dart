@@ -134,8 +134,8 @@ class _HomePageState extends State<HomePage> {
         color: Colors.transparent,
         child: Column(
           children: [
-            // Top padding for iOS 26 translucent app bar
-            if (PlatformInfo.isIOS26OrHigher())
+            // Top padding for iOS app bars (17/18/26+)
+            if (Platform.isIOS)
               SizedBox(
                   height: MediaQuery.of(context).padding.top + kToolbarHeight),
             // Monitoring status card

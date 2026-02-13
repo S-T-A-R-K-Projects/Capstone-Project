@@ -1,4 +1,5 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -29,8 +30,8 @@ class AboutSupportPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top padding for iOS 26 translucent app bar
-              if (PlatformInfo.isIOS26OrHigher())
+              // Top padding for iOS app bars (17/18/26+)
+              if (Platform.isIOS)
                 SizedBox(
                     height:
                         MediaQuery.of(context).padding.top + kToolbarHeight),

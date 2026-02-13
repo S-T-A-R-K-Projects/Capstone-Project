@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -205,8 +206,8 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top padding for iOS 26 translucent app bar
-              if (PlatformInfo.isIOS26OrHigher())
+              // Top padding for iOS app bars (17/18/26+)
+              if (Platform.isIOS)
                 SizedBox(
                     height:
                         MediaQuery.of(context).padding.top + kToolbarHeight),
@@ -303,14 +304,17 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text(
-                      'Speech to Text',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Text(
+                        'Speech to Text',
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     SizedBox(
                       width: 70,
                       child: AdaptiveButton(

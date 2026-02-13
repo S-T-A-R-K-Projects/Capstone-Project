@@ -1,6 +1,7 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
 
 class NameRecognitionPage extends StatelessWidget {
   const NameRecognitionPage({super.key});
@@ -19,7 +20,7 @@ class NameRecognitionPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Top padding for iOS 26 translucent app bar
-              if (PlatformInfo.isIOS26OrHigher())
+              if (Platform.isIOS)
                 SizedBox(
                     height:
                         MediaQuery.of(context).padding.top + kToolbarHeight),

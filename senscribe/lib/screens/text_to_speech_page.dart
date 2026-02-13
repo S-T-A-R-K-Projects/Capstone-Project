@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -66,45 +68,50 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
       appBar: AdaptiveAppBar(title: 'Text to Speech'),
       body: Material(
         color: Colors.transparent,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Top padding for iOS 26 translucent app bar
-              if (PlatformInfo.isIOS26OrHigher())
-                SizedBox(
-                    height:
-                        MediaQuery.of(context).padding.top + kToolbarHeight),
-              // Input Area
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    AdaptiveCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TextField(
-                            controller: _textController,
-                            maxLines: 5,
-                            decoration: InputDecoration(
-                              hintText: 'Enter text to speak...',
-                              border: InputBorder.none,
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: _clearText,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Top padding for iOS app bars (17/18/26+)
+                if (Platform.isIOS)
+                  SizedBox(
+                      height:
+                          MediaQuery.of(context).padding.top + kToolbarHeight),
+                // Input Area
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      AdaptiveCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              controller: _textController,
+                              maxLines: 5,
+                              onTapOutside: (_) =>
+                                  FocusScope.of(context).unfocus(),
+                              decoration: InputDecoration(
+                                hintText: 'Enter text to speak...',
+                                border: InputBorder.none,
+                                suffixIcon: IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: _clearText,
+                                ),
                               ),
+                              style: GoogleFonts.inter(fontSize: 18),
                             ),
-                            style: GoogleFonts.inter(fontSize: 18),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              if (_isSpeaking)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 16.0),
-                                  child: SizedBox(
+                            const SizedBox(height: 16),
+                            Wrap(
+                              alignment: WrapAlignment.end,
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (_isSpeaking)
+                                  SizedBox(
                                     width: 70,
                                     child: AdaptiveButton(
                                       onPressed: _stop,
@@ -112,24 +119,24 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                                       style: AdaptiveButtonStyle.bordered,
                                     ),
                                   ),
+                                SizedBox(
+                                  width: 80,
+                                  child: AdaptiveButton(
+                                    onPressed: _speak,
+                                    label: 'Speak',
+                                    style: AdaptiveButtonStyle.filled,
+                                  ),
                                 ),
-                              SizedBox(
-                                width: 80,
-                                child: AdaptiveButton(
-                                  onPressed: _speak,
-                                  label: 'Speak',
-                                  style: AdaptiveButtonStyle.filled,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ).animate().fadeIn().slideY(begin: 0.1),
-                  ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ).animate().fadeIn().slideY(begin: 0.1),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

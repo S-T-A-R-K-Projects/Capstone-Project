@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'dart:io';
 import '../services/trigger_word_service.dart';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
@@ -39,53 +40,58 @@ class _AlertsPageState extends State<AlertsPage> {
             'Add Trigger Word',
             style: GoogleFonts.inter(fontWeight: FontWeight.bold),
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: _newWordController,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter word to monitor',
-                    border: OutlineInputBorder(),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _newWordController,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter word to monitor',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: caseSensitive,
-                      onChanged: (value) {
-                        setState(() => caseSensitive = value ?? false);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Case Sensitive',
-                      style: GoogleFonts.inter(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: exactMatch,
-                      onChanged: (value) {
-                        setState(() => exactMatch = value ?? true);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Exact Word Match (whole word only)',
-                        style: GoogleFonts.inter(),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: caseSensitive,
+                        onChanged: (value) {
+                          setState(() => caseSensitive = value ?? false);
+                        },
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Case Sensitive',
+                          style: GoogleFonts.inter(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: exactMatch,
+                        onChanged: (value) {
+                          setState(() => exactMatch = value ?? true);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Exact Word Match (whole word only)',
+                          style: GoogleFonts.inter(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -95,7 +101,8 @@ class _AlertsPageState extends State<AlertsPage> {
             ),
             FilledButton(
               onPressed: () async {
-                if (_newWordController.text.isEmpty) {
+                final wordToAdd = _newWordController.text.trim();
+                if (wordToAdd.isEmpty) {
                   AdaptiveSnackBar.show(
                     context,
                     message: 'Please enter a trigger word',
@@ -103,8 +110,6 @@ class _AlertsPageState extends State<AlertsPage> {
                   );
                   return;
                 }
-
-                final wordToAdd = _newWordController.text.trim();
                 final navigator = Navigator.of(context);
 
                 await _triggerWordService.addTriggerWord(
@@ -145,53 +150,58 @@ class _AlertsPageState extends State<AlertsPage> {
             'Edit Trigger Word',
             style: GoogleFonts.inter(fontWeight: FontWeight.bold),
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: _newWordController,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter word to monitor',
-                    border: OutlineInputBorder(),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _newWordController,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter word to monitor',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: caseSensitive,
-                      onChanged: (value) {
-                        setState(() => caseSensitive = value ?? false);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Case Sensitive',
-                      style: GoogleFonts.inter(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: exactMatch,
-                      onChanged: (value) {
-                        setState(() => exactMatch = value ?? true);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Exact Word Match (whole word only)',
-                        style: GoogleFonts.inter(),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: caseSensitive,
+                        onChanged: (value) {
+                          setState(() => caseSensitive = value ?? false);
+                        },
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Case Sensitive',
+                          style: GoogleFonts.inter(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: exactMatch,
+                        onChanged: (value) {
+                          setState(() => exactMatch = value ?? true);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Exact Word Match (whole word only)',
+                          style: GoogleFonts.inter(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -329,7 +339,7 @@ class _AlertsPageState extends State<AlertsPage> {
         child: Column(
           children: [
             // Top padding for iOS 26 translucent app bar
-            if (PlatformInfo.isIOS26OrHigher())
+            if (Platform.isIOS)
               SizedBox(
                   height: MediaQuery.of(context).padding.top + kToolbarHeight),
             // Tab selector using AdaptiveSegmentedControl
@@ -337,17 +347,23 @@ class _AlertsPageState extends State<AlertsPage> {
               padding: const EdgeInsets.all(16),
               child: SizedBox(
                 width: double.infinity,
-                child: AdaptiveSegmentedControl(
-                  labels: const ['Recent Alerts', 'Trigger Words'],
-                  selectedIndex: _selectedTabIndex,
-                  onValueChanged: (index) {
-                    setState(() {
-                      _selectedTabIndex = index;
-                      if (_selectedTabIndex != 0) {
-                        _clearAlertSelection();
-                      }
-                    });
-                  },
+                child: ClipRect(
+                  child: SizedBox(
+                    height: 40,
+                    child: AdaptiveSegmentedControl(
+                      labels: const ['Recent Alerts', 'Trigger Words'],
+                      color: Theme.of(context).colorScheme.surface,
+                      selectedIndex: _selectedTabIndex,
+                      onValueChanged: (index) {
+                        setState(() {
+                          _selectedTabIndex = index;
+                          if (_selectedTabIndex != 0) {
+                            _clearAlertSelection();
+                          }
+                        });
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -420,7 +436,10 @@ class _AlertsPageState extends State<AlertsPage> {
                 if (_isAlertSelectionMode)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Row(
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         SizedBox(
                           width: 110,
@@ -442,7 +461,6 @@ class _AlertsPageState extends State<AlertsPage> {
                             color: Colors.red,
                           ),
                         ),
-                        const Spacer(),
                         SizedBox(
                           width: 88,
                           child: AdaptiveButton(

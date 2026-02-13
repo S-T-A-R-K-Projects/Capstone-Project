@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'dart:io';
 
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
@@ -40,7 +41,7 @@ class NotificationPage extends StatelessWidget {
         child: Column(
           children: [
             // Top padding for iOS 26 translucent app bar
-            if (PlatformInfo.isIOS26OrHigher())
+            if (Platform.isIOS)
               SizedBox(
                   height: MediaQuery.of(context).padding.top + kToolbarHeight),
             Expanded(

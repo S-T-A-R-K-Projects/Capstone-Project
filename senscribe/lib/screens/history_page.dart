@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
@@ -146,7 +147,7 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final topInset = PlatformInfo.isIOS26OrHigher()
+    final topInset = Platform.isIOS
         ? MediaQuery.of(context).padding.top + kToolbarHeight
         : 0.0;
 
@@ -479,7 +480,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final topInset = PlatformInfo.isIOS26OrHigher()
+    final topInset = Platform.isIOS
         ? MediaQuery.of(context).padding.top + kToolbarHeight
         : 0.0;
 
@@ -521,8 +522,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                   )
                 : Column(
                     children: [
-                      if (PlatformInfo.isIOS26OrHigher())
-                        SizedBox(height: topInset),
+                      if (Platform.isIOS) SizedBox(height: topInset),
                       Container(
                         margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                         padding: const EdgeInsets.symmetric(
@@ -628,8 +628,10 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
           if (_isEditing)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   SizedBox(
                     width: 90,
@@ -639,7 +641,6 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                       style: AdaptiveButtonStyle.plain,
                     ),
                   ),
-                  const SizedBox(width: 8),
                   SizedBox(
                     width: 90,
                     child: AdaptiveButton(

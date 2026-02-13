@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'dart:io';
 import '../main.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
@@ -35,7 +36,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: EdgeInsets.only(
             left: 16,
             right: 16,
-            top: PlatformInfo.isIOS26OrHigher()
+            top: Platform.isIOS
                 ? MediaQuery.of(context).padding.top + kToolbarHeight + 16
                 : 16,
             bottom: 120,
@@ -80,14 +81,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 8.0),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: AdaptiveSegmentedControl(
-                          labels: const ['System', 'Light', 'Dark'],
-                          selectedIndex: themeProvider.themeMode.index,
-                          onValueChanged: (int index) {
-                            themeProvider.setTheme(ThemeMode.values[index]);
-                          },
+                      child: ClipRect(
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 40,
+                          child: AdaptiveSegmentedControl(
+                            labels: const ['System', 'Light', 'Dark'],
+                            color: Theme.of(context).colorScheme.surface,
+                            selectedIndex: themeProvider.themeMode.index,
+                            onValueChanged: (int index) {
+                              themeProvider.setTheme(ThemeMode.values[index]);
+                              if (mounted) setState(() {});
+                            },
+                          ),
                         ),
                       ),
                     ),

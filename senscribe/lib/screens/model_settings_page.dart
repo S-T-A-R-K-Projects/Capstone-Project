@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_leap_sdk/flutter_leap_sdk.dart';
+import 'dart:io';
 
 import '../services/summarization_service.dart';
 import '../models/llm_model.dart';
@@ -89,6 +91,51 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
     }
   }
 
+  Future<void> _deleteModel() async {
+    if (!_isConfigured || _isDownloading) return;
+
+    var shouldDelete = false;
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: 'Delete model files?',
+      message:
+          'This will remove the downloaded AI model from this device. You can download it again later.',
+      actions: [
+        AlertAction(
+          title: 'Cancel',
+          style: AlertActionStyle.cancel,
+          onPressed: () {},
+        ),
+        AlertAction(
+          title: 'Delete',
+          style: AlertActionStyle.destructive,
+          onPressed: () {
+            shouldDelete = true;
+          },
+        ),
+      ],
+    );
+
+    if (!shouldDelete) return;
+
+    try {
+      await _summarizationService.unloadModel();
+      final deleted = await FlutterLeapSdkService.deleteModel(_modelId);
+      if (!mounted) return;
+
+      if (deleted) {
+        _showSuccess('Model deleted');
+      } else {
+        _showError('Model file was not found on device');
+      }
+      await _checkStatus();
+    } catch (e) {
+      if (mounted) {
+        _showError('Delete failed: $e');
+      }
+    }
+  }
+
   void _showError(String message) {
     AdaptiveSnackBar.show(
       context,
@@ -124,7 +171,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Top padding for iOS 26 translucent app bar
-                      if (PlatformInfo.isIOS26OrHigher())
+                      if (Platform.isIOS)
                         SizedBox(
                             height: MediaQuery.of(context).padding.top +
                                 kToolbarHeight),
@@ -224,6 +271,19 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
             style: AdaptiveButtonStyle.filled,
           ),
         ),
+        if (_isConfigured)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: AdaptiveButton(
+                onPressed: _deleteModel,
+                label: 'Delete Model from Device',
+                style: AdaptiveButtonStyle.plain,
+                color: Colors.red,
+              ),
+            ),
+          ),
         if (!_isConfigured)
           Padding(
             padding: const EdgeInsets.only(top: 8),

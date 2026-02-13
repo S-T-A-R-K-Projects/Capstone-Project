@@ -671,8 +671,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         // Action Bar for STT
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
             children: [
               SizedBox(
                 width: 70,

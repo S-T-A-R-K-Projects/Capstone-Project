@@ -48,7 +48,6 @@ dependencies:
   flutter_leap_sdk: ^0.2.4
   permission_handler: ^11.3.1
   shared_preferences: ^2.1.0
-  file_picker: ^8.1.2
   path: ^1.9.0
   url_launcher: ^6.2.5
   dio: ^5.9.0

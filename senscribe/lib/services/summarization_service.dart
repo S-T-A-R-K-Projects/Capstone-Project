@@ -22,7 +22,24 @@ class SummarizationService {
   /// Get currently selected model name
   Future<String> getSelectedModelName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_modelNameKey) ?? LLMModel.defaultModel.name;
+    final selected = prefs.getString(_modelNameKey);
+    if (selected == null || selected.trim().isEmpty) {
+      await prefs.setString(_modelNameKey, LLMModel.defaultModel.name);
+      return LLMModel.defaultModel.name;
+    }
+
+    final normalized = selected.trim();
+    final existsInCurrentCatalog = LLMModel.getModelByName(normalized) != null;
+    if (!existsInCurrentCatalog) {
+      await prefs.setString(_modelNameKey, LLMModel.defaultModel.name);
+      return LLMModel.defaultModel.name;
+    }
+
+    if (normalized != selected) {
+      await prefs.setString(_modelNameKey, normalized);
+    }
+
+    return normalized;
   }
 
   /// Set selected model name
@@ -40,24 +57,7 @@ class SummarizationService {
   /// Check if model is configured (Using SDK)
   Future<bool> isModelConfigured([LLMModel? model]) async {
     final m = model ?? await getActiveModel();
-    // Use SDK to check if managed model exists
-    return await FlutterLeapSdkService.checkModelExists(m.name);
-  }
-
-  // Maximum characters for input
-  static const int _maxInputChars = 3000;
-
-  /// Truncate transcript if too long
-  String _truncateIfNeeded(String transcript) {
-    if (transcript.length <= _maxInputChars) {
-      return transcript;
-    }
-    final truncated = transcript.substring(0, _maxInputChars);
-    final lastPeriod = truncated.lastIndexOf('.');
-    if (lastPeriod > _maxInputChars * 0.8) {
-      return '${truncated.substring(0, lastPeriod + 1)} [Text truncated]';
-    }
-    return '$truncated... [Text truncated]';
+    return await _leapService.isModelCached(m.name);
   }
 
   /// Download Model using Leap SDK Native Download
@@ -69,12 +69,12 @@ class SummarizationService {
     onStatus('Initializing Download...');
 
     try {
-      // Use Native SDK Download
+      final modelNameForSdk = model.name;
+
       onStatus('Downloading ${model.name}...');
       await FlutterLeapSdkService.downloadModel(
-        modelName: model.name,
+        modelName: modelNameForSdk,
         onProgress: (progress) {
-          // progress.percentage is 0-100
           final percent = progress.percentage / 100.0;
           onProgress(percent);
         },
@@ -89,14 +89,60 @@ class SummarizationService {
 
   // Expose loadModel for UI reloading
   Future<void> loadModel(String modelName) async {
-    // Just pass the model name to LeapService (which wraps SDK load)
     await _leapService.loadModel(modelName);
   }
 
   /// Unload the currently loaded model to free resources
   Future<void> unloadModel() async {
     debugPrint('SummarizationService: Unloading model...');
-    await _leapService.dispose();
+    await _leapService.forceUnload();
+  }
+
+  /// Synchronous summarization: returns final ~200-word summary.
+  Future<String> summarize(String transcript) async {
+    final modelName = await getSelectedModelName();
+    final exists = await _leapService.isModelCached(modelName);
+
+    if (!exists) {
+      throw SummarizationException(
+        'Model not found on device. Please download it in Settings.',
+      );
+    }
+
+    try {
+      return await _leapService.summarizeLargeText(
+        transcript,
+        modelId: modelName,
+      );
+    } on LeapServiceException catch (e) {
+      throw SummarizationException(e.message);
+    } catch (e) {
+      throw SummarizationException('Summarization failed: $e');
+    }
+  }
+
+  /// Streaming summarization:
+  /// emits progress updates first, then streams final summary tokens.
+  Stream<String> summarizeStream(String transcript) async* {
+    final modelName = await getSelectedModelName();
+    final exists = await _leapService.isModelCached(modelName);
+
+    if (!exists) {
+      throw SummarizationException(
+        'Model not found on device. Please download it in Settings.',
+      );
+    }
+
+    try {
+      yield* _leapService.summarizeLargeTextStream(
+        transcript,
+        modelId: modelName,
+      );
+    } on LeapServiceException catch (e) {
+      throw SummarizationException(e.message);
+    } catch (e) {
+      throw SummarizationException('Summarization failed: $e');
+    }
   }
 
   /// Summarize text using Leap service (streaming)
@@ -104,53 +150,32 @@ class SummarizationService {
     String transcript, {
     required void Function(String token) onToken,
   }) async {
-    // Check if model is configured
-    final name = await getSelectedModelName();
-
-    debugPrint('SummarizationService: Loading managed model: $name');
-
-    // Ensure model is downloaded
-    final exists = await FlutterLeapSdkService.checkModelExists(name);
-    if (!exists) {
-      throw SummarizationException(
-          'Model not found on device. Please download it in Settings.');
-    }
+    final buffer = StringBuffer();
 
     try {
-      // 1. Load Model (SDK Native)
-      await _leapService.loadModel(name);
+      await for (final token in summarizeStream(transcript)) {
+        if (_isProgressToken(token)) {
+          onToken('${token.trim()}\n');
+          continue;
+        }
 
-      final processedTranscript = _truncateIfNeeded(transcript);
-      String fullResponse = '';
-
-      // 2. Generate
-      final stream = _leapService.generateStream(processedTranscript);
-      final completer = Completer<String>();
-
-      stream.listen(
-        (token) {
-          fullResponse += token;
-          onToken(token);
-        },
-        onError: (e) {
-          if (!completer.isCompleted) completer.completeError(e);
-        },
-        onDone: () {
-          if (!completer.isCompleted) completer.complete(fullResponse);
-        },
-      );
-
-      final result = await completer.future;
-
-      // 3. Unload Model (Cleanup)
-      await unloadModel();
-
-      return result;
+        buffer.write(token);
+        onToken(token);
+      }
+      return buffer.toString().trim();
     } catch (e) {
       debugPrint('SummarizationService: Error: $e');
-      await unloadModel();
+      if (e is SummarizationException) {
+        rethrow;
+      }
       throw SummarizationException('Summarization failed: $e');
     }
+  }
+
+  bool _isProgressToken(String token) {
+    final trimmed = token.trimLeft();
+    return trimmed.startsWith('Processing section ') ||
+        trimmed.startsWith('Combining section summaries');
   }
 }
 

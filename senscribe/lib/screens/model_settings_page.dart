@@ -267,7 +267,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
           height: 50,
           child: AdaptiveButton(
             onPressed: _startDownload,
-            label: _isConfigured ? 'Reload Model' : 'Download Model (~1.2 GB)',
+            label: _isConfigured ? 'Reload Model' : 'Download Model (~1.25 GB)',
             style: AdaptiveButtonStyle.filled,
           ),
         ),
@@ -338,7 +338,10 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
           _buildInfoRow('ID', _modelId, theme),
           _buildInfoRow('Type', 'Leap Managed Model', theme),
           _buildInfoRow(
-              'Description', 'Qwen 3 (1.7B). Managed via Liquid SDK.', theme),
+            'Description',
+            'LFM2.5-1.2B-Instruct Q8_0. Managed via Liquid SDK.',
+            theme,
+          ),
           const SizedBox(height: 8),
           Text(
             'Powered by flutter_leap_sdk',

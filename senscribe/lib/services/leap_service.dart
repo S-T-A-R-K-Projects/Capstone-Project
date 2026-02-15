@@ -20,7 +20,10 @@ class LeapService {
   static const int _chunkSummaryMaxTokens = 150;
   static const int _finalSummaryMaxTokens = 300;
   static const Duration _chunkGenerationTimeout = Duration(seconds: 45);
-  static const Duration _finalGenerationTimeout = Duration(seconds: 75);
+  static const Duration _finalGenerationTimeout = Duration(seconds: 30);
+  static const Duration _conversationTransitionDelay = Duration(
+    milliseconds: 120,
+  );
 
   // Singleton instance
   static final LeapService _instance = LeapService._internal();
@@ -93,6 +96,8 @@ class LeapService {
         chunkSummaries.add(summary);
       }
 
+      await _prepareForFinalReduction(resolvedModelId);
+
       return await _buildFinalSummary(chunkSummaries, modelId: resolvedModelId);
     } catch (e) {
       debugPrint('LeapService: summarizeLargeText failed: $e');
@@ -141,6 +146,7 @@ class LeapService {
       }
 
       yield 'Combining section summaries...\n';
+      await _prepareForFinalReduction(resolvedModelId);
       final combinedSummary = await _buildFinalSummary(
         chunkSummaries,
         modelId: resolvedModelId,
@@ -271,6 +277,8 @@ $chunkText
         ),
       );
 
+      var recoverAfterDispose = false;
+
       try {
         final summary = (await conversation
                 .generateResponse(prompt)
@@ -289,15 +297,19 @@ $chunkText
         );
 
         if (shouldRetry) {
-          await _recoverModelAfterStop(modelId);
-          continue;
+          recoverAfterDispose = true;
+        } else {
+          throw LeapServiceException(
+            'Failed while processing section $sectionIndex of $totalSections. $e',
+          );
         }
-
-        throw LeapServiceException(
-          'Failed while processing section $sectionIndex of $totalSections. $e',
-        );
       } finally {
         await _disposeConversation(conversation);
+      }
+
+      if (recoverAfterDispose) {
+        await _recoverModelAfterStop(modelId);
+        continue;
       }
     }
 
@@ -322,6 +334,8 @@ $chunkText
         ),
       );
 
+      var recoverAfterDispose = false;
+
       try {
         final response = (await conversation
                 .generateResponse(prompt)
@@ -337,12 +351,17 @@ $chunkText
         debugPrint('LeapService: Final summary failed on attempt $attempt: $e');
 
         if (shouldRetry) {
-          await _recoverModelAfterStop(modelId);
-          continue;
+          recoverAfterDispose = true;
+        } else {
+          throw LeapServiceException('Failed to generate final summary. $e');
         }
-        throw LeapServiceException('Failed to generate final summary. $e');
       } finally {
         await _disposeConversation(conversation);
+      }
+
+      if (recoverAfterDispose) {
+        await _recoverModelAfterStop(modelId);
+        continue;
       }
     }
 
@@ -492,6 +511,7 @@ $joined
   Future<void> _disposeConversation(Conversation conversation) async {
     try {
       await FlutterLeapSdkService.disposeConversation(conversation.id);
+      await Future<void>.delayed(_conversationTransitionDelay);
     } catch (e) {
       debugPrint(
         'LeapService: Conversation dispose failed for ${conversation.id}: $e',
@@ -518,6 +538,18 @@ $joined
       await forceUnload();
     } catch (e) {
       debugPrint('LeapService: forceUnload during recovery failed: $e');
+    }
+    await _ensureModelLoaded(modelId);
+  }
+
+  Future<void> _prepareForFinalReduction(String modelId) async {
+    debugPrint(
+      'LeapService: Preparing final reduction stage with clean model state...',
+    );
+    try {
+      await forceUnload();
+    } catch (e) {
+      debugPrint('LeapService: Pre-final forceUnload failed: $e');
     }
     await _ensureModelLoaded(modelId);
   }

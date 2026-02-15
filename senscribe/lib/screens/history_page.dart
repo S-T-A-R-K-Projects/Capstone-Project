@@ -783,6 +783,16 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'For large transcripts, summarization may take a while.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.72),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                     ],
                     SelectableText(

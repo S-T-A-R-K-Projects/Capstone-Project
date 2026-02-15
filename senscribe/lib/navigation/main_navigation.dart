@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import '../screens/home_page.dart';
 import '../screens/history_page.dart';
 import '../screens/alerts_page.dart';
 import '../screens/settings_page.dart';
+import '../screens/speech_to_text_page.dart';
+import '../screens/text_to_speech_page.dart';
+
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -15,39 +20,126 @@ class MainNavigationPage extends StatefulWidget {
   State<MainNavigationPage> createState() => _MainNavigationPageState();
 }
 
-class _MainNavigationPageState extends State<MainNavigationPage> with TickerProviderStateMixin {
+class _MainNavigationPageState extends State<MainNavigationPage>
+    with TickerProviderStateMixin {
   int _selectedIndex = 0;
   late AnimationController _fabAnimationController;
-  // current UI mode for HomePage: 'speech' or 'text'
-  String _mode = 'speech';
-  List<Widget> get _pages => [
-        HomePage(mode: _mode),
-        HistoryPage(),
-        AlertsPage(),
-        SettingsPage(),
-      ];
 
-  final iconList = <IconData>[
-    Icons.home_rounded,
-    Icons.history_rounded,
-    Icons.notifications_rounded,
-    Icons.settings_rounded,
-  ];
+  // Separate monitoring states for each feature
+  bool _isSoundFeedMonitoring = false;
+  bool _isSpeechToTextMonitoring = false;
+  bool _isTextToSpeechMonitoring = false;
+
+  late AnimationController _soundFeedPulseController;
+  late AnimationController _speechToTextPulseController;
+  late AnimationController _textToSpeechPulseController;
 
   @override
   void initState() {
     super.initState();
+    _requestStoragePermission();
     _fabAnimationController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
+    _soundFeedPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _speechToTextPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _textToSpeechPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+  }
+
+  Future<void> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      if (await Permission.manageExternalStorage.isDenied) {
+        await Permission.manageExternalStorage.request();
+      }
+      // Fail-safe for older Android versions or if manage is not applicable (though manifest says manage)
+      if (await Permission.storage.isDenied) {
+        await Permission.storage.request();
+      }
+    }
   }
 
   @override
   void dispose() {
     _fabAnimationController.dispose();
+    _soundFeedPulseController.dispose();
+    _speechToTextPulseController.dispose();
+    _textToSpeechPulseController.dispose();
     super.dispose();
   }
+
+  void _toggleSoundFeedMonitoring() {
+    setState(() {
+      _isSoundFeedMonitoring = !_isSoundFeedMonitoring;
+      if (_isSoundFeedMonitoring) {
+        _soundFeedPulseController.repeat();
+      } else {
+        _soundFeedPulseController.stop();
+        _soundFeedPulseController.reset();
+      }
+    });
+  }
+
+  void _toggleSpeechToTextMonitoring() {
+    setState(() {
+      _isSpeechToTextMonitoring = !_isSpeechToTextMonitoring;
+      if (_isSpeechToTextMonitoring) {
+        _speechToTextPulseController.repeat();
+      } else {
+        _speechToTextPulseController.stop();
+        _speechToTextPulseController.reset();
+      }
+    });
+  }
+
+  void _toggleTextToSpeechMonitoring() {
+    setState(() {
+      _isTextToSpeechMonitoring = !_isTextToSpeechMonitoring;
+      if (_isTextToSpeechMonitoring) {
+        _textToSpeechPulseController.repeat();
+      } else {
+        _textToSpeechPulseController.stop();
+        _textToSpeechPulseController.reset();
+      }
+    });
+  }
+
+  List<Widget> get _pages => [
+    HomePage(
+      isMonitoring: _isSoundFeedMonitoring,
+      pulseController: _soundFeedPulseController,
+      onToggleMonitoring: _toggleSoundFeedMonitoring,
+    ),
+    HistoryPage(),
+    AlertsPage(),
+    SettingsPage(),
+    SpeechToTextPage(
+      isMonitoring: _isSpeechToTextMonitoring,
+      pulseController: _speechToTextPulseController,
+      onToggleMonitoring: _toggleSpeechToTextMonitoring,
+    ),
+    TextToSpeechPage(
+      isMonitoring: _isTextToSpeechMonitoring,
+      pulseController: _textToSpeechPulseController,
+      onToggleMonitoring: _toggleTextToSpeechMonitoring,
+    ),
+  ];
+
+  final iconList = <IconData>[
+    Icons.hearing_rounded,
+    Icons.history_rounded,
+    Icons.notifications_rounded,
+    Icons.settings_rounded,
+  ];
 
   void _onItemTapped(int index) {
     setState(() {
@@ -64,159 +156,75 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
         child: SlideAnimation(
           horizontalOffset: 50.0,
           child: FadeInAnimation(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: _pages,
-            ),
+            child: IndexedStack(index: _selectedIndex, children: _pages),
           ),
         ),
       ),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: () {
-                  // Show a true semicircular overlay anchored above the nav bar.
-                  OverlayEntry? entry;
-                  entry = OverlayEntry(builder: (context) {
-                    // Overlay constants
-                    const double width = 320;
-                    const double height = 160;
-                    const double btnSize = 68;
-                    final double centerX = width / 2;
-                    final double centerY = height; // center at bottom of the box
-                    final double radius = 120;
-
-                    // angles for two options along the semicircle (left to right)
-                    final leftAngle = 160.0 * (math.pi / 180.0);
-                    final rightAngle = 20.0 * (math.pi / 180.0);
-
-                    final leftX = centerX + radius * math.cos(leftAngle);
-                    final leftY = centerY - radius * math.sin(leftAngle);
-                    final rightX = centerX + radius * math.cos(rightAngle);
-                    final rightY = centerY - radius * math.sin(rightAngle);
-
-                    return Positioned.fill(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
+      floatingActionButton:
+          (_selectedIndex == 0 || _selectedIndex == 4 || _selectedIndex == 5)
+          ? SpeedDial(
+                  icon: _selectedIndex == 0
+                      ? Icons.add_rounded
+                      : Icons.home_rounded,
+                  activeIcon: Icons.close_rounded,
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                  foregroundColor: Colors.white,
+                  activeForegroundColor: Colors.white,
+                  activeBackgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.secondary,
+                  buttonSize: const Size(56.0, 56.0),
+                  visible: true,
+                  closeManually: false,
+                  curve: Curves.bounceIn,
+                  overlayColor: Colors.black,
+                  overlayOpacity: 0.5,
+                  elevation: 8.0,
+                  shape: const CircleBorder(),
+                  children: [
+                    if (_selectedIndex == 4 || _selectedIndex == 5)
+                      SpeedDialChild(
+                        child: const Icon(Icons.hearing_rounded),
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        label: 'R-T Sound Feed',
+                        labelStyle: const TextStyle(fontSize: 16.0),
                         onTap: () {
-                          entry?.remove();
+                          setState(() {
+                            _selectedIndex = 0;
+                          });
                         },
-                        child: Stack(
-                          children: [
-                            Align(
-                              alignment: Alignment.bottomCenter,
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 64.0),
-                                child: SizedBox(
-                                  width: width,
-                                  height: height,
-                                  child: Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      // semicircle background
-                                      CustomPaint(
-                                        size: const Size(width, height),
-                                        painter: _SemiCirclePainter(
-                                          color: Theme.of(context).colorScheme.surface,
-                                        ),
-                                      ),
-                                      // Left option (Speech to Text) - placed on arc
-                                      Positioned(
-                                        left: leftX - (btnSize / 2),
-                                        top: leftY - (btnSize / 2),
-                                        child: Column(
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () {
-                                                setState(() {
-                                                  _mode = 'speech';
-                                                });
-                                                entry?.remove();
-                                              },
-                                              child: Container(
-                                                width: btnSize,
-                                                height: btnSize,
-                                                decoration: BoxDecoration(
-                                                  color: Theme.of(context).colorScheme.primary,
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [
-                                                    BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6),
-                                                  ],
-                                                ),
-                                                alignment: Alignment.center,
-                                                child: const Icon(Icons.hearing_rounded, color: Colors.white),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            SizedBox(
-                                              width: 110,
-                                              child: Text(
-                                                'Speech to Text',
-                                                textAlign: TextAlign.center,
-                                                style: Theme.of(context).textTheme.bodySmall,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      // Right option (Text to Speech)
-                                      Positioned(
-                                        left: rightX - (btnSize / 2),
-                                        top: rightY - (btnSize / 2),
-                                        child: Column(
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () {
-                                                setState(() {
-                                                  _mode = 'text';
-                                                });
-                                                entry?.remove();
-                                              },
-                                              child: Container(
-                                                width: btnSize,
-                                                height: btnSize,
-                                                decoration: BoxDecoration(
-                                                  color: Theme.of(context).colorScheme.primary,
-                                                  shape: BoxShape.circle,
-                                                  boxShadow: [
-                                                    BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6),
-                                                  ],
-                                                ),
-                                                alignment: Alignment.center,
-                                                child: const Icon(Icons.record_voice_over, color: Colors.white),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            SizedBox(
-                                              width: 110,
-                                              child: Text(
-                                                'Text to Speech',
-                                                textAlign: TextAlign.center,
-                                                style: Theme.of(context).textTheme.bodySmall,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
-                    );
-                  });
-                  Overlay.of(context).insert(entry);
-
-                _fabAnimationController.forward().then((_) {
-                  _fabAnimationController.reverse();
-                });
-              },
-              backgroundColor: Theme.of(context).colorScheme.secondary,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add_rounded),
-            ).animate().scale(duration: 300.ms).then().shimmer(duration: 1000.ms)
+                    SpeedDialChild(
+                      child: const Icon(Icons.mic_rounded),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      label: 'Speech to Text',
+                      labelStyle: const TextStyle(fontSize: 16.0),
+                      onTap: () {
+                        setState(() {
+                          _selectedIndex = 4;
+                        });
+                      },
+                    ),
+                    SpeedDialChild(
+                      child: const Icon(Icons.volume_up_rounded),
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      label: 'Text to Speech',
+                      labelStyle: const TextStyle(fontSize: 16.0),
+                      onTap: () {
+                        setState(() {
+                          _selectedIndex = 5;
+                        });
+                      },
+                    ),
+                  ],
+                )
+                .animate()
+                .scale(duration: 300.ms)
+                .then()
+                .shimmer(duration: 1000.ms)
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: AnimatedBottomNavigationBar(
@@ -235,22 +243,4 @@ class _MainNavigationPageState extends State<MainNavigationPage> with TickerProv
       ),
     );
   }
-
-}
-
-class _SemiCirclePainter extends CustomPainter {
-  final Color color;
-  _SemiCirclePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final rect = Rect.fromCircle(center: Offset(size.width / 2, size.height), radius: size.width / 2);
-    // draw the top semicircle (arc from 180deg to 0deg)
-    canvas.drawArc(rect, math.pi, -math.pi, false, paint);
-  // optional: leave as flat colored semicircle; shadow handled by container
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

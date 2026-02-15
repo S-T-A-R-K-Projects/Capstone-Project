@@ -45,7 +45,13 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>SenScribe needs access to the microphone to classify sounds in your environment.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>SenScribe needs access to speech recognition to transcribe spoken words into text.</string>
 </dict>
 </plist>

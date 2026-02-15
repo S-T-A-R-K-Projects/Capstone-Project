@@ -24,11 +24,27 @@ class AudioClassificationService {
     return _cachedStream!;
   }
 
+  void _log(String message) {
+    assert(() {
+      // ignore: avoid_print
+      print(message);
+      return true;
+    }());
+  }
+
   Future<void> start() async {
-    await _methodChannel.invokeMethod('start');
+    try {
+      await _methodChannel.invokeMethod('start');
+    } catch (e) {
+      _log('Audio classification not implemented yet: $e');
+    }
   }
 
   Future<void> stop() async {
-    await _methodChannel.invokeMethod('stop');
+    try {
+      await _methodChannel.invokeMethod('stop');
+    } catch (e) {
+      _log('Audio classification not implemented yet: $e');
+    }
   }
 }

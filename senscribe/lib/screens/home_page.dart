@@ -126,6 +126,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final filteredCaptions = _filteredCaptions;
 
     return AdaptiveScaffold(
@@ -158,7 +159,7 @@ class _HomePageState extends State<HomePage> {
                             decoration: BoxDecoration(
                               color: _isMonitoring
                                   ? Colors.green.withValues(alpha: 0.2)
-                                  : Colors.grey.withValues(alpha: 0.2),
+                                  : scheme.onSurface.withValues(alpha: 0.16),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -166,7 +167,9 @@ class _HomePageState extends State<HomePage> {
                                   ? Icons.mic_rounded
                                   : Icons.mic_off_rounded,
                               size: 24,
-                              color: _isMonitoring ? Colors.green : Colors.grey,
+                              color: _isMonitoring
+                                  ? Colors.green
+                                  : scheme.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         );
@@ -184,7 +187,7 @@ class _HomePageState extends State<HomePage> {
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: _isMonitoring
                                   ? Colors.green
-                                  : Colors.grey[600],
+                                  : scheme.onSurface,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -192,8 +195,9 @@ class _HomePageState extends State<HomePage> {
                             _isMonitoring
                                 ? 'Listening for sounds...'
                                 : 'Tap to start monitoring',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(color: Colors.grey[600]),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                                color:
+                                    scheme.onSurface.withValues(alpha: 0.72)),
                           ),
                         ],
                       ),
@@ -235,8 +239,8 @@ class _HomePageState extends State<HomePage> {
                                 filter,
                                 style: GoogleFonts.inter(
                                   color: isSelected
-                                      ? Colors.white
-                                      : Colors.black87,
+                                      ? scheme.onPrimary
+                                      : scheme.onSurface,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -246,8 +250,8 @@ class _HomePageState extends State<HomePage> {
                                   _selectedFilter = filter;
                                 });
                               },
-                              selectedColor: theme.colorScheme.secondary,
-                              backgroundColor: Colors.white,
+                              selectedColor: scheme.primary,
+                              backgroundColor: scheme.surfaceContainerHighest,
                               elevation: 2,
                               pressElevation: 4,
                             ),
@@ -299,7 +303,7 @@ class _HomePageState extends State<HomePage> {
                           Icon(
                             Icons.volume_off_rounded,
                             size: 80,
-                            color: Colors.grey[400],
+                            color: scheme.onSurface.withValues(alpha: 0.45),
                           )
                               .animate()
                               .scale(duration: 600.ms)
@@ -309,15 +313,15 @@ class _HomePageState extends State<HomePage> {
                           Text(
                             'No sounds detected yet',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.grey[600],
+                              color: scheme.onSurface.withValues(alpha: 0.8),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'Start monitoring to see live captions',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(color: Colors.grey[500]),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurface.withValues(alpha: 0.7)),
                           ),
                         ],
                       ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.2),

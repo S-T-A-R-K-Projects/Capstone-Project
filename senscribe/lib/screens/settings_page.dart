@@ -67,49 +67,35 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  AdaptiveListTile(
-                    leading: Icon(
-                      Icons.brightness_auto_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(
-                      'App Theme',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.brightness_auto_rounded,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final segmented = SizedBox(
-                            height: 40,
-                            child: AdaptiveSegmentedControl(
-                              labels: const ['System', 'Light', 'Dark'],
-                              color: Theme.of(context).colorScheme.surface,
-                              shrinkWrap: !PlatformInfo.isIOS26OrHigher(),
-                              selectedIndex: themeProvider.themeMode.index,
-                              onValueChanged: (int index) {
-                                themeProvider.setTheme(ThemeMode.values[index]);
-                                if (mounted) setState(() {});
-                              },
-                            ),
-                          );
-
-                          if (PlatformInfo.isIOS26OrHigher()) {
-                            return SizedBox(
-                              width: constraints.maxWidth,
-                              child: segmented,
-                            );
-                          }
-
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: segmented,
-                          );
-                        },
+                      const SizedBox(width: 8),
+                      Text(
+                        'App Theme',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: AdaptiveSegmentedControl(
+                      labels: const ['System', 'Light', 'Dark'],
+                      color: Theme.of(context).colorScheme.surface,
+                      shrinkWrap: false,
+                      selectedIndex: themeProvider.themeMode.index,
+                      onValueChanged: (int index) {
+                        themeProvider.setTheme(ThemeMode.values[index]);
+                        if (mounted) setState(() {});
+                      },
                     ),
                   ),
                 ],

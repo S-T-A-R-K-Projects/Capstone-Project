@@ -39,11 +39,15 @@ class SoundCaptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return AdaptiveCard(
       padding: const EdgeInsets.all(0),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: caption.isCritical
               ? Border.all(color: Colors.red, width: 2)
               : null,
@@ -113,7 +117,7 @@ class SoundCaptionCard extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                               color: caption.isCritical
                                   ? Colors.red[700]
-                                  : Colors.black87,
+                                  : scheme.onSurface,
                             ),
                           ),
                         ),
@@ -132,7 +136,7 @@ class SoundCaptionCard extends StatelessWidget {
                             child: Text(
                               'CRITICAL',
                               style: GoogleFonts.inter(
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onError,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -199,20 +203,22 @@ class SoundCaptionCard extends StatelessWidget {
   }
 
   Widget _buildInfoChip(IconData icon, String label, BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
           size: 16,
-          color: Colors.grey[600],
+          color: scheme.onSurface.withValues(alpha: 0.75),
         ),
         const SizedBox(width: 4),
         Text(
           label,
           style: GoogleFonts.inter(
             fontSize: 12,
-            color: Colors.grey[600],
+            color: scheme.onSurface.withValues(alpha: 0.78),
             fontWeight: FontWeight.w500,
           ),
         ),

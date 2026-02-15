@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -69,14 +68,8 @@ class _SenScribeAppState extends State<SenScribeApp> {
       title: 'SenScribe',
       materialLightTheme: AppTheme.lightTheme,
       materialDarkTheme: AppTheme.darkTheme,
-      cupertinoLightTheme: const CupertinoThemeData(
-        brightness: Brightness.light,
-        primaryColor: Color(0xFF1565C0),
-      ),
-      cupertinoDarkTheme: const CupertinoThemeData(
-        brightness: Brightness.dark,
-        primaryColor: Color(0xFF42A5F5),
-      ),
+      cupertinoLightTheme: AppTheme.cupertinoLightTheme,
+      cupertinoDarkTheme: AppTheme.cupertinoDarkTheme,
       themeMode: _themeProvider.themeMode,
       home: const MainNavigationPage(),
       localizationsDelegates: const [

@@ -561,11 +561,14 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                           ? AdaptiveButtonStyle.glass
                           : AdaptiveButtonStyle.plain,
                       child: Center(
-                        child: Icon(
-                          isExpanded
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.keyboard_arrow_down_rounded,
-                          size: 20,
+                        child: Transform.translate(
+                          offset: const Offset(-0.5, 0),
+                          child: Icon(
+                            isExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -631,42 +634,97 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   Widget _buildSoundContent() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     if (_soundEvents.isEmpty) {
       return Center(
           child: Text("No sounds detected",
-              style: GoogleFonts.inter(color: Colors.grey)));
+              style: GoogleFonts.inter(
+                  color: scheme.onSurface.withValues(alpha: 0.72))));
     }
+
     return ListView.builder(
       physics: const NeverScrollableScrollPhysics(), // Nested scrolling
       shrinkWrap: true, // Needed inside SingleChildScrollView
-      itemCount: _soundEvents.length > 3
-          ? 3
-          : _soundEvents.length, // Show limited items
+      itemCount: _soundEvents.length,
       itemBuilder: (context, index) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final trailingWidth = screenWidth < 360 ? 116.0 : 136.0;
         final event = _soundEvents[index];
+        final directionLabel =
+            event.direction.trim().isEmpty ? 'Unknown' : event.direction;
+        final matchLabel = '${(event.confidence * 100).toStringAsFixed(0)}%';
+
         return AdaptiveListTile(
           leading: Icon(
             event.isCritical
                 ? Icons.warning_amber_rounded
                 : Icons.music_note_rounded,
-            color: event.isCritical ? Colors.red : Colors.blue,
+            color: event.isCritical ? scheme.error : scheme.primary,
           ),
-          title: Text(event.sound,
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-          subtitle: Text("${event.confidence.toStringAsFixed(2)} confidence",
-              style: GoogleFonts.inter(fontSize: 12)),
+          title: Text(
+            event.sound,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: scheme.onSurface,
+            ),
+          ),
+          subtitle: Text(
+            _formatSoundEventTime(event.timestamp),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: scheme.onSurface.withValues(alpha: 0.68),
+            ),
+          ),
+          trailing: SizedBox(
+            width: trailingWidth,
+            child: Text(
+              '$matchLabel • $directionLabel',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface.withValues(alpha: 0.84),
+              ),
+            ),
+          ),
         );
       },
     );
   }
 
+  String _formatSoundEventTime(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inSeconds < 60) {
+      return '${diff.inSeconds}s ago';
+    }
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    }
+    if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    }
+    return '${diff.inDays}d ago';
+  }
+
   Widget _buildSTTContent() {
+    final scheme = Theme.of(context).colorScheme;
+
     if (_speechTranscript.isEmpty && _currentSpeechBuffer.isEmpty) {
       return Center(
           child: Text("Tap play to listen...",
-              style: GoogleFonts.inter(color: Colors.grey)));
+              style: GoogleFonts.inter(
+                  color: scheme.onSurface.withValues(alpha: 0.72))));
     }
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         // Action Bar for STT
         Padding(
@@ -690,7 +748,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   onPressed: _clearSTT,
                   label: "Clear",
                   style: AdaptiveButtonStyle.plain,
-                  color: Colors.red,
+                  color: scheme.error,
                   size: AdaptiveButtonSize.small,
                 ),
               ),
@@ -698,10 +756,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           ),
         ),
 
-        ListView(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          controller: _sttScrollController,
+        Column(
           children: [
             ..._speechTranscript.map((t) => Padding(
                   padding:
@@ -714,7 +769,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                 child: Text(_currentSpeechBuffer,
                     style: GoogleFonts.inter(
                         fontSize: 16,
-                        color: Colors.grey,
+                        color: scheme.onSurface.withValues(alpha: 0.72),
                         fontStyle: FontStyle.italic)),
               ),
           ],

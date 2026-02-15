@@ -178,7 +178,10 @@ class _HistoryPageState extends State<HistoryPage> {
                       padding: EdgeInsets.only(top: topInset),
                       child: Text(
                         'No history yet',
-                        style: GoogleFonts.inter(color: Colors.grey[600]),
+                        style: GoogleFonts.inter(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.72),
+                        ),
                       ),
                     ),
                   )
@@ -187,46 +190,65 @@ class _HistoryPageState extends State<HistoryPage> {
                     itemCount: _items.length,
                     itemBuilder: (context, index) {
                       final entry = _items[index];
-                      return Dismissible(
-                        key: ValueKey(entry.id),
-                        direction: DismissDirection.endToStart,
-                        onDismissed: (_) => _remove(entry.id),
-                        background: Container(
-                          color: Colors.redAccent,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        child: AdaptiveListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: entry.hasSummary
-                                ? Colors.green[100]
-                                : theme.colorScheme.primaryContainer,
-                            child: Icon(
-                              entry.hasSummary ? Icons.summarize : Icons.mic,
-                              color: entry.hasSummary
-                                  ? Colors.green[700]
-                                  : theme.colorScheme.primary,
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Dismissible(
+                          key: ValueKey(entry.id),
+                          direction: DismissDirection.endToStart,
+                          onDismissed: (_) => _remove(entry.id),
+                          background: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              color: theme.colorScheme.error,
+                              alignment: Alignment.centerRight,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              child: Icon(
+                                Icons.delete,
+                                color: theme.colorScheme.onError,
+                              ),
                             ),
                           ),
-                          title: Text(
-                            entry.title,
-                            style:
-                                GoogleFonts.inter(fontWeight: FontWeight.w600),
+                          child: AdaptiveCard(
+                            padding: EdgeInsets.zero,
+                            borderRadius: BorderRadius.circular(16),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: AdaptiveListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: entry.hasSummary
+                                      ? theme.colorScheme.secondaryContainer
+                                      : theme.colorScheme.primaryContainer,
+                                  child: Icon(
+                                    entry.hasSummary
+                                        ? Icons.summarize
+                                        : Icons.mic,
+                                    color: entry.hasSummary
+                                        ? theme.colorScheme.onSecondaryContainer
+                                        : theme.colorScheme.primary,
+                                  ),
+                                ),
+                                title: Text(
+                                  entry.title,
+                                  style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Text(
+                                  '${_previewContent(entry)} · ${_formatTimestamp(entry.timestamp)}',
+                                  style: GoogleFonts.inter(),
+                                ),
+                                trailing: entry.hasSummary
+                                    ? Icon(
+                                        Icons.check_circle,
+                                        color: theme.colorScheme.secondary,
+                                        size: 18,
+                                      )
+                                    : null,
+                                onTap: () => _openDetail(entry),
+                                onLongPress: () => _rename(entry),
+                              ),
+                            ),
                           ),
-                          subtitle: Text(
-                            '${_previewContent(entry)} · ${_formatTimestamp(entry.timestamp)}',
-                            style: GoogleFonts.inter(),
-                          ),
-                          trailing: entry.hasSummary
-                              ? Icon(
-                                  Icons.check_circle,
-                                  color: Colors.green[600],
-                                  size: 18,
-                                )
-                              : null,
-                          onTap: () => _openDetail(entry),
-                          onLongPress: () => _rename(entry),
                         ),
                       );
                     },
@@ -245,12 +267,11 @@ class HistoryDetailPage extends StatefulWidget {
   State<HistoryDetailPage> createState() => _HistoryDetailPageState();
 }
 
-class _HistoryDetailPageState extends State<HistoryDetailPage>
-    with SingleTickerProviderStateMixin {
+class _HistoryDetailPageState extends State<HistoryDetailPage> {
   final HistoryService _historyService = HistoryService();
   final SummarizationService _summarizationService = SummarizationService();
 
-  late TabController _tabController;
+  int _selectedViewIndex = 0;
   final TextEditingController _transcriptController = TextEditingController();
 
   HistoryItem? _item;
@@ -262,13 +283,11 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _loadItem();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _transcriptController.dispose();
     super.dispose();
   }
@@ -414,9 +433,8 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
     setState(() {
       _isSummarizing = true;
       _streamedSummary = '';
+      _selectedViewIndex = 1;
     });
-
-    _tabController.animateTo(1);
 
     try {
       final summary = await _summarizationService.summarizeWithCallback(
@@ -517,7 +535,10 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                 ? Center(
                     child: Text(
                       'Transcription not found',
-                      style: GoogleFonts.inter(color: Colors.grey[600]),
+                      style: GoogleFonts.inter(
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.72),
+                      ),
                     ),
                   )
                 : Column(
@@ -538,7 +559,8 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                             Icon(
                               Icons.schedule,
                               size: 16,
-                              color: Colors.grey[600],
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.72),
                             ),
                             const SizedBox(width: 6),
                             Expanded(
@@ -546,7 +568,8 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                                 'Recorded ${_formatTimestamp(item.timestamp)}',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
-                                  color: Colors.grey[600],
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.72),
                                 ),
                               ),
                             ),
@@ -559,26 +582,24 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                           color: theme.colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: TabBar(
-                          controller: _tabController,
-                          indicator: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          height: 44,
+                          child: AdaptiveSegmentedControl(
+                            labels: const ['Transcript', 'Summary'],
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            selectedIndex: _selectedViewIndex,
+                            onValueChanged: (index) {
+                              setState(() {
+                                _selectedViewIndex = index;
+                              });
+                            },
                           ),
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          labelColor: Colors.white,
-                          unselectedLabelColor: theme.colorScheme.onSurface,
-                          dividerColor: Colors.transparent,
-                          tabs: const [
-                            Tab(text: 'Transcript'),
-                            Tab(text: 'Summary'),
-                          ],
                         ),
                       ),
                       const SizedBox(height: 12),
                       Expanded(
-                        child: TabBarView(
-                          controller: _tabController,
+                        child: IndexedStack(
+                          index: _selectedViewIndex,
                           children: [
                             _buildTranscriptTab(theme, item),
                             _buildSummaryTab(theme, item),
@@ -769,7 +790,10 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                       style: GoogleFonts.inter(
                         fontSize: 15,
                         height: 1.6,
-                        color: placeholder ? Colors.grey[500] : null,
+                        color: placeholder
+                            ? theme.colorScheme.onSurface
+                                .withValues(alpha: 0.64)
+                            : theme.colorScheme.onSurface,
                         fontStyle: placeholder ? FontStyle.italic : null,
                       ),
                     ),
@@ -821,16 +845,16 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
   Widget _buildSummarizeButton(ThemeData theme, HistoryItem item) {
     final hasSummary = item.summary != null && item.summary!.isNotEmpty;
 
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: AdaptiveButton.child(
-        onPressed: _isSummarizing ? null : _startSummarization,
-        style: AdaptiveButtonStyle.filled,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_isSummarizing)
+    if (_isSummarizing) {
+      return SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: AdaptiveButton.child(
+          onPressed: null,
+          style: AdaptiveButtonStyle.filled,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
               SizedBox(
                 width: 18,
                 height: 18,
@@ -838,14 +862,31 @@ class _HistoryDetailPageState extends State<HistoryDetailPage>
                   strokeWidth: 2,
                   color: theme.colorScheme.onPrimary,
                 ),
-              )
-            else
-              Icon(hasSummary ? Icons.refresh : Icons.auto_awesome),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Summarizing...',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: AdaptiveButton.child(
+        onPressed: _startSummarization,
+        style: AdaptiveButtonStyle.filled,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(hasSummary ? Icons.refresh : Icons.auto_awesome),
             const SizedBox(width: 8),
             Text(
-              _isSummarizing
-                  ? 'Summarizing...'
-                  : (hasSummary ? 'Re-summarize' : 'Summarize'),
+              hasSummary ? 'Re-summarize' : 'Summarize',
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
           ],

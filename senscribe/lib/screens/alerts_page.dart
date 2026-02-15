@@ -347,22 +347,20 @@ class _AlertsPageState extends State<AlertsPage> {
               padding: const EdgeInsets.all(16),
               child: SizedBox(
                 width: double.infinity,
-                child: ClipRect(
-                  child: SizedBox(
-                    height: 40,
-                    child: AdaptiveSegmentedControl(
-                      labels: const ['Recent Alerts', 'Trigger Words'],
-                      color: Theme.of(context).colorScheme.surface,
-                      selectedIndex: _selectedTabIndex,
-                      onValueChanged: (index) {
-                        setState(() {
-                          _selectedTabIndex = index;
-                          if (_selectedTabIndex != 0) {
-                            _clearAlertSelection();
-                          }
-                        });
-                      },
-                    ),
+                child: SizedBox(
+                  height: 44,
+                  child: AdaptiveSegmentedControl(
+                    labels: const ['Recent Alerts', 'Trigger Words'],
+                    color: Theme.of(context).colorScheme.surface,
+                    selectedIndex: _selectedTabIndex,
+                    onValueChanged: (index) {
+                      setState(() {
+                        _selectedTabIndex = index;
+                        if (_selectedTabIndex != 0) {
+                          _clearAlertSelection();
+                        }
+                      });
+                    },
                   ),
                 ),
               ),
@@ -381,6 +379,8 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildAlertsTab() {
+    final scheme = Theme.of(context).colorScheme;
+
     return StreamBuilder<List<TriggerAlert>>(
       stream: _triggerWordService.alertsStream,
       builder: (context, snapshot) {
@@ -407,7 +407,7 @@ class _AlertsPageState extends State<AlertsPage> {
                     Icon(
                       Icons.notifications_off_rounded,
                       size: 80,
-                      color: Colors.grey[400],
+                      color: scheme.onSurface.withValues(alpha: 0.45),
                     ).animate().scale(duration: 600.ms),
                     const SizedBox(height: 24),
                     Text(
@@ -415,14 +415,14 @@ class _AlertsPageState extends State<AlertsPage> {
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey[600],
+                        color: scheme.onSurface.withValues(alpha: 0.82),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Add trigger words and use text-to-speech to generate alerts',
                       style: GoogleFonts.inter(
-                        color: Colors.grey[500],
+                        color: scheme.onSurface.withValues(alpha: 0.68),
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -458,7 +458,7 @@ class _AlertsPageState extends State<AlertsPage> {
                                 : _deleteSelectedAlerts,
                             label: 'Delete',
                             style: AdaptiveButtonStyle.plain,
-                            color: Colors.red,
+                            color: scheme.error,
                           ),
                         ),
                         SizedBox(
@@ -486,57 +486,71 @@ class _AlertsPageState extends State<AlertsPage> {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: AdaptiveCard(
                             padding: EdgeInsets.zero,
-                            child: AdaptiveListTile(
-                              leading: Icon(
-                                _isAlertSelectionMode
-                                    ? (isSelected
-                                        ? Icons.check_circle
-                                        : Icons.radio_button_unchecked)
-                                    : Icons.warning_rounded,
-                                color: _isAlertSelectionMode
-                                    ? (isSelected ? Colors.blue : Colors.grey)
-                                    : Colors.orange,
-                              ),
-                              title: Text(
-                                'Trigger: "${alert.triggerWord}"',
-                                style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    alert.detectedText,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.inter(fontSize: 12),
+                            borderRadius: BorderRadius.circular(16),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: AdaptiveListTile(
+                                leading: Icon(
+                                  _isAlertSelectionMode
+                                      ? (isSelected
+                                          ? Icons.check_circle
+                                          : Icons.radio_button_unchecked)
+                                      : Icons.warning_rounded,
+                                  color: _isAlertSelectionMode
+                                      ? (isSelected
+                                          ? scheme.primary
+                                          : scheme.onSurface
+                                              .withValues(alpha: 0.65))
+                                      : scheme.error,
+                                ),
+                                title: Text(
+                                  'Trigger: "${alert.triggerWord}"',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.bold,
+                                    color: scheme.onSurface,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _formatTime(alert.timestamp),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: Colors.grey[500],
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      alert.detectedText,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: scheme.onSurface
+                                            .withValues(alpha: 0.8),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _formatTime(alert.timestamp),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        color: scheme.onSurface
+                                            .withValues(alpha: 0.68),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                trailing: _isAlertSelectionMode
+                                    ? null
+                                    : AdaptiveButton.icon(
+                                        icon: Icons.delete_outline,
+                                        onPressed: () async {
+                                          await _triggerWordService
+                                              .removeAlert(alert.id);
+                                        },
+                                        style: AdaptiveButtonStyle.plain,
+                                      ),
+                                onTap: () {
+                                  if (_isAlertSelectionMode) {
+                                    _toggleAlertSelection(alert.id);
+                                  }
+                                },
                               ),
-                              trailing: _isAlertSelectionMode
-                                  ? null
-                                  : AdaptiveButton.icon(
-                                      icon: Icons.delete_outline,
-                                      onPressed: () async {
-                                        await _triggerWordService
-                                            .removeAlert(alert.id);
-                                      },
-                                      style: AdaptiveButtonStyle.plain,
-                                    ),
-                              onTap: () {
-                                if (_isAlertSelectionMode) {
-                                  _toggleAlertSelection(alert.id);
-                                }
-                              },
                             ),
                           ),
                         ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1),
@@ -553,6 +567,8 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildTriggerWordsTab() {
+    final scheme = Theme.of(context).colorScheme;
+
     return FutureBuilder<List<TriggerWord>>(
       future: _triggerWordService.loadTriggerWords(),
       builder: (context, snapshot) {
@@ -576,7 +592,7 @@ class _AlertsPageState extends State<AlertsPage> {
                     Icon(
                       Icons.label_off_rounded,
                       size: 80,
-                      color: Colors.grey[400],
+                      color: scheme.onSurface.withValues(alpha: 0.45),
                     ).animate().scale(duration: 600.ms),
                     const SizedBox(height: 24),
                     Text(
@@ -584,14 +600,14 @@ class _AlertsPageState extends State<AlertsPage> {
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey[600],
+                        color: scheme.onSurface.withValues(alpha: 0.82),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Add words to monitor in your text',
                       style: GoogleFonts.inter(
-                        color: Colors.grey[500],
+                        color: scheme.onSurface.withValues(alpha: 0.68),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -627,67 +643,76 @@ class _AlertsPageState extends State<AlertsPage> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: AdaptiveCard(
                     padding: EdgeInsets.zero,
-                    child: AdaptiveListTile(
-                      leading: Icon(
-                        word.enabled
-                            ? Icons.label_rounded
-                            : Icons.label_off_rounded,
-                        color: word.enabled ? Colors.blue : Colors.grey,
-                      ),
-                      title: Text(
-                        '"${word.word}"',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Row(
-                        children: [
-                          if (word.caseSensitive)
-                            Chip(
-                              label: Text(
-                                'Case Sensitive',
-                                style: GoogleFonts.inter(fontSize: 10),
+                    borderRadius: BorderRadius.circular(16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AdaptiveListTile(
+                        leading: Icon(
+                          word.enabled
+                              ? Icons.label_rounded
+                              : Icons.label_off_rounded,
+                          color: word.enabled
+                              ? scheme.primary
+                              : scheme.onSurface.withValues(alpha: 0.65),
+                        ),
+                        title: Text(
+                          '"${word.word}"',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.bold,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                        subtitle: Row(
+                          children: [
+                            if (word.caseSensitive)
+                              Chip(
+                                label: Text(
+                                  'Case Sensitive',
+                                  style: GoogleFonts.inter(fontSize: 10),
+                                ),
+                                visualDensity: VisualDensity.compact,
                               ),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          const SizedBox(width: 8),
-                          if (word.exactMatch)
-                            Chip(
-                              label: Text(
-                                'Exact Match',
-                                style: GoogleFonts.inter(fontSize: 10),
+                            const SizedBox(width: 8),
+                            if (word.exactMatch)
+                              Chip(
+                                label: Text(
+                                  'Exact Match',
+                                  style: GoogleFonts.inter(fontSize: 10),
+                                ),
+                                visualDensity: VisualDensity.compact,
                               ),
-                              visualDensity: VisualDensity.compact,
+                          ],
+                        ),
+                        trailing: AdaptivePopupMenuButton.icon<String>(
+                          icon: 'ellipsis.circle',
+                          items: [
+                            AdaptivePopupMenuItem(
+                              label: 'Edit',
+                              value: 'edit',
                             ),
-                        ],
-                      ),
-                      trailing: AdaptivePopupMenuButton.icon<String>(
-                        icon: 'ellipsis.circle',
-                        items: [
-                          AdaptivePopupMenuItem(
-                            label: 'Edit',
-                            value: 'edit',
-                          ),
-                          AdaptivePopupMenuItem(
-                            label: word.enabled ? 'Disable' : 'Enable',
-                            value: 'toggle',
-                          ),
-                          AdaptivePopupMenuItem(
-                            label: 'Delete',
-                            value: 'delete',
-                          ),
-                        ],
-                        onSelected: (index, item) async {
-                          if (item.value == 'edit') {
-                            _showEditTriggerWordDialog(word);
-                          } else if (item.value == 'toggle') {
-                            await _triggerWordService.updateTriggerWord(
-                              word.word,
-                              word.copyWith(enabled: !word.enabled),
-                            );
-                          } else if (item.value == 'delete') {
-                            await _triggerWordService
-                                .removeTriggerWord(word.word);
-                          }
-                        },
+                            AdaptivePopupMenuItem(
+                              label: word.enabled ? 'Disable' : 'Enable',
+                              value: 'toggle',
+                            ),
+                            AdaptivePopupMenuItem(
+                              label: 'Delete',
+                              value: 'delete',
+                            ),
+                          ],
+                          onSelected: (index, item) async {
+                            if (item.value == 'edit') {
+                              _showEditTriggerWordDialog(word);
+                            } else if (item.value == 'toggle') {
+                              await _triggerWordService.updateTriggerWord(
+                                word.word,
+                                word.copyWith(enabled: !word.enabled),
+                              );
+                            } else if (item.value == 'delete') {
+                              await _triggerWordService
+                                  .removeTriggerWord(word.word);
+                            }
+                          },
+                        ),
                       ),
                     ),
                   ),

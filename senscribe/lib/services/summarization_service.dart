@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_leap_sdk/flutter_leap_sdk.dart';
 
 import 'leap_service.dart';
 import '../models/llm_model.dart';
 
 /// High-level service for text summarization using Liquid AI Leap.
-/// Updated to use native managed models ONLY.
+/// Uses liquid_ai managed models.
 class SummarizationService {
   static const _modelNameKey = 'llm_model_name_leap';
 
@@ -66,24 +65,28 @@ class SummarizationService {
     required Function(double) onProgress,
     required Function(String) onStatus,
   }) async {
-    onStatus('Initializing Download...');
+    onStatus('Initializing model download...');
 
     try {
-      final modelNameForSdk = model.name;
-
-      onStatus('Downloading ${model.name}...');
-      await FlutterLeapSdkService.downloadModel(
-        modelName: modelNameForSdk,
-        onProgress: (progress) {
-          final percent = progress.percentage / 100.0;
-          onProgress(percent);
-        },
+      onStatus('Downloading ${model.displayName}...');
+      await _leapService.downloadModel(
+        model.name,
+        onProgress: onProgress,
+        onStatus: onStatus,
       );
 
       onStatus('Model Downloaded.');
     } catch (e) {
       debugPrint('SummarizationService: Download failed: $e');
       throw SummarizationException('Failed to download model: $e');
+    }
+  }
+
+  Future<void> deleteModelFiles(LLMModel model) async {
+    try {
+      await _leapService.deleteModel(model.name);
+    } catch (e) {
+      throw SummarizationException('Failed to delete model: $e');
     }
   }
 

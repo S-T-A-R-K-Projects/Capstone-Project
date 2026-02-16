@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_leap_sdk/flutter_leap_sdk.dart';
 import 'dart:io';
 
 import '../services/summarization_service.dart';
 import '../models/llm_model.dart';
-import '../services/leap_service.dart';
 
 /// Settings page for configuring the Leap AI model
 class ModelSettingsPage extends StatefulWidget {
@@ -21,7 +19,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   final SummarizationService _summarizationService = SummarizationService();
 
   // Using default model for simplified UI
-  final String _modelId = LeapService.defaultModelId;
+  final String _modelId = LLMModel.defaultModel.name;
 
   bool _isConfigured = false;
   bool _isLoading = true;
@@ -53,13 +51,11 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0.0;
-      _statusMessage = 'Initializing Leap...';
+      _statusMessage = 'Initializing Liquid AI...';
     });
 
     try {
-      // Retrieve the full model definition to ensure downloadUrl and localPath are present
-      final model = LLMModel.getModelByName(_modelId) ??
-          LLMModel.defaultModel; // Fallback only if not found
+      final model = LLMModel.getModelByName(_modelId) ?? LLMModel.defaultModel;
 
       await _summarizationService.downloadModelFiles(
         model,
@@ -120,14 +116,11 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
 
     try {
       await _summarizationService.unloadModel();
-      final deleted = await FlutterLeapSdkService.deleteModel(_modelId);
+      final model = LLMModel.getModelByName(_modelId) ?? LLMModel.defaultModel;
+      await _summarizationService.deleteModelFiles(model);
       if (!mounted) return;
 
-      if (deleted) {
-        _showSuccess('Model deleted');
-      } else {
-        _showError('Model file was not found on device');
-      }
+      _showSuccess('Model deleted');
       await _checkStatus();
     } catch (e) {
       if (mounted) {
@@ -336,15 +329,15 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
           ),
           const SizedBox(height: 12),
           _buildInfoRow('ID', _modelId, theme),
-          _buildInfoRow('Type', 'Leap Managed Model', theme),
+          _buildInfoRow('Type', 'Liquid AI Managed Model', theme),
           _buildInfoRow(
             'Description',
-            'LFM2.5-1.2B-Instruct Q8_0. Managed via Liquid SDK.',
+            'LFM2.5-1.2B-Instruct Q8_0. Managed via liquid_ai.',
             theme,
           ),
           const SizedBox(height: 8),
           Text(
-            'Powered by flutter_leap_sdk',
+            'Powered by liquid_ai',
             style: GoogleFonts.inter(
                 fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
           ),

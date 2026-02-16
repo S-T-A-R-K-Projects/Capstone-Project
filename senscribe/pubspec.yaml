@@ -45,7 +45,7 @@ dependencies:
   flutter_staggered_animations: ^1.1.1
   flutter_speed_dial: ^7.0.0
   speech_to_text: ^7.0.0
-  flutter_leap_sdk: ^0.2.4
+  liquid_ai: ^1.2.0
   permission_handler: ^11.3.1
   shared_preferences: ^2.1.0
   path: ^1.9.0
@@ -74,6 +74,9 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  config:
+    enable-swift-package-manager: true
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

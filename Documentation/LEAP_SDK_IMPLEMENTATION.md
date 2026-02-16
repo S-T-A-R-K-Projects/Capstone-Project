@@ -1,12 +1,13 @@
-# LEAP SDK Implementation (Current)
+# LEAP / Liquid AI Implementation (Current)
 
 ## Purpose
 
-This document describes the **current, shipping** long-text summarization implementation in Senscribe using `flutter_leap_sdk`.
+This document describes the **current, shipping** summarization implementation in Senscribe using `liquid_ai`.
 
 The implementation is optimized for:
 
 - Large transcripts (e.g., 5,000+ words)
+- Short inputs (including very short messages like single-word prompts)
 - Mobile memory safety (Android API 31+, iOS)
 - Stable behavior across repeated summarization sessions
 - No context leakage between independent transcripts
@@ -20,7 +21,8 @@ This document intentionally describes only the active architecture and runtime b
 ### Active model
 
 - Display name: `LFM2.5-1.2B-Instruct Q8_0`
-- Bundle id used by SDK/runtime: `LFM2-1.2B-8da4w_output_8da8w-seq_4096.bundle`
+- Model slug used by SDK/runtime: `LFM2.5-1.2B-Instruct`
+- Quantization: `Q8_0`
 - Approximate on-device model size: `~1.25 GB`
 
 ### Why this model setup
@@ -41,7 +43,7 @@ This document intentionally describes only the active architecture and runtime b
 
 - Resolve model identifiers
 - Ensure model loaded state
-- Execute map-reduce summarization
+- Execute adaptive summarization strategy (tiny/single-pass/map-reduce)
 - Manage conversation lifecycle per generation unit
 - Handle retry/recovery on recoverable generation interruptions
 - Manage model memory (explicit unload + idle auto-unload)
@@ -63,11 +65,26 @@ Future<void> dispose()
 - Chunk overlap: `150` tokens
 - Token approximation: `1 token ≈ 0.75 words`
 - Chunk generation: `temperature 0.3`, `maxTokens 150`
-- Final generation: `temperature 0.3`, `maxTokens 300`
+- Final reduction generation: `temperature 0.3`, `maxTokens 300`
+- Short/single-pass generation: `temperature 0.2`, `maxTokens 96`
+- Tiny input passthrough threshold: `<= 3` words
+- Single-pass threshold: `<= 900` words
+- Short-chunk prompt threshold (inside map step): `<= 120` words
 - Chunk timeout: `45s`
 - Final timeout: `30s`
 - Auto-unload delay: `3s`
 - Conversation transition delay: `120ms`
+
+### Model load tuning (current)
+
+Current `LoadOptions` are tuned conservatively for cross-device stability:
+
+- `contextSize: 2048`
+- `batchSize: 256`
+- `threads: 2`
+- `gpuLayers: 0`
+
+This reduces memory pressure while preserving reliable throughput on Android API 31+ and iOS 17/18/26 devices.
 
 ---
 
@@ -97,7 +114,7 @@ Future<String> summarizeWithCallback(String transcript, {required void Function(
 The app model catalog currently contains one active production model entry:
 
 ```dart
-LFM2-1.2B-8da4w_output_8da8w-seq_4096.bundle
+LFM2.5-1.2B-Instruct
 ```
 
 Model selection logic falls back to this default if persisted value is empty/invalid.
@@ -113,7 +130,17 @@ Model selection logic falls back to this default if persisted value is empty/inv
 3. Ensure model is loaded (`_ensureModelLoaded`)
 4. Cancel pending auto-unload timers
 
-## Phase B: Split input (Map setup)
+## Phase B: Adaptive strategy selection
+
+Before chunking, text is normalized and tokenized into words. Then strategy is selected:
+
+1. **Tiny input** (`<= 3 words`): return normalized text directly.
+2. **Short/medium input** (`<= 900 words`): run a single-pass faithful summary.
+3. **Long input** (`> 120 words`): use map-reduce chunking pipeline.
+
+This avoids over-generation for short inputs while retaining high-quality long-text summarization.
+
+## Phase C: Split input (Map setup for long inputs only)
 
 Input text is normalized and split by whitespace:
 
@@ -131,7 +158,7 @@ Then chunked using:
 
 A normalization pass reduces obvious STT word-fragment artifacts before chunking (for example, accidental single-letter split fragments inside words) while keeping conservative rules to avoid over-merging normal words.
 
-## Phase C: Per-chunk summarization (Map)
+## Phase D: Per-chunk summarization (Map)
 
 For each chunk:
 
@@ -142,7 +169,7 @@ For each chunk:
 
 This ensures no conversation history is shared between chunks.
 
-## Phase D: Final combine (Reduce)
+## Phase E: Final combine (Reduce)
 
 Before reduce stage:
 
@@ -156,11 +183,13 @@ Then:
 2. Generate final ~200-word summary from chunk summaries
 3. Dispose conversation
 
+If only one chunk summary exists, reduce stage is skipped and that summary is returned directly.
+
 ### Why pre-final reduction reset exists
 
 On Android, intermittent stop-state contamination can occur near stage transitions. A clean model reset before final reduce makes final combine more deterministic.
 
-## Phase E: Finish + unload
+## Phase F: Finish + unload
 
 - `summarize...` returns final result
 - Auto-unload timer is scheduled (3s)
@@ -172,6 +201,7 @@ On Android, intermittent stop-state contamination can occur near stage transitio
 
 `summarizeLargeTextStream` provides staged progress messages:
 
+- `Summarizing...` (single-pass short-input path)
 - `Processing section X of Y...`
 - `Combining section summaries...`
 
@@ -229,14 +259,16 @@ For non-recoverable failures or second-attempt failures:
 ## Android
 
 - Minimum SDK target: `31`
-- Typical bundle location:
-  - `/data/user/0/<package>/app_flutter/leap/<bundle>`
-- Runtime logs often show effective sequence capacity as `4096`
+- Model cache/storage is handled by `liquid_ai` runtime and model manifest system
+- Kotlin Gradle plugin is pinned to `2.3.0` to match `liquid_ai` dependencies
+- Runtime logs may show backend fallback messages (e.g., CPU_REPACK → CPU); these are informational unless accompanied by generation errors
 
 ## iOS
 
 - Uses same service-layer architecture
-- Bundle storage and loading handled by LEAP SDK on iOS filesystem paths
+- Uses Swift Package Manager integration (`enable-swift-package-manager: true` in app `pubspec.yaml`)
+- CocoaPods remains present for other Flutter plugins, while `liquid_ai` resolves via SPM
+- Model storage and loading handled by `liquid_ai` runtime on iOS filesystem paths
 
 ---
 
@@ -247,6 +279,11 @@ For large transcript runs:
 - Most time is spent in repeated chunk generation and final reduce
 - Pauses can occur at stage boundaries when recovery/reload is triggered
 - Recovery path trades a small latency hit for improved completion reliability
+
+For short transcript runs:
+
+- Single-pass path avoids over-summarization
+- Tiny inputs are returned as-is after normalization
 
 ---
 
@@ -265,9 +302,10 @@ For large transcript runs:
 
 ## Current Implementation Summary
 
-The current implementation is a **single-model, mobile-safe, map-reduce summarization pipeline** with:
+The current implementation is a **single-model, mobile-safe, adaptive summarization pipeline** with:
 
 - fixed chunking (`1200` + `150 overlap`),
+- short-input guardrails (tiny passthrough + single-pass summarization),
 - strict context isolation (fresh conversation per unit),
 - deterministic lifecycle controls (load on start, unload on idle),
 - Android-focused recovery for stop-request interruptions,
@@ -276,5 +314,5 @@ The current implementation is a **single-model, mobile-safe, map-reduce summariz
 ---
 
 **Last Updated**: February 15, 2026  
-**SDK**: `flutter_leap_sdk ^0.2.4`  
-**Active Bundle**: `LFM2-1.2B-8da4w_output_8da8w-seq_4096.bundle`
+**SDK**: `liquid_ai ^1.2.0`  
+**Active Model**: `LFM2.5-1.2B-Instruct (Q8_0)`

@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
+import '../utils/app_constants.dart';
 
 class TriggerWordService {
   static const _kTriggerWordsKey = 'trigger_words_v1';
@@ -114,10 +115,9 @@ class TriggerWordService {
 
   Future<void> addAlert(TriggerAlert alert) async {
     final alerts = await loadAlerts();
-    alerts.insert(0, alert); // Newest first
-    // Keep only last 100 alerts to prevent too much storage
-    if (alerts.length > 100) {
-      alerts.removeRange(100, alerts.length);
+    alerts.insert(0, alert);
+    if (alerts.length > AppConstants.alertHistoryMaxItems) {
+      alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
     }
     await saveAlerts(alerts);
     // TODO: Add vibration/haptic feedback for alert trigger.

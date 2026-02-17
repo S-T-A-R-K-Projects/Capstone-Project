@@ -3,24 +3,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/sound_caption.dart';
+import '../utils/time_utils.dart';
 
 class SoundCaptionCard extends StatelessWidget {
   final SoundCaption caption;
 
   const SoundCaptionCard({super.key, required this.caption});
-
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inMinutes < 1) {
-      return '${difference.inSeconds}s ago';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return '${difference.inHours}h ago';
-    }
-  }
 
   IconData _getDirectionIcon(String direction) {
     switch (direction.toLowerCase()) {
@@ -155,7 +143,7 @@ class SoundCaptionCard extends StatelessWidget {
                       children: [
                         _buildInfoChip(
                           Icons.access_time_rounded,
-                          _formatTimestamp(caption.timestamp),
+                          TimeUtils.formatTimeAgoForSound(caption.timestamp),
                           context,
                         ),
                         _buildInfoChip(

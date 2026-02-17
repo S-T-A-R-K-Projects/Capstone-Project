@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'dart:io';
 import '../main.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
@@ -20,11 +19,12 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  // Keep this State simple for now; detailed state moved to section pages.
-
   @override
   Widget build(BuildContext context) {
-    final themeProvider = ThemeProvider();
+    final themeProvider = ThemeProvider.instance;
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight + 16
+        : 16.0;
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(
@@ -36,9 +36,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: EdgeInsets.only(
             left: 16,
             right: 16,
-            top: Platform.isIOS
-                ? MediaQuery.of(context).padding.top + kToolbarHeight + 16
-                : 16,
+            top: topInset,
             bottom: 120,
           ),
           children: [

@@ -1,7 +1,6 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
 class PermissionsBackgroundPage extends StatefulWidget {
@@ -210,6 +209,10 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
+
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'Permissions & Background'),
       body: Material(
@@ -219,11 +222,7 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top padding for iOS 26 translucent app bar
-              if (Platform.isIOS)
-                SizedBox(
-                    height:
-                        MediaQuery.of(context).padding.top + kToolbarHeight),
+              if (topInset > 0) SizedBox(height: topInset),
               Text(
                 'App Permissions',
                 style: GoogleFonts.inter(

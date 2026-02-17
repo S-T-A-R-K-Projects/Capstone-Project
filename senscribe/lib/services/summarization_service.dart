@@ -18,7 +18,12 @@ class SummarizationService {
 
   final LeapService _leapService = LeapService();
 
-  /// Get currently selected model name
+  bool get isSummarizationInProgress => _leapService.isSummarizationInProgress;
+
+  void cancelSummarization() {
+    _leapService.cancelSummarization();
+  }
+
   Future<String> getSelectedModelName() async {
     final prefs = await SharedPreferences.getInstance();
     final selected = prefs.getString(_modelNameKey);

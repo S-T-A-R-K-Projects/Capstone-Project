@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../screens/unified_home_page.dart';
 import '../screens/history_page.dart';
 import '../screens/alerts_page.dart';
@@ -17,6 +16,12 @@ class MainNavigationPage extends StatefulWidget {
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int _selectedIndex = 0;
+  final List<Widget> _pages = const [
+    UnifiedHomePage(),
+    HistoryPage(),
+    AlertsPage(),
+    SettingsPage(),
+  ];
 
   @override
   void initState() {
@@ -35,61 +40,48 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     }
   }
 
-  List<Widget> get _pages => const [
-        UnifiedHomePage(),
-        HistoryPage(),
-        AlertsPage(),
-        SettingsPage(),
-      ];
-
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    if (_selectedIndex != index) {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final useNativeBar = PlatformInfo.isIOS26OrHigher();
+
     return AdaptiveScaffold(
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           return true; // Stop scroll notifications from reaching AdaptiveScaffold to prevent dock scaling
         },
-        child: AnimationConfiguration.staggeredList(
-          position: _selectedIndex,
-          duration: const Duration(milliseconds: 375),
-          child: SlideAnimation(
-            horizontalOffset: 50.0,
-            child: FadeInAnimation(
-              child: HeroMode(
-                enabled: false,
-                child: IndexedStack(index: _selectedIndex, children: _pages),
-              ),
-            ),
-          ),
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: _pages,
         ),
       ),
       bottomNavigationBar: AdaptiveBottomNavigationBar(
-        useNativeBottomBar: true, // Glass effect for iOS 26+
+        useNativeBottomBar: useNativeBar,
         selectedIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: [
           AdaptiveNavigationDestination(
-            icon: Platform.isIOS ? 'house.fill' : Icons.home_rounded,
+            icon: useNativeBar ? 'house.fill' : Icons.home_rounded,
             label: 'Home',
           ),
           AdaptiveNavigationDestination(
-            icon: Platform.isIOS
-                ? 'clock.arrow.circlepath'
-                : Icons.history_rounded,
+            icon:
+                useNativeBar ? 'clock.arrow.circlepath' : Icons.history_rounded,
             label: 'History',
           ),
           AdaptiveNavigationDestination(
-            icon: Platform.isIOS ? 'bell.fill' : Icons.notifications_rounded,
+            icon: useNativeBar ? 'bell.fill' : Icons.notifications_rounded,
             label: 'Alerts',
           ),
           AdaptiveNavigationDestination(
-            icon: Platform.isIOS ? 'gear' : Icons.settings_rounded,
+            icon: useNativeBar ? 'gear' : Icons.settings_rounded,
             label: 'Settings',
           ),
         ],

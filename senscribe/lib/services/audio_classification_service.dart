@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import '../models/sound_caption.dart';
+import '../utils/app_constants.dart';
 
 class AudioClassificationService {
   static final AudioClassificationService _instance =
@@ -66,31 +67,20 @@ class AudioClassificationService {
     final label = data['label'] as String? ?? 'Unknown';
     final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
 
-    if (confidence < 0.6) return; // Filtering threshold
+    if (confidence < AppConstants.audioConfidenceThreshold) return;
 
     final caption = SoundCaption(
       sound: label,
       timestamp: DateTime.now(),
-      isCritical: _isCriticalSound(label),
+      isCritical: CriticalSounds.isCritical(label),
       direction: 'Unknown',
       confidence: confidence,
     );
 
     _history.insert(0, caption);
-    if (_history.length > 50) _history.removeLast();
+    if (_history.length > AppConstants.soundHistoryMaxItems) {
+      _history.removeLast();
+    }
     _historyController.add(_history);
-  }
-
-  bool _isCriticalSound(String label) {
-    const critical = [
-      'siren',
-      'fire_alarm',
-      'smoke_alarm',
-      'scream',
-      'baby_crying',
-      'glass_breaking',
-      'gunshot'
-    ];
-    return critical.contains(label.toLowerCase().replaceAll(' ', '_'));
   }
 }

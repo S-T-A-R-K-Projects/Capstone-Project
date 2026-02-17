@@ -10,16 +10,17 @@ import '../services/audio_classification_service.dart';
 import '../services/text_to_speech_service.dart';
 import '../models/sound_caption.dart';
 
-// Import full pages for navigation
 import 'speech_to_text_page.dart';
 import 'text_to_speech_page.dart';
-import 'home_page.dart'; // For Sound Recognition Expanded View
-import '../services/history_service.dart'; // For Saving STT
-import '../models/history_item.dart'; // For Saving STT
+import 'home_page.dart';
+import '../services/history_service.dart';
+import '../models/history_item.dart';
 import '../services/trigger_word_service.dart';
 import '../models/trigger_alert.dart';
 import '../models/trigger_word.dart';
 import '../services/stt_transcript_service.dart';
+import '../utils/time_utils.dart';
+import '../utils/app_constants.dart';
 
 class UnifiedHomePage extends StatefulWidget {
   const UnifiedHomePage({super.key});
@@ -146,7 +147,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   void _onSpeechStatus(String status) {
     if (!_isSpeechMonitoring) return;
     if (status == 'done' || status == 'notListening') {
-      _scheduleSpeechRestart(const Duration(milliseconds: 40));
+      _scheduleSpeechRestart(Delays.speechRestart);
     }
   }
 
@@ -155,8 +156,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     if (!_isSpeechMonitoring || error.errorMsg == 'error_permission') return;
 
     final restartDelay = error.errorMsg == 'error_listen_failed'
-        ? const Duration(milliseconds: 350)
-        : const Duration(milliseconds: 80);
+        ? Delays.speechRestartAfterFailed
+        : Delays.speechRestartAfterError;
     _scheduleSpeechRestart(restartDelay);
   }
 
@@ -351,11 +352,10 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   void _scrollToBottom() {
     if (_sttScrollController.hasClients) {
-      // Small delay to allow render
-      Future.delayed(const Duration(milliseconds: 100), () {
+      Future.delayed(Delays.scrollDelay, () {
         _sttScrollController.animateTo(
           _sttScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: Delays.scrollAnimation,
           curve: Curves.easeOut,
         );
       });
@@ -673,7 +673,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
             ),
           ),
           subtitle: Text(
-            _formatSoundEventTime(event.timestamp),
+            TimeUtils.formatTimeAgo(event.timestamp),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.inter(
@@ -698,20 +698,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         );
       },
     );
-  }
-
-  String _formatSoundEventTime(DateTime timestamp) {
-    final diff = DateTime.now().difference(timestamp);
-    if (diff.inSeconds < 60) {
-      return '${diff.inSeconds}s ago';
-    }
-    if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    }
-    if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    }
-    return '${diff.inDays}d ago';
   }
 
   Widget _buildSTTContent() {

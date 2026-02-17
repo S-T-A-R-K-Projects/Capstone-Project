@@ -1,13 +1,16 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:io';
 
 class NameRecognitionPage extends StatelessWidget {
   const NameRecognitionPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
+
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(
         title: 'Name Recognition',
@@ -19,11 +22,7 @@ class NameRecognitionPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top padding for iOS 26 translucent app bar
-              if (Platform.isIOS)
-                SizedBox(
-                    height:
-                        MediaQuery.of(context).padding.top + kToolbarHeight),
+              if (topInset > 0) SizedBox(height: topInset),
               const SizedBox(height: 12),
               Text(
                 'Name recognition',

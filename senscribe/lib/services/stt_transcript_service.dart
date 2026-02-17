@@ -20,6 +20,11 @@ class SttTranscriptSnapshot {
   }
 
   bool get hasContent => fullText.isNotEmpty;
+
+  static const SttTranscriptSnapshot empty = SttTranscriptSnapshot(
+    finalizedSegments: [],
+    partialWords: '',
+  );
 }
 
 class SttTranscriptService {
@@ -30,10 +35,7 @@ class SttTranscriptService {
 
   final _controller = StreamController<SttTranscriptSnapshot>.broadcast();
 
-  SttTranscriptSnapshot _snapshot = const SttTranscriptSnapshot(
-    finalizedSegments: [],
-    partialWords: '',
-  );
+  SttTranscriptSnapshot _snapshot = SttTranscriptSnapshot.empty;
 
   Stream<SttTranscriptSnapshot> get stream => _controller.stream;
   SttTranscriptSnapshot get current => _snapshot;
@@ -42,7 +44,7 @@ class SttTranscriptService {
     final nextWords = words.trim();
     if (_snapshot.partialWords == nextWords) return;
     _snapshot = SttTranscriptSnapshot(
-      finalizedSegments: List<String>.from(_snapshot.finalizedSegments),
+      finalizedSegments: _snapshot.finalizedSegments,
       partialWords: nextWords,
     );
     _emit();
@@ -51,20 +53,15 @@ class SttTranscriptService {
   void commitFinalWords(String words) {
     final nextWords = words.trim();
     if (nextWords.isEmpty) return;
-    final updated = List<String>.from(_snapshot.finalizedSegments)
-      ..add(nextWords);
     _snapshot = SttTranscriptSnapshot(
-      finalizedSegments: updated,
+      finalizedSegments: [..._snapshot.finalizedSegments, nextWords],
       partialWords: '',
     );
     _emit();
   }
 
   void clear() {
-    _snapshot = const SttTranscriptSnapshot(
-      finalizedSegments: [],
-      partialWords: '',
-    );
+    _snapshot = SttTranscriptSnapshot.empty;
     _emit();
   }
 
@@ -72,5 +69,9 @@ class SttTranscriptService {
     if (!_controller.isClosed) {
       _controller.add(_snapshot);
     }
+  }
+
+  void dispose() {
+    _controller.close();
   }
 }

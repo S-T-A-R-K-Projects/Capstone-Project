@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -197,6 +196,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'SenScribe'),
@@ -206,12 +208,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top padding for iOS app bars (17/18/26+)
-              if (Platform.isIOS)
-                SizedBox(
-                    height:
-                        MediaQuery.of(context).padding.top + kToolbarHeight),
-              // Monitoring status card
+              if (topInset > 0) SizedBox(height: topInset),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: AdaptiveCard(

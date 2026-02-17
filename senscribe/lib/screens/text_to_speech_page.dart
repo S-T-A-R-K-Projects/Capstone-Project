@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -64,6 +62,10 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
+
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'Text to Speech'),
       body: Material(
@@ -74,12 +76,7 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
           child: SingleChildScrollView(
             child: Column(
               children: [
-                // Top padding for iOS app bars (17/18/26+)
-                if (Platform.isIOS)
-                  SizedBox(
-                      height:
-                          MediaQuery.of(context).padding.top + kToolbarHeight),
-                // Input Area
+                if (topInset > 0) SizedBox(height: topInset),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

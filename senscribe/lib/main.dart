@@ -12,6 +12,7 @@ void main() {
 
 class ThemeProvider extends ChangeNotifier {
   static final ThemeProvider _instance = ThemeProvider._internal();
+  static ThemeProvider get instance => _instance;
   factory ThemeProvider() => _instance;
   ThemeProvider._internal();
 
@@ -31,8 +32,10 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   void setTheme(ThemeMode mode) {
-    _themeMode = mode;
-    notifyListeners();
+    if (_themeMode != mode) {
+      _themeMode = mode;
+      notifyListeners();
+    }
   }
 }
 

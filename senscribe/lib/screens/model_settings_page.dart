@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'dart:io';
 
 import '../services/summarization_service.dart';
 import '../models/llm_model.dart';
@@ -148,13 +147,21 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'AI Model Settings'),
       body: Material(
         color: Colors.transparent,
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: topInset),
+                  child: const CircularProgressIndicator(),
+                ),
+              )
             : RefreshIndicator(
                 onRefresh: _checkStatus,
                 child: SingleChildScrollView(
@@ -163,11 +170,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Top padding for iOS 26 translucent app bar
-                      if (Platform.isIOS)
-                        SizedBox(
-                            height: MediaQuery.of(context).padding.top +
-                                kToolbarHeight),
+                      if (topInset > 0) SizedBox(height: topInset),
                       _buildStatusCard(theme),
                       const SizedBox(height: 24),
                       _buildActionSection(theme),

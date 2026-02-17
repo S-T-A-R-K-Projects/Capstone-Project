@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'dart:io';
 import '../services/trigger_word_service.dart';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
+import '../utils/time_utils.dart';
 
 class AlertsPage extends StatefulWidget {
   const AlertsPage({super.key});
@@ -330,6 +330,10 @@ class _AlertsPageState extends State<AlertsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
+
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(
         title: 'Alerts',
@@ -338,11 +342,7 @@ class _AlertsPageState extends State<AlertsPage> {
         color: Colors.transparent,
         child: Column(
           children: [
-            // Top padding for iOS 26 translucent app bar
-            if (Platform.isIOS)
-              SizedBox(
-                  height: MediaQuery.of(context).padding.top + kToolbarHeight),
-            // Tab selector using AdaptiveSegmentedControl
+            if (topInset > 0) SizedBox(height: topInset),
             Padding(
               padding: const EdgeInsets.all(16),
               child: SizedBox(
@@ -365,8 +365,6 @@ class _AlertsPageState extends State<AlertsPage> {
                 ),
               ),
             ),
-
-            // Content
             Expanded(
               child: _selectedTabIndex == 0
                   ? _buildAlertsTab()
@@ -526,7 +524,8 @@ class _AlertsPageState extends State<AlertsPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      _formatTime(alert.timestamp),
+                                      TimeUtils.formatTimeAgoShort(
+                                          alert.timestamp),
                                       style: GoogleFonts.inter(
                                         fontSize: 11,
                                         color: scheme.onSurface
@@ -723,20 +722,5 @@ class _AlertsPageState extends State<AlertsPage> {
         );
       },
     );
-  }
-
-  String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final diff = now.difference(dateTime);
-
-    if (diff.inSeconds < 60) {
-      return 'Just now';
-    } else if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    } else {
-      return '${diff.inDays}d ago';
-    }
   }
 }

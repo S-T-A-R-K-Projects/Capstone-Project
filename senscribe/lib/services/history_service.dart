@@ -122,4 +122,8 @@ class HistoryService {
     await saveHistory(items);
     _notifyChange();
   }
+
+  void dispose() {
+    _changeController.close();
+  }
 }

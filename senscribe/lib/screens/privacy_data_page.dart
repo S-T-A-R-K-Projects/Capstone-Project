@@ -1,13 +1,16 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:io';
 
 class PrivacyDataPage extends StatelessWidget {
   const PrivacyDataPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
+
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'Privacy & Data'),
       body: Material(
@@ -17,12 +20,7 @@ class PrivacyDataPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top padding for iOS 26 translucent app bar
-              if (Platform.isIOS)
-                SizedBox(
-                    height:
-                        MediaQuery.of(context).padding.top + kToolbarHeight),
-              // Header
+              if (topInset > 0) SizedBox(height: topInset),
               Text(
                 'Privacy & Data',
                 style: GoogleFonts.inter(

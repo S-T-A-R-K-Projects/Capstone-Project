@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/history_item.dart';
 import '../services/history_service.dart';
 import '../services/summarization_service.dart';
+import '../utils/time_utils.dart';
+import '../utils/app_constants.dart';
 import 'model_settings_page.dart';
 
 class HistoryPage extends StatefulWidget {
@@ -48,19 +49,11 @@ class _HistoryPageState extends State<HistoryPage> {
     });
   }
 
-  String _formatTimestamp(DateTime timestamp) {
-    final diff = DateTime.now().difference(timestamp);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
   String _previewContent(HistoryItem item) {
     final text = item.content.trim();
     if (text.isEmpty) return item.subtitle;
-    const maxLength = 64;
-    return text.length > maxLength
-        ? '${text.substring(0, maxLength)}...'
+    return text.length > AppConstants.historyPreviewMaxLength
+        ? '${text.substring(0, AppConstants.historyPreviewMaxLength)}...'
         : text;
   }
 
@@ -147,7 +140,7 @@ class _HistoryPageState extends State<HistoryPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final topInset = Platform.isIOS
+    final topInset = PlatformInfo.isIOS26OrHigher()
         ? MediaQuery.of(context).padding.top + kToolbarHeight
         : 0.0;
 
@@ -186,7 +179,8 @@ class _HistoryPageState extends State<HistoryPage> {
                     ),
                   )
                 : ListView.builder(
-                    padding: EdgeInsets.fromLTRB(16, topInset + 8, 16, 16),
+                    padding: EdgeInsets.fromLTRB(
+                        16, topInset > 0 ? topInset + 8 : 8, 16, 16),
                     itemCount: _items.length,
                     itemBuilder: (context, index) {
                       final entry = _items[index];
@@ -234,7 +228,7 @@ class _HistoryPageState extends State<HistoryPage> {
                                       fontWeight: FontWeight.w600),
                                 ),
                                 subtitle: Text(
-                                  '${_previewContent(entry)} · ${_formatTimestamp(entry.timestamp)}',
+                                  '${_previewContent(entry)} · ${TimeUtils.formatTimeAgo(entry.timestamp)}',
                                   style: GoogleFonts.inter(),
                                 ),
                                 trailing: entry.hasSummary
@@ -279,6 +273,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
   bool _isEditing = false;
   bool _isSummarizing = false;
   String _streamedSummary = '';
+  String? _finalSummary;
 
   @override
   void initState() {
@@ -305,12 +300,12 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     });
   }
 
-  String _formatTimestamp(DateTime t) {
-    final diff = DateTime.now().difference(t);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+  void _cancelSummarization() {
+    _summarizationService.cancelSummarization();
+    setState(() {
+      _isSummarizing = false;
+      _streamedSummary = '';
+    });
   }
 
   Future<void> _renameTitle() async {
@@ -433,6 +428,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     setState(() {
       _isSummarizing = true;
       _streamedSummary = '';
+      _finalSummary = null;
       _selectedViewIndex = 1;
     });
 
@@ -447,15 +443,21 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
         },
       );
 
+      _finalSummary = summary;
+
       await _historyService.updateSummary(item.id, summary);
       await _loadItem();
     } on SummarizationException catch (e) {
-      _showError(e.message);
+      if (!e.message.contains('cancelled')) {
+        _showError(e.message);
+      }
     } catch (e) {
       _showError('Summarization failed: $e');
     } finally {
       if (mounted) {
-        setState(() => _isSummarizing = false);
+        setState(() {
+          _isSummarizing = false;
+        });
       }
     }
   }
@@ -498,7 +500,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final topInset = Platform.isIOS
+    final topInset = PlatformInfo.isIOS26OrHigher()
         ? MediaQuery.of(context).padding.top + kToolbarHeight
         : 0.0;
 
@@ -533,17 +535,20 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
               )
             : item == null
                 ? Center(
-                    child: Text(
-                      'Transcription not found',
-                      style: GoogleFonts.inter(
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.72),
+                    child: Padding(
+                      padding: EdgeInsets.only(top: topInset),
+                      child: Text(
+                        'Transcription not found',
+                        style: GoogleFonts.inter(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.72),
+                        ),
                       ),
                     ),
                   )
                 : Column(
                     children: [
-                      if (Platform.isIOS) SizedBox(height: topInset),
+                      if (topInset > 0) SizedBox(height: topInset),
                       Container(
                         margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                         padding: const EdgeInsets.symmetric(
@@ -565,7 +570,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                'Recorded ${_formatTimestamp(item.timestamp)}',
+                                'Recorded ${TimeUtils.formatTimeAgoShort(item.timestamp)}',
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   color: theme.colorScheme.onSurface
@@ -734,6 +739,8 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
       displayText = _streamedSummary.isEmpty
           ? 'Loading model and generating summary...'
           : _streamedSummary;
+    } else if (_finalSummary != null && _finalSummary!.isNotEmpty) {
+      displayText = _finalSummary!;
     } else if (hasSummary) {
       displayText = item.summary!;
     } else {
@@ -829,7 +836,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Summarized ${_formatTimestamp(item.summaryTimestamp!)}',
+                              'Summarized ${TimeUtils.formatTimeAgoShort(item.summaryTimestamp!)}',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: Colors.green[700],
@@ -856,31 +863,46 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     final hasSummary = item.summary != null && item.summary!.isNotEmpty;
 
     if (_isSummarizing) {
-      return SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: AdaptiveButton.child(
-          onPressed: null,
-          style: AdaptiveButtonStyle.filled,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: theme.colorScheme.onPrimary,
-                ),
+      return Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: AdaptiveButton.child(
+              onPressed: null,
+              style: AdaptiveButtonStyle.filled,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: theme.colorScheme.onPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Summarizing...',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Summarizing...',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: AdaptiveButton(
+              onPressed: _cancelSummarization,
+              label: 'Cancel',
+              style: AdaptiveButtonStyle.bordered,
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
       );
     }
 

@@ -14,7 +14,7 @@ class LeapService {
   static const int _chunkTokenSize = 1200;
   static const int _chunkOverlapTokens = 150;
   static const double _wordPerToken = 0.75;
-  static const Duration _autoUnloadDelay = Duration(seconds: 3);
+  static const Duration _autoUnloadDelay = Duration(seconds: 7);
 
   static const double _summaryTemperature = 0.3;
   static const int _chunkSummaryMaxTokens = 150;
@@ -23,10 +23,10 @@ class LeapService {
   static const int _tinyInputWordThreshold = 3;
   static const int _singlePassWordThreshold = 900;
   static const int _shortChunkPromptWordThreshold = 120;
-  static const Duration _chunkGenerationTimeout = Duration(seconds: 45);
-  static const Duration _finalGenerationTimeout = Duration(seconds: 30);
+  static const Duration _chunkGenerationTimeout = Duration(seconds: 60);
+  static const Duration _finalGenerationTimeout = Duration(seconds: 45);
   static const Duration _conversationTransitionDelay = Duration(
-    milliseconds: 120,
+    milliseconds: 50,
   );
   static const int _loadContextSize = 2048;
   static const int _loadBatchSize = 256;
@@ -47,6 +47,13 @@ class LeapService {
   String? _loadedQuantization;
   ModelRunner? _runner;
   bool _isSummarizationInProgress = false;
+  bool _isCancellationRequested = false;
+
+  bool get isSummarizationInProgress => _isSummarizationInProgress;
+
+  void cancelSummarization() {
+    _isCancellationRequested = true;
+  }
 
   Future<bool> isModelCached(String modelId) async {
     final resolved = _resolveModel(modelId);
@@ -183,6 +190,7 @@ class LeapService {
     }
 
     _isSummarizationInProgress = true;
+    _isCancellationRequested = false;
     _cancelAutoUnload();
 
     if (transcript.trim().isEmpty) {
@@ -194,6 +202,10 @@ class LeapService {
       final resolved = _resolveModel(modelId);
       await _ensureModelLoaded(resolved.modelSlug);
 
+      if (_isCancellationRequested) {
+        throw LeapServiceException('Summarization was cancelled.');
+      }
+
       final normalizedTranscript = _normalizeTranscriptText(transcript);
       final transcriptWords = _extractWords(normalizedTranscript);
 
@@ -204,6 +216,9 @@ class LeapService {
 
       if (transcriptWords.length <= _singlePassWordThreshold) {
         yield 'Summarizing...\n';
+        if (_isCancellationRequested) {
+          throw LeapServiceException('Summarization was cancelled.');
+        }
         final singlePass = await _summarizeSinglePass(
           normalizedTranscript,
           modelId: resolved.modelSlug,
@@ -216,6 +231,10 @@ class LeapService {
       final chunkSummaries = <String>[];
 
       for (var i = 0; i < chunks.length; i++) {
+        if (_isCancellationRequested) {
+          throw LeapServiceException('Summarization was cancelled.');
+        }
+
         final section = i + 1;
         yield 'Processing section $section of ${chunks.length}...\n';
 
@@ -228,6 +247,10 @@ class LeapService {
         chunkSummaries.add(summary);
       }
 
+      if (_isCancellationRequested) {
+        throw LeapServiceException('Summarization was cancelled.');
+      }
+
       if (chunkSummaries.length == 1) {
         yield* _emitSummaryAsStream(chunkSummaries.first);
         return;
@@ -235,6 +258,11 @@ class LeapService {
 
       yield 'Combining section summaries...\n';
       await _prepareForFinalReduction(resolved.modelSlug);
+
+      if (_isCancellationRequested) {
+        throw LeapServiceException('Summarization was cancelled.');
+      }
+
       final combinedSummary = await _buildFinalSummary(
         chunkSummaries,
         modelId: resolved.modelSlug,
@@ -245,6 +273,7 @@ class LeapService {
       throw LeapServiceException('Summarization failed. Please try again. $e');
     } finally {
       _isSummarizationInProgress = false;
+      _isCancellationRequested = false;
       _scheduleAutoUnload();
     }
   }
@@ -374,7 +403,9 @@ class LeapService {
       }
     } finally {
       await _disposeConversation(conversation);
-      _scheduleAutoUnload();
+      if (!_isSummarizationInProgress) {
+        _scheduleAutoUnload();
+      }
     }
   }
 
@@ -479,6 +510,7 @@ $chunkText
         }
       } finally {
         await _disposeConversation(conversation);
+        _gcHint();
       }
 
       if (recoverAfterDispose) {
@@ -535,6 +567,7 @@ $chunkText
         }
       } finally {
         await _disposeConversation(conversation);
+        _gcHint();
       }
 
       if (recoverAfterDispose) {
@@ -597,6 +630,7 @@ $transcript
         }
       } finally {
         await _disposeConversation(conversation);
+        _gcHint();
       }
 
       if (recoverAfterDispose) {
@@ -772,6 +806,10 @@ $joined
     }
   }
 
+  void _gcHint() {
+    debugPrint('LeapService: Suggesting garbage collection...');
+  }
+
   bool _isRecoverableGenerationStop(Object error) {
     final text = error.toString().toLowerCase();
     return text.contains('stop request') ||
@@ -786,26 +824,14 @@ $joined
 
   Future<void> _recoverModelAfterStop(String modelId) async {
     debugPrint(
-      'LeapService: Recovering model after generation interruption. Reloading model...',
+      'LeapService: Generation interrupted, retrying with loaded model...',
     );
-    try {
-      await forceUnload();
-    } catch (e) {
-      debugPrint('LeapService: forceUnload during recovery failed: $e');
-    }
-    await _ensureModelLoaded(modelId);
   }
 
   Future<void> _prepareForFinalReduction(String modelId) async {
     debugPrint(
-      'LeapService: Preparing final reduction stage with clean model state...',
+      'LeapService: Proceeding to final reduction with loaded model...',
     );
-    try {
-      await forceUnload();
-    } catch (e) {
-      debugPrint('LeapService: Pre-final forceUnload failed: $e');
-    }
-    await _ensureModelLoaded(modelId);
   }
 
   void _scheduleAutoUnload() {

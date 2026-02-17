@@ -128,6 +128,9 @@ class _HomePageState extends State<HomePage> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final filteredCaptions = _filteredCaptions;
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'SenScribe'),
@@ -135,11 +138,7 @@ class _HomePageState extends State<HomePage> {
         color: Colors.transparent,
         child: Column(
           children: [
-            // Top padding for iOS app bars (17/18/26+)
-            if (Platform.isIOS)
-              SizedBox(
-                  height: MediaQuery.of(context).padding.top + kToolbarHeight),
-            // Monitoring status card
+            if (topInset > 0) SizedBox(height: topInset),
             Padding(
               padding: const EdgeInsets.all(16),
               child: AdaptiveCard(

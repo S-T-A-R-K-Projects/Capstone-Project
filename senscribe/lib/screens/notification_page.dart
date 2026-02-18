@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'dart:io';
 
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     final notifications = [
       {
         'title': 'Welcome to the app!',
-        'subtitle': 'Thanks for joining. Let’s get started.',
+        'subtitle': 'Thanks for joining. Let\'s get started.',
         'icon': Icons.celebration_rounded,
       },
       {
@@ -30,65 +34,53 @@ class NotificationPage extends StatelessWidget {
       },
     ];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Notifications',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            height: 100,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withAlpha(0),
-                ],
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(title: 'Notifications'),
+      body: Material(
+        color: Colors.transparent,
+        child: Column(
+          children: [
+            // Top padding for iOS 26 translucent app bar
+            if (Platform.isIOS)
+              SizedBox(
+                  height: MediaQuery.of(context).padding.top + kToolbarHeight),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: notifications.length,
+                itemBuilder: (context, index) {
+                  final item = notifications[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: AdaptiveCard(
+                      padding: const EdgeInsets.all(0),
+                      child: AdaptiveListTile(
+                        leading: Icon(
+                          item['icon'] as IconData,
+                          color: theme.colorScheme.primary,
+                        ),
+                        title: Text(
+                          item['title'] as String,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          item['subtitle'] as String,
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: theme.textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
+                },
               ),
             ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: notifications.length,
-              itemBuilder: (context, index) {
-                final item = notifications[index];
-                return Card(
-                  child: ListTile(
-                    leading: Icon(
-                      item['icon'] as IconData,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(
-                      item['title'] as String,
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: Text(
-                      item['subtitle'] as String,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.1);
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

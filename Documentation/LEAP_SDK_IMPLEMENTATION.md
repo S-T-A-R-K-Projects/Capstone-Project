@@ -1,444 +1,318 @@
-# Liquid AI Leap SDK Implementation
+# LEAP / Liquid AI Implementation (Current)
 
-## Overview
+## Purpose
 
-This document describes the implementation of on-device AI summarization using the **Liquid AI Leap SDK** (`flutter_leap_sdk`). This implementation replaced the previous ONNX GenAI architecture to leverage Liquid AI's managed model ecosystem and native Flutter integration.
+This document describes the **current, shipping** summarization implementation in Senscribe using `liquid_ai`.
 
-## Architecture
+The implementation is optimized for:
 
-### Core Components
+- Large transcripts (e.g., 5,000+ words)
+- Short inputs (including very short messages like single-word prompts)
+- Mobile memory safety (Android API 31+, iOS)
+- Stable behavior across repeated summarization sessions
+- No context leakage between independent transcripts
 
-#### 1. **LeapService** (`lib/services/leap_service.dart`)
-
-The primary wrapper service for all Liquid AI Leap SDK interactions.
-
-**Responsibilities:**
-
-- Model loading and lifecycle management
-- Conversation context creation and management
-- Streaming text generation
-- Model caching verification
-
-**Key Methods:**
-
-```dart
-Future<void> loadModel(String modelId)
-Stream<String> generateStream(String prompt)
-Future<bool> isModelCached(String modelId)
-Future<void> dispose()
-```
-
-**Implementation Details:**
-
-- **Singleton Pattern**: Ensures a single instance manages SDK state
-- **Conversation-Based**: Uses persistent `Conversation` objects that maintain chat history and system prompts
-- **Streaming**: Native support for token-by-token generation via Dart streams
-- **Model ID Support**: Accepts both managed model IDs (e.g., `"Qwen3-1.7B"`) and local file paths
-
-#### 2. **SummarizationService** (`lib/services/summarization_service.dart`)
-
-High-level service orchestrating the summarization workflow.
-
-**Responsibilities:**
-
-- Model download coordination
-- Model configuration verification
-- Text preprocessing (truncation, formatting)
-- Ephemeral loading (load → generate → unload)
-- Error handling and user feedback
-
-**Key Methods:**
-
-```dart
-Future<void> downloadModelFiles(LLMModel model, ...)
-Future<bool> isModelConfigured([LLMModel? model])
-Future<String> summarizeWithCallback(String transcript, ...)
-```
-
-**Workflow:**
-
-1. Check if model exists via `FlutterLeapSdkService.checkModelExists()`
-2. Load model on-demand using `LeapService.loadModel()`
-3. Create streaming generation request
-4. Collect tokens and invoke callback for UI updates
-5. Unload model to free memory
-
-#### 3. **LLMModel** (`lib/models/llm_model.dart`)
-
-Data model defining available AI models.
-
-**Current Model:**
-
-```dart
-static const qwenManaged = LLMModel(
-  name: 'Qwen3-1.7B',
-  description: 'Qwen 3 1.7B (Liquid Managed)',
-  estimatedSizeMB: 1200,
-  requiredFiles: [],
-);
-```
-
-**Design:**
-
-- No `localPath` or `downloadUrl` fields required for managed models
-- SDK handles all storage and versioning internally
-- Model identification via simple string ID
-
-### SDK Integration Flow
-
-```mermaid
-graph TB
-    UI[User Interface] --> SS[SummarizationService]
-    SS --> |Check Existence| SDK[FlutterLeapSdkService]
-    SS --> |Download If Missing| SDK
-    SS --> |Load Model| LS[LeapService]
-    LS --> |Create Conversation| SDK
-    LS --> |Generate Stream| SDK
-    SDK --> |Return Tokens| LS
-    LS --> |Stream Tokens| SS
-    SS --> |Update UI| UI
-    SS --> |Unload Model| LS
-    LS --> |Dispose Conversation| SDK
-```
-
-## Platform-Specific Details
-
-### Android
-
-**Requirements:**
-
-- `minSdk`: 31 (required by Leap SDK)
-- No additional native code or JNI libraries required
-- Model storage managed by SDK in app-private directories
-
-**Dependencies:**
-
-```kotlin
-// No manual dependencies needed - handled by flutter_leap_sdk
-```
-
-**Storage Location:**
-
-- Managed internally by SDK
-- Path: `/data/user/0/com.example.senscribe/app_flutter/leap/<model-id>`
-
-### iOS
-
-**Requirements:**
-
-- `platform :ios, '15.0'` (minimum)
-- No additional frameworks or native code required
-- Model storage in app's `Application Support` directory
-
-**Podfile:**
-
-```ruby
-# flutter_leap_sdk handles all native dependencies automatically
-```
-
-**Storage Location:**
-
-- Managed internally by SDK
-- Typical path: `Library/Application Support/leap/<model-id>`
-
-## Model Management
-
-### Download Process
-
-The SDK provides a native download mechanism:
-
-```dart
-await FlutterLeapSdkService.downloadModel(
-  modelName: 'Qwen3-1.7B',
-  onProgress: (progress) {
-    // progress.percentage: 0-100
-    final percent = progress.percentage / 100.0;
-    onProgress(percent);
-  },
-);
-```
-
-**Features:**
-
-- Automatic resume on interruption
-- Progress callbacks for UI updates
-- Integrity validation
-- Differential updates (if supported by SDK)
-
-### Model Verification
-
-```dart
-bool exists = await FlutterLeapSdkService.checkModelExists('Qwen3-1.7B');
-```
-
-Checks:
-
-- Model bundle presence
-- Integrity checksums
-- Version compatibility
-
-## Inference Pipeline
-
-### 1. Preprocessing
-
-```dart
-String _truncateIfNeeded(String transcript) {
-  if (transcript.length <= 3000) return transcript;
-  final truncated = transcript.substring(0, 3000);
-  final lastPeriod = truncated.lastIndexOf('.');
-  if (lastPeriod > 2400) {
-    return '${truncated.substring(0, lastPeriod + 1)} [Text truncated]';
-  }
-  return '$truncated... [Text truncated]';
-}
-```
-
-**Rationale:**
-
-- Prevents context overflow
-- Maintains sentence boundaries
-- User-friendly truncation indicator
-
-### 2. Model Loading
-
-```dart
-await FlutterLeapSdkService.loadModel(modelPath: 'Qwen3-1.7B');
-```
-
-**Lifecycle:**
-
-- Loads model weights into memory
-- Initializes inference engine
-- Returns when ready for generation
-
-### 3. Conversation Creation
-
-```dart
-final conversation = await FlutterLeapSdkService.createConversation(
-  systemPrompt: 'You are a helpful assistant that summarizes text concisely.',
-  generationOptions: GenerationOptions(
-    temperature: 0.7,
-    maxTokens: 512,
-  ),
-);
-```
-
-**Parameters:**
-
-- `systemPrompt`: Defines AI behavior and role
-- `temperature`: 0.7 for balanced creativity/consistency
-- `maxTokens`: 512 limit for concise summaries
-
-### 4. Streaming Generation
-
-```dart
-conversation.generateResponseStream(prompt).listen(
-  (token) => onToken(token),
-  onDone: () => completer.complete(fullResponse),
-  onError: (e) => completer.completeError(e),
-);
-```
-
-**Benefits:**
-
-- Real-time UI updates
-- Lower perceived latency
-- Ability to cancel mid-generation
-
-### 5. Cleanup
-
-```dart
-await _leapService.dispose();
-```
-
-**Purpose:**
-
-- Frees GPU/CPU resources
-- Clears conversation context
-- Prepares for next inference cycle
-
-## Performance Characteristics
-
-### Android Metrics (Example Run)
-
-From logs on `sdk gphone64 arm64`:
-
-```
-Model Load Time:                  1.05 seconds
-Total inference time:             0.67 seconds (35.93 tokens/second)
-  Prompt evaluation:              0.20 seconds (163.74 tokens/second)
-  Generated 24 tokens:            0.47 seconds (51.45 tokens/second)
-Time to first generated token:    0.20 seconds
-```
-
-**Observations:**
-
-- Fast prompt processing (~164 t/s)
-- Moderate generation speed (~51 t/s)
-- Low time-to-first-token (<0.2s for good UX)
-
-### Memory Usage
-
-- **Model Size on Disk**: ~1.2 GB (Qwen3-1.7B Q8_0 quantization)
-- **Runtime Memory (RSS)**: ~1.26 GB during inference
-- **Ephemeral Loading**: Reduces baseline memory when not summarizing
-
-## Error Handling
-
-### Common Errors
-
-#### 1. Model Not Downloaded
-
-```dart
-if (!await FlutterLeapSdkService.checkModelExists(name)) {
-  throw SummarizationException(
-    'Model not found on device. Please download it in Settings.'
-  );
-}
-```
-
-#### 2. Model Loading Failure
-
-```dart
-catch (e) {
-  debugPrint('LeapService: Failed to load model: $e');
-  throw Exception('Failed to load model: $e');
-}
-```
-
-#### 3. Generation Errors
-
-```dart
-stream.listen(
-  (token) => ...,
-  onError: (e) {
-    if (!completer.isCompleted) completer.completeError(e);
-  },
-);
-```
-
-### Recovery Strategy
-
-All errors:
-
-1. Log detailed stack trace
-2. Attempt cleanup (`unloadModel()`)
-3. Propagate to UI with user-friendly message
-4. Reset service state for next request
-
-## UI Integration
-
-### ModelSettingsPage
-
-**Responsibilities:**
-
-- Display model status ("Model Found" / "Model Not Found")
-- Initiate download with progress tracking
-- Trigger model reload/verification
-
-**Key UI States:**
-
-```dart
-bool _isConfigured    // Model exists locally
-bool _isDownloading   // Download in progress
-double _downloadProgress  // 0.0 - 1.0
-String _statusMessage     // User-facing status
-```
-
-**Download Flow:**
-
-```dart
-await _summarizationService.downloadModelFiles(
-  model,
-  onProgress: (progress) => setState(() => _downloadProgress = progress),
-  onStatus: (status) => setState(() => _statusMessage = status),
-);
-```
-
-### Transcription Detail Screen
-
-**Integration:**
-
-```dart
-final summaryStream = _summarizationService.summarizeWithCallback(
-  transcript,
-  onToken: (token) {
-    setState(() => _summary += token);
-  },
-);
-```
-
-**User Experience:**
-
-- Tokens appear progressively
-- Loading indicator during model load
-- Error snackbars for failures
-- Retry capability on error
-
-## Comparison with ONNX GenAI Implementation
-
-| Aspect                 | ONNX GenAI                         | Leap SDK                                |
-| ---------------------- | ---------------------------------- | --------------------------------------- |
-| **Model Format**       | ONNX Runtime `.ort` files          | Leap `.bundle` packages                 |
-| **Native Code**        | Manual JNI/Obj-C wrappers          | SDK-managed, no custom native code      |
-| **Download**           | Manual `Dio` HTTP downloads        | `FlutterLeapSdkService.downloadModel()` |
-| **Path Handling**      | Complex platform-specific logic    | SDK-managed, ID-based                   |
-| **Conversation State** | Manual prompt construction         | Built-in `Conversation` objects         |
-| **Streaming**          | Custom tokenizer + callbacks       | Native stream support                   |
-| **Dependencies**       | `onnxruntime-c`, custom `.so` libs | Single `flutter_leap_sdk` package       |
-| **Maintenance**        | High (manual native updates)       | Low (SDK handles updates)               |
-
-## Configuration
-
-### Flutter Dependencies
-
-**`pubspec.yaml`:**
-
-```yaml
-dependencies:
-  flutter_leap_sdk: ^0.2.4
-  shared_preferences: ^2.3.4
-  path_provider: ^2.1.5
-  permission_handler: ^11.4.0
-```
-
-### Model Configuration
-
-**Default Model ID:**
-
-```dart
-static const String defaultModelId = 'Qwen3-1.7B';
-```
-
-**Available Models:**
-
-```dart
-static const List<LLMModel> availableModels = [qwenManaged];
-```
-
-To add new models:
-
-1. Define new `LLMModel` constant
-2. Add to `availableModels` list
-3. Ensure model ID matches Leap SDK catalog
-
-## References
-
-- [Liquid AI Leap SDK Documentation](https://pub.dev/packages/flutter_leap_sdk)
-- [Qwen Model Family](https://huggingface.co/Qwen)
-- [Flutter Platform Channels](https://docs.flutter.dev/platform-integration/platform-channels)
-
-## Changelog
-
-### 2026-01-23: Initial Leap SDK Migration
-
-- Replaced ONNX GenAI with `flutter_leap_sdk`
-- Simplified architecture (removed native wrappers)
-- Adopted managed model ecosystem
-- Implemented ephemeral loading pattern
+This document intentionally describes only the active architecture and runtime behavior.
 
 ---
 
-**Last Updated**: January 23, 2026  
-**SDK Version**: flutter_leap_sdk ^0.2.4  
-**Model**: Qwen3-1.7B (Q8_0)
+## Model Configuration
+
+### Active model
+
+- Display name: `LFM2.5-1.2B-Instruct Q8_0`
+- Model slug used by SDK/runtime: `LFM2.5-1.2B-Instruct`
+- Quantization: `Q8_0`
+- Approximate on-device model size: `~1.25 GB`
+
+### Why this model setup
+
+- Fits mobile constraints better than larger alternatives
+- Works with on-device sequence capacity shown in runtime logs (`4096`)
+- Provides adequate speed/quality tradeoff for transcript summarization
+
+---
+
+## Service Architecture
+
+## 1) `LeapService` (`lib/services/leap_service.dart`)
+
+`LeapService` is the core inference and lifecycle layer.
+
+### Responsibilities
+
+- Resolve model identifiers
+- Ensure model loaded state
+- Execute adaptive summarization strategy (tiny/single-pass/map-reduce)
+- Manage conversation lifecycle per generation unit
+- Handle retry/recovery on recoverable generation interruptions
+- Manage model memory (explicit unload + idle auto-unload)
+
+### Public API
+
+```dart
+Future<bool> isModelCached(String modelId)
+Future<void> loadModel(String modelId)
+Future<String> summarizeLargeText(String transcript, {String modelId})
+Stream<String> summarizeLargeTextStream(String transcript, {String modelId})
+Future<void> forceUnload()
+Future<void> dispose()
+```
+
+### Key runtime constants
+
+- Chunk size: `1200` tokens
+- Chunk overlap: `150` tokens
+- Token approximation: `1 token ≈ 0.75 words`
+- Chunk generation: `temperature 0.3`, `maxTokens 150`
+- Final reduction generation: `temperature 0.3`, `maxTokens 300`
+- Short/single-pass generation: `temperature 0.2`, `maxTokens 96`
+- Tiny input passthrough threshold: `<= 3` words
+- Single-pass threshold: `<= 900` words
+- Short-chunk prompt threshold (inside map step): `<= 120` words
+- Chunk timeout: `45s`
+- Final timeout: `30s`
+- Auto-unload delay: `3s`
+- Conversation transition delay: `120ms`
+
+### Model load tuning (current)
+
+Current `LoadOptions` are tuned conservatively for cross-device stability:
+
+- `contextSize: 2048`
+- `batchSize: 256`
+- `threads: 2`
+- `gpuLayers: 0`
+
+This reduces memory pressure while preserving reliable throughput on Android API 31+ and iOS 17/18/26 devices.
+
+---
+
+## 2) `SummarizationService` (`lib/services/summarization_service.dart`)
+
+`SummarizationService` is the app-facing orchestration layer.
+
+### Responsibilities
+
+- Persist selected model (`SharedPreferences`)
+- Normalize/repair invalid or stale persisted model values
+- Trigger model download via SDK
+- Expose sync and streaming summarization interfaces for UI
+
+### App-facing API
+
+```dart
+Future<String> summarize(String transcript)
+Stream<String> summarizeStream(String transcript)
+Future<String> summarizeWithCallback(String transcript, {required void Function(String token) onToken})
+```
+
+---
+
+## 3) Model Catalog (`lib/models/llm_model.dart`)
+
+The app model catalog currently contains one active production model entry:
+
+```dart
+LFM2.5-1.2B-Instruct
+```
+
+Model selection logic falls back to this default if persisted value is empty/invalid.
+
+---
+
+## End-to-End Summarization Flow
+
+## Phase A: Start + load
+
+1. Validate transcript is non-empty
+2. Resolve model id
+3. Ensure model is loaded (`_ensureModelLoaded`)
+4. Cancel pending auto-unload timers
+
+## Phase B: Adaptive strategy selection
+
+Before chunking, text is normalized and tokenized into words. Then strategy is selected:
+
+1. **Tiny input** (`<= 3 words`): return normalized text directly.
+2. **Short/medium input** (`<= 900 words`): run a single-pass faithful summary.
+3. **Long input** (`> 120 words`): use map-reduce chunking pipeline.
+
+This avoids over-generation for short inputs while retaining high-quality long-text summarization.
+
+## Phase C: Split input (Map setup for long inputs only)
+
+Input text is normalized and split by whitespace:
+
+```dart
+split(RegExp(r'\\s+'))
+```
+
+Then chunked using:
+
+- chunk words: `round(1200 * 0.75) ~= 900`
+- overlap words: `round(150 * 0.75) ~= 113`
+- sliding step: `chunkWords - overlapWords`
+
+### Text normalization before chunking
+
+A normalization pass reduces obvious STT word-fragment artifacts before chunking (for example, accidental single-letter split fragments inside words) while keeping conservative rules to avoid over-merging normal words.
+
+## Phase D: Per-chunk summarization (Map)
+
+For each chunk:
+
+1. Create a **fresh** `Conversation`
+2. Generate a 50–100 word chunk summary
+3. Dispose that conversation
+4. Insert a short transition delay (`120ms`) before next unit
+
+This ensures no conversation history is shared between chunks.
+
+## Phase E: Final combine (Reduce)
+
+Before reduce stage:
+
+1. `_prepareForFinalReduction(modelId)` is called
+2. Model is force-unloaded
+3. Model is reloaded cleanly
+
+Then:
+
+1. Create fresh reduce conversation
+2. Generate final ~200-word summary from chunk summaries
+3. Dispose conversation
+
+If only one chunk summary exists, reduce stage is skipped and that summary is returned directly.
+
+### Why pre-final reduction reset exists
+
+On Android, intermittent stop-state contamination can occur near stage transitions. A clean model reset before final reduce makes final combine more deterministic.
+
+## Phase F: Finish + unload
+
+- `summarize...` returns final result
+- Auto-unload timer is scheduled (3s)
+- If no further requests arrive, model is unloaded to free memory
+
+---
+
+## Streaming Behavior
+
+`summarizeLargeTextStream` provides staged progress messages:
+
+- `Summarizing...` (single-pass short-input path)
+- `Processing section X of Y...`
+- `Combining section summaries...`
+
+After final text is produced, output is emitted as stream tokens for UI rendering.
+
+UI additionally displays a QoL message during summarization indicating large transcripts may take longer.
+
+---
+
+## Context Isolation and Memory Guarantees
+
+### Context isolation
+
+- Each chunk uses a new conversation instance
+- Final reduce uses a new conversation instance
+- No chunk conversation history is reused for other chunks/transcripts
+
+### Memory strategy
+
+- Model loads on demand
+- Model auto-unloads after inactivity
+- Explicit `forceUnload()` is available for lifecycle cleanup
+- In recoverable interruption paths, unload/reload is used to recover clean engine state
+
+---
+
+## Error Handling and Recovery
+
+Recoverable interruption patterns include log/error signatures such as:
+
+- `stop request`
+- `generation stopped`
+- `stopped unexpectedly`
+- timeout-based incomplete generations
+
+### Recovery behavior
+
+For chunk/final failures (attempt 1):
+
+1. Mark as recoverable when signature matches
+2. Dispose current conversation first
+3. Force unload model
+4. Reload model
+5. Retry once
+
+For non-recoverable failures or second-attempt failures:
+
+- Throw `LeapServiceException`
+- Surface user-facing `SummarizationException`
+
+---
+
+## Platform Notes
+
+## Android
+
+- Minimum SDK target: `31`
+- Model cache/storage is handled by `liquid_ai` runtime and model manifest system
+- Kotlin Gradle plugin is pinned to `2.3.0` to match `liquid_ai` dependencies
+- Runtime logs may show backend fallback messages (e.g., CPU_REPACK → CPU); these are informational unless accompanied by generation errors
+
+## iOS
+
+- Uses same service-layer architecture
+- Uses Swift Package Manager integration (`enable-swift-package-manager: true` in app `pubspec.yaml`)
+- CocoaPods remains present for other Flutter plugins, while `liquid_ai` resolves via SPM
+- Model storage and loading handled by `liquid_ai` runtime on iOS filesystem paths
+
+---
+
+## Operational Characteristics
+
+For large transcript runs:
+
+- Most time is spent in repeated chunk generation and final reduce
+- Pauses can occur at stage boundaries when recovery/reload is triggered
+- Recovery path trades a small latency hit for improved completion reliability
+
+For short transcript runs:
+
+- Single-pass path avoids over-summarization
+- Tiny inputs are returned as-is after normalization
+
+---
+
+## Files and Responsibilities Map
+
+- `lib/services/leap_service.dart`
+  - Inference orchestration, chunking, retries, model lifecycle
+- `lib/services/summarization_service.dart`
+  - App-facing summarization interface, model preference persistence
+- `lib/models/llm_model.dart`
+  - Active model catalog and metadata
+- `lib/screens/history_page.dart`
+  - Summarization UI state and progress rendering
+
+---
+
+## Current Implementation Summary
+
+The current implementation is a **single-model, mobile-safe, adaptive summarization pipeline** with:
+
+- fixed chunking (`1200` + `150 overlap`),
+- short-input guardrails (tiny passthrough + single-pass summarization),
+- strict context isolation (fresh conversation per unit),
+- deterministic lifecycle controls (load on start, unload on idle),
+- Android-focused recovery for stop-request interruptions,
+- and progressive UX feedback for long-running operations.
+
+---
+
+**Last Updated**: February 15, 2026  
+**SDK**: `liquid_ai ^1.2.0`  
+**Active Model**: `LFM2.5-1.2B-Instruct (Q8_0)`

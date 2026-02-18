@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
+import '../utils/app_constants.dart';
 
 class TriggerWordService {
   static const _kTriggerWordsKey = 'trigger_words_v1';
@@ -13,10 +14,12 @@ class TriggerWordService {
   TriggerWordService._internal();
 
   // Stream controllers
-  final _triggerWordsController = StreamController<List<TriggerWord>>.broadcast();
+  final _triggerWordsController =
+      StreamController<List<TriggerWord>>.broadcast();
   final _alertsController = StreamController<List<TriggerAlert>>.broadcast();
 
-  Stream<List<TriggerWord>> get triggerWordsStream => _triggerWordsController.stream;
+  Stream<List<TriggerWord>> get triggerWordsStream =>
+      _triggerWordsController.stream;
   Stream<List<TriggerAlert>> get alertsStream => _alertsController.stream;
 
   Future<List<TriggerWord>> loadTriggerWords() async {
@@ -53,7 +56,8 @@ class TriggerWordService {
 
   Future<void> updateTriggerWord(String oldWord, TriggerWord newWord) async {
     final words = await loadTriggerWords();
-    final index = words.indexWhere((w) => w.word.toLowerCase() == oldWord.toLowerCase());
+    final index =
+        words.indexWhere((w) => w.word.toLowerCase() == oldWord.toLowerCase());
     if (index == -1) return;
     words[index] = newWord;
     await saveTriggerWords(words);
@@ -68,12 +72,14 @@ class TriggerWordService {
       if (!triggerWord.enabled) continue;
 
       final searchText = triggerWord.caseSensitive ? text : text.toLowerCase();
-      final word = triggerWord.caseSensitive ? triggerWord.word : triggerWord.word.toLowerCase();
+      final word = triggerWord.caseSensitive
+          ? triggerWord.word
+          : triggerWord.word.toLowerCase();
 
       if (triggerWord.exactMatch) {
         // Match whole words only
-        final regex = RegExp(r'\b' + RegExp.escape(word) + r'\b', 
-          caseSensitive: triggerWord.caseSensitive);
+        final regex = RegExp(r'\b' + RegExp.escape(word) + r'\b',
+            caseSensitive: triggerWord.caseSensitive);
         if (regex.hasMatch(text)) {
           matches.add(triggerWord.word);
         }
@@ -109,12 +115,12 @@ class TriggerWordService {
 
   Future<void> addAlert(TriggerAlert alert) async {
     final alerts = await loadAlerts();
-    alerts.insert(0, alert); // Newest first
-    // Keep only last 100 alerts to prevent too much storage
-    if (alerts.length > 100) {
-      alerts.removeRange(100, alerts.length);
+    alerts.insert(0, alert);
+    if (alerts.length > AppConstants.alertHistoryMaxItems) {
+      alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
     }
     await saveAlerts(alerts);
+    // TODO: Add vibration/haptic feedback for alert trigger.
   }
 
   Future<void> clearAlerts() async {

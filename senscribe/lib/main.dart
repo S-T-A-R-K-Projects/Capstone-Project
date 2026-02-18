@@ -1,29 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
 
 void main() {
-  GoogleFonts.config.allowRuntimeFetching = false;
+  GoogleFonts.config.allowRuntimeFetching = true;
   runApp(const SenScribeApp());
 }
 
 class ThemeProvider extends ChangeNotifier {
   static final ThemeProvider _instance = ThemeProvider._internal();
+  static ThemeProvider get instance => _instance;
   factory ThemeProvider() => _instance;
   ThemeProvider._internal();
 
-  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    // Cycle: System -> Light -> Dark -> System
+    if (_themeMode == ThemeMode.system) {
+      _themeMode = ThemeMode.light;
+    } else if (_themeMode == ThemeMode.light) {
+      _themeMode = ThemeMode.dark;
+    } else {
+      _themeMode = ThemeMode.system;
+    }
     notifyListeners();
   }
 
   void setTheme(ThemeMode mode) {
-    _themeMode = mode;
-    notifyListeners();
+    if (_themeMode != mode) {
+      _themeMode = mode;
+      notifyListeners();
+    }
   }
 }
 
@@ -55,12 +67,22 @@ class _SenScribeAppState extends State<SenScribeApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return AdaptiveApp(
       title: 'SenScribe',
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      materialLightTheme: AppTheme.lightTheme,
+      materialDarkTheme: AppTheme.darkTheme,
+      cupertinoLightTheme: AppTheme.cupertinoLightTheme,
+      cupertinoDarkTheme: AppTheme.cupertinoDarkTheme,
       themeMode: _themeProvider.themeMode,
       home: const MainNavigationPage(),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', ''), // English
+      ],
     );
   }
 }

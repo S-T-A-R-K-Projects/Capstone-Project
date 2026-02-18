@@ -545,10 +545,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         padding: EdgeInsets.zero,
         borderRadius: BorderRadius.circular(24),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 children: [
                   // Circular Expand/Collapse Button

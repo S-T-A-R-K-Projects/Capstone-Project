@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+
 import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
+import 'utils/app_constants.dart';
+
+// notification / live activity helpers
+import 'services/notification_service.dart';
+import 'services/live_activity_service.dart';
 
 void main() {
   GoogleFonts.config.allowRuntimeFetching = true;
@@ -53,6 +59,17 @@ class _SenScribeAppState extends State<SenScribeApp> {
   void initState() {
     super.initState();
     _themeProvider.addListener(_onThemeChanged);
+
+    // initialization that involves async I/O should happen after the first
+    // frame; using a post‑frame callback keeps initState synchronous.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await NotificationService.instance.init();
+
+      // you must replace the appGroupId below with the value you configure in
+      // Xcode (App Groups capability) when you add the widget extension.
+      await LiveActivityService.instance
+          .init(appGroupId: AppConstants.liveActivityAppGroup);
+    });
   }
 
   @override

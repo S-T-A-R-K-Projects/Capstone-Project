@@ -1,8 +1,14 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
+
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
 import '../utils/app_constants.dart';
+
+// service helpers
+import 'notification_service.dart';
+import 'live_activity_service.dart';
 
 class TriggerWordService {
   static const _kTriggerWordsKey = 'trigger_words_v1';
@@ -120,13 +126,40 @@ class TriggerWordService {
       alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
     }
     await saveAlerts(alerts);
-    // TODO: Add vibration/haptic feedback for alert trigger.
+
+    // give the user immediate haptic feedback so they feel the alert even if
+    // notifications are suppressed/turned off at the system level.
+    HapticFeedback.vibrate();
+
+    // show a local notification as well.
+    try {
+      NotificationService.instance.showAlertNotification(
+        'Trigger word detected',
+        alert.triggerWord,
+      );
+    } catch (e) {
+      debugPrint('could not show notification: $e');
+    }
+
+    // update live activity so the dynamic island/lockscreen shows the latest
+    // word.  service will no-op if live activities are not supported.
+    try {
+      await LiveActivityService.instance.createOrUpdate(alert.triggerWord);
+    } catch (e) {
+      debugPrint('could not update live activity: $e');
+    }
   }
 
   Future<void> clearAlerts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kTriggerAlertsKey);
     _alertsController.add([]);
+
+    // when the history is wiped we no longer have an active trigger word –
+    // terminating any live activity keeps the UI in sync.
+    try {
+      await LiveActivityService.instance.endAll();
+    } catch (_) {}
   }
 
   Future<void> removeAlert(String alertId) async {

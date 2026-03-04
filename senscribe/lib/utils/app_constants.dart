@@ -25,6 +25,9 @@ class AppConstants {
       EdgeInsets.symmetric(horizontal: 16, vertical: 8);
   static const EdgeInsets listPadding = EdgeInsets.fromLTRB(16, 8, 16, 120);
 
+  // application group used for iOS live activities widget extension
+  static const String liveActivityAppGroup = 'group.com.example.senscribe';
+
   static const double bottomNavHeight = 120.0;
 }
 

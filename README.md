@@ -63,6 +63,22 @@ flutter clean
 flutter pub get
 ```
 
+### 4.1 Notifications & Live Activities
+
+The app now uses `flutter_local_notifications` to display local alerts with
+vibration enabled.  Vibration permissions have been added on Android; iOS will
+use the system default vibration pattern.  In addition, a lightweight
+`LiveActivityService` is wired up to the `live_activities` plugin – when a
+trigger word is detected the service will create or update an iOS/Android live
+activity (Dynamic Island / ongoing notification) that shows the word.
+
+> ⚠️ Native platform setup is still required for Live Activities.  You must
+> configure an App Group in your Xcode project, add a Widget Extension, enable
+> the `NSSupportsLiveActivities` flag in `Info.plist`, and (on Android) provide
+> a custom `LiveActivityManager`/layout as described in the plugin README.
+> See `Documentation/` for additional guidance.
+
+
 ### 5. Check Connected Devices
 
 Verify that you have a device or emulator available:

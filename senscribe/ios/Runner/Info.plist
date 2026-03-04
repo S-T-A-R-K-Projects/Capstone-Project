@@ -74,5 +74,8 @@
 	<string>SenScribe needs access to the microphone to classify sounds in your environment.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>SenScribe needs access to speech recognition to transcribe spoken words into text.</string>
+	<!-- enable iOS 16+ Live Activities / Dynamic Island support -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>

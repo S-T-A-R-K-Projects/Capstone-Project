@@ -1,57 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/sound_caption.dart';
+import '../utils/time_utils.dart';
 
 class SoundCaptionCard extends StatelessWidget {
   final SoundCaption caption;
 
   const SoundCaptionCard({super.key, required this.caption});
 
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-    
-    if (difference.inMinutes < 1) {
-      return '${difference.inSeconds}s ago';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return '${difference.inHours}h ago';
-    }
-  }
-
   IconData _getDirectionIcon(String direction) {
     switch (direction.toLowerCase()) {
-      case 'front': return Icons.arrow_upward_rounded;
-      case 'back': return Icons.arrow_downward_rounded;
-      case 'left': return Icons.arrow_back_rounded;
-      case 'right': return Icons.arrow_forward_rounded;
-      default: return Icons.my_location_rounded;
+      case 'front':
+        return Icons.arrow_upward_rounded;
+      case 'back':
+        return Icons.arrow_downward_rounded;
+      case 'left':
+        return Icons.arrow_back_rounded;
+      case 'right':
+        return Icons.arrow_forward_rounded;
+      default:
+        return Icons.my_location_rounded;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: caption.isCritical ? 6 : 3,
-      shadowColor: caption.isCritical ? Colors.red.withValues(alpha: 0.3) : null,
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return AdaptiveCard(
+      padding: const EdgeInsets.all(0),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: caption.isCritical
-            ? Border.all(color: Colors.red, width: 2)
-            : null,
-          gradient: caption.isCritical 
-            ? LinearGradient(
-                colors: [
-                  Colors.red.withValues(alpha: 0.05),
-                  Colors.red.withValues(alpha: 0.02),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
+              ? Border.all(color: Colors.red, width: 2)
+              : null,
+          gradient: caption.isCritical
+              ? LinearGradient(
+                  colors: [
+                    Colors.red.withValues(alpha: 0.05),
+                    Colors.red.withValues(alpha: 0.02),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -63,25 +60,36 @@ class SoundCaptionCard extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: caption.isCritical 
-                      ? [Colors.red.withValues(alpha: 0.2), Colors.red.withValues(alpha: 0.1)]
-                      : [
-                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                        ],
+                    colors: caption.isCritical
+                        ? [
+                            Colors.red.withValues(alpha: 0.2),
+                            Colors.red.withValues(alpha: 0.1)
+                          ]
+                        : [
+                            Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.2),
+                            Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.1),
+                          ],
                   ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  caption.isCritical ? Icons.warning_rounded : _getDirectionIcon(caption.direction),
-                  color: caption.isCritical 
-                    ? Colors.red 
-                    : Theme.of(context).colorScheme.primary,
+                  caption.isCritical
+                      ? Icons.warning_rounded
+                      : _getDirectionIcon(caption.direction),
+                  color: caption.isCritical
+                      ? Colors.red
+                      : Theme.of(context).colorScheme.primary,
                   size: 24,
                 ),
               ),
               const SizedBox(width: 16),
-              
+
               // Caption Content
               Expanded(
                 child: Column(
@@ -95,7 +103,9 @@ class SoundCaptionCard extends StatelessWidget {
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: caption.isCritical ? Colors.red[700] : Colors.black87,
+                              color: caption.isCritical
+                                  ? Colors.red[700]
+                                  : scheme.onSurface,
                             ),
                           ),
                         ),
@@ -114,15 +124,16 @@ class SoundCaptionCard extends StatelessWidget {
                             child: Text(
                               'CRITICAL',
                               style: GoogleFonts.inter(
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onError,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ).animate()
-                            .scale(duration: 300.ms)
-                            .then()
-                            .shimmer(duration: 1000.ms),
+                          )
+                              .animate()
+                              .scale(duration: 300.ms)
+                              .then()
+                              .shimmer(duration: 1000.ms),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -132,7 +143,7 @@ class SoundCaptionCard extends StatelessWidget {
                       children: [
                         _buildInfoChip(
                           Icons.access_time_rounded,
-                          _formatTimestamp(caption.timestamp),
+                          TimeUtils.formatTimeAgoForSound(caption.timestamp),
                           context,
                         ),
                         _buildInfoChip(
@@ -150,52 +161,27 @@ class SoundCaptionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
-              // Quick Actions
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert_rounded,
-                  color: Colors.grey[600],
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 8,
-                onSelected: (value) {
-                  // TODO: Implement quick actions
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
+
+              // Quick Actions - using AdaptivePopupMenuButton
+              AdaptivePopupMenuButton.icon<String>(
+                icon: 'ellipsis.circle',
+                items: [
+                  AdaptivePopupMenuItem(
+                    label: 'View Details',
                     value: 'details',
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded, color: Colors.blue[600]),
-                        const SizedBox(width: 12),
-                        const Text('View Details'),
-                      ],
-                    ),
                   ),
-                  PopupMenuItem(
+                  AdaptivePopupMenuItem(
+                    label: 'Create Alert',
                     value: 'alert',
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_alert_rounded, color: Colors.orange[600]),
-                        const SizedBox(width: 12),
-                        const Text('Create Alert'),
-                      ],
-                    ),
                   ),
-                  PopupMenuItem(
+                  AdaptivePopupMenuItem(
+                    label: 'Train Custom',
                     value: 'train',
-                    child: Row(
-                      children: [
-                        Icon(Icons.model_training_rounded, color: Colors.green[600]),
-                        const SizedBox(width: 12),
-                        const Text('Train Custom'),
-                      ],
-                    ),
                   ),
                 ],
+                onSelected: (index, item) {
+                  //
+                },
               ),
             ],
           ),
@@ -205,20 +191,22 @@ class SoundCaptionCard extends StatelessWidget {
   }
 
   Widget _buildInfoChip(IconData icon, String label, BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
           size: 16,
-          color: Colors.grey[600],
+          color: scheme.onSurface.withValues(alpha: 0.75),
         ),
         const SizedBox(width: 4),
         Text(
           label,
           style: GoogleFonts.inter(
             fontSize: 12,
-            color: Colors.grey[600],
+            color: scheme.onSurface.withValues(alpha: 0.78),
             fontWeight: FontWeight.w500,
           ),
         ),

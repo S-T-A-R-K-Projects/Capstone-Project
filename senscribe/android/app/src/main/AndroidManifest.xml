@@ -13,6 +13,7 @@
         android:label="senscribe"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="false"
         android:requestLegacyExternalStorage="true">
         <activity
             android:name=".MainActivity"

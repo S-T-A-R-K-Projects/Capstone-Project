@@ -2,20 +2,24 @@ import Flutter
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        // Register existing plugins first
-        GeneratedPluginRegistrant.register(with: self)
-        
-        // Register AudioClassificationPlugin
-        if let registrar = self.registrar(forPlugin: "AudioClassificationPlugin") {
+        // Suppress unsatisfiable constraint warnings from native platform views
+        UserDefaults.standard.set(false, forKey: "_UIConstraintBasedLayoutLogUnsatisfiable")
+
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    // UIScene lifecycle: plugin registration for the new launch sequence
+    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+        GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+        if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AudioClassificationPlugin") {
             AudioClassificationPlugin.register(with: registrar)
         }
-        
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 }

@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
+import 'utils/app_constants.dart';
 
 // notification helper
 import 'services/notification_service.dart';

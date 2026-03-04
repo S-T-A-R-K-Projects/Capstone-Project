@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -32,7 +33,7 @@ class NotificationService {
     // all "trigger word" alerts so that the device will buzz even if the
     // user has otherwise silenced notifications.
     if (!kIsWeb) {
-      final channel = AndroidNotificationChannel(
+      const channel = AndroidNotificationChannel(
         'trigger_channel',
         'Trigger Alerts',
         description: 'Notifications when a trigger word is heard',
@@ -57,7 +58,7 @@ class NotificationService {
   /// sound.
   Future<void> showAlertNotification(String title, String body) async {
     try {
-      final androidDetails = AndroidNotificationDetails(
+      const androidDetails = AndroidNotificationDetails(
         'trigger_channel',
         'Trigger Alerts',
         channelDescription: 'Notifications when a trigger word is heard',
@@ -67,13 +68,13 @@ class NotificationService {
         vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
         playSound: true,
       );
-      final iosDetails = DarwinNotificationDetails(
+      const iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentSound: true,
         presentBadge: true,
       );
 
-      final details = NotificationDetails(
+      final details = const NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );

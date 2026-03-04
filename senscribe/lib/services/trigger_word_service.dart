@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
@@ -148,12 +149,8 @@ class TriggerWordService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kTriggerAlertsKey);
     _alertsController.add([]);
-
     // when the history is wiped we no longer have an active trigger word –
-    // terminating any live activity keeps the UI in sync.
-    try {
-      await LiveActivityService.instance.endAll();
-    } catch (_) {}
+    // if you implement live activities re-add termination logic here.
   }
 
   Future<void> removeAlert(String alertId) async {

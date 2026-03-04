@@ -58,7 +58,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   flutter_local_notifications: ^12.0.4   # local notifications with vibration support
-  live_activities: ^2.4.7               # iOS/Android live activities (Dynamic Island)
+  live_activities: 2.4.3               # pinned to 2.4.3 per request
 
 
 dev_dependencies:

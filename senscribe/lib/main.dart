@@ -4,6 +4,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
+import 'screens/start_page.dart';
 
 void main() {
   GoogleFonts.config.allowRuntimeFetching = true;
@@ -74,7 +75,7 @@ class _SenScribeAppState extends State<SenScribeApp> {
       cupertinoLightTheme: AppTheme.cupertinoLightTheme,
       cupertinoDarkTheme: AppTheme.cupertinoDarkTheme,
       themeMode: _themeProvider.themeMode,
-      home: const MainNavigationPage(),
+      home: const StartPage(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

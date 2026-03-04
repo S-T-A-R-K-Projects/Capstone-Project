@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.10.8 <4.0.0"  # updated to satisfy dart requirements of some deps
+  sdk: ">=3.0.0 <4.0.0"
   flutter: ">=3.35.0 <4.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
@@ -58,7 +58,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   flutter_local_notifications: ^12.0.4   # local notifications with vibration support
-  live_activities: 2.4.3               # pinned to 2.4.3 per request
+  # live_activities removed to remain compatible with local SDK
 
 
 dev_dependencies:

@@ -8,7 +8,6 @@ import '../utils/app_constants.dart';
 
 // service helpers
 import 'notification_service.dart';
-import 'live_activity_service.dart';
 
 class TriggerWordService {
   static const _kTriggerWordsKey = 'trigger_words_v1';
@@ -141,13 +140,8 @@ class TriggerWordService {
       debugPrint('could not show notification: $e');
     }
 
-    // update live activity so the dynamic island/lockscreen shows the latest
-    // word.  service will no-op if live activities are not supported.
-    try {
-      await LiveActivityService.instance.createOrUpdate(alert.triggerWord);
-    } catch (e) {
-      debugPrint('could not update live activity: $e');
-    }
+    // live activities were removed from dependencies to preserve SDK
+    // compatibility; native Live Activity integration can be re-added later.
   }
 
   Future<void> clearAlerts() async {

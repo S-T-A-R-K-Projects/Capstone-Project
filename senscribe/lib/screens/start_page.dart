@@ -2,96 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'home_page.dart';
-import 'speech_to_text_page.dart';
-import 'text_to_speech_page.dart';
+import 'unified_home_page.dart';
 
-/// A simple landing screen that presents three primary sections of the
-/// application.  Each button pushes the corresponding feature page so the
-/// user can jump directly into text‑to‑speech, speech‑to‑text, or the sound
-/// recognition/active‑listening workflow.
+/// A simple landing screen that welcomes the user and provides a single
+/// button to access the main home page with all the app's features.
 ///
 /// The visual style mirrors the rest of the app by using [AdaptiveScaffold],
 /// [AdaptiveAppBar] and the standard theme colours for buttons.
-class StartPage extends StatefulWidget {
+class StartPage extends StatelessWidget {
   const StartPage({Key? key}) : super(key: key);
 
-  @override
-  State<StartPage> createState() => _StartPageState();
-}
-
-class _StartPageState extends State<StartPage> with TickerProviderStateMixin {
-  late final AnimationController _soundPulseController;
-  late final AnimationController _speechPulseController;
-
-  bool _isSoundMonitoring = false;
-  bool _isSpeechMonitoring = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _soundPulseController =
-        AnimationController(vsync: this, duration: const Duration(seconds: 2));
-    _speechPulseController =
-        AnimationController(vsync: this, duration: const Duration(seconds: 2));
-  }
-
-  @override
-  void dispose() {
-    _soundPulseController.dispose();
-    _speechPulseController.dispose();
-    super.dispose();
-  }
-
-  void _toggleSoundMonitoring() {
-    setState(() {
-      _isSoundMonitoring = !_isSoundMonitoring;
-      if (_isSoundMonitoring) {
-        _soundPulseController.repeat(reverse: true);
-      } else {
-        _soundPulseController.stop();
-      }
-    });
-  }
-
-  void _toggleSpeechMonitoring() {
-    setState(() {
-      _isSpeechMonitoring = !_isSpeechMonitoring;
-      if (_isSpeechMonitoring) {
-        _speechPulseController.repeat(reverse: true);
-      } else {
-        _speechPulseController.stop();
-      }
-    });
-  }
-
-  void _openTextToSpeech() {
+  void _openHomePage(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (c) => const TextToSpeechPage()),
-    );
-  }
-
-  void _openSpeechToText() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (c) => SpeechToTextPage(
-          isMonitoring: _isSpeechMonitoring,
-          pulseController: _speechPulseController,
-          onToggleMonitoring: _toggleSpeechMonitoring,
-        ),
-      ),
-    );
-  }
-
-  void _openSoundRecognition() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (c) => HomePage(
-          isMonitoring: _isSoundMonitoring,
-          pulseController: _soundPulseController,
-          onToggleMonitoring: _toggleSoundMonitoring,
-        ),
-      ),
+      MaterialPageRoute(builder: (c) => const UnifiedHomePage()),
     );
   }
 
@@ -141,25 +64,18 @@ class _StartPageState extends State<StartPage> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Start here',
+                      'Welcome to SenScribe',
                       style: theme.textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Your assistant for text-to-speech, speech-to-text, and sound recognition.',
+                      style: theme.textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 32),
                     AdaptiveButton(
-                      onPressed: _openTextToSpeech,
-                      label: 'Text to Speech',
-                      style: AdaptiveButtonStyle.filled,
-                    ),
-                    const SizedBox(height: 16),
-                    AdaptiveButton(
-                      onPressed: _openSpeechToText,
-                      label: 'Speech to Text',
-                      style: AdaptiveButtonStyle.filled,
-                    ),
-                    const SizedBox(height: 16),
-                    AdaptiveButton(
-                      onPressed: _openSoundRecognition,
-                      label: 'Sound Recognition',
+                      onPressed: () => _openHomePage(context),
+                      label: 'Get Started',
                       style: AdaptiveButtonStyle.filled,
                     ),
                   ],

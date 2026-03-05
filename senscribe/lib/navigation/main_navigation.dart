@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import '../screens/start_page.dart';
+import '../screens/home_tab.dart';
 import '../screens/history_page.dart';
 import '../screens/alerts_page.dart';
 import '../screens/settings_page.dart';
@@ -17,7 +17,7 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int _selectedIndex = 0;
   final List<Widget> _pages = [
-    const StartPage(),
+    const HomeTab(),
     const HistoryPage(),
     const AlertsPage(),
     const SettingsPage(),

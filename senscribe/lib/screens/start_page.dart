@@ -2,21 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'unified_home_page.dart';
-
 /// A simple landing screen that welcomes the user and provides a single
 /// button to access the main home page with all the app's features.
 ///
 /// The visual style mirrors the rest of the app by using [AdaptiveScaffold],
 /// [AdaptiveAppBar] and the standard theme colours for buttons.
 class StartPage extends StatelessWidget {
-  const StartPage({Key? key}) : super(key: key);
+  final VoidCallback? onGetStarted;
 
-  void _openHomePage(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (c) => const UnifiedHomePage()),
-    );
-  }
+  const StartPage({Key? key, this.onGetStarted}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +68,7 @@ class StartPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 32),
                     AdaptiveButton(
-                      onPressed: () => _openHomePage(context),
+                      onPressed: onGetStarted,
                       label: 'Get Started',
                       style: AdaptiveButtonStyle.filled,
                     ),

@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+const int kRequiredCustomSoundSamples = 5;
+const int kRequiredBackgroundSamples = 1;
+
 enum CustomSoundProfileStatus {
   draft,
   recording,
@@ -51,7 +54,9 @@ class CustomSoundProfile {
   int get targetSampleCount => targetSamplePaths.length;
   int get backgroundSampleCount => backgroundSamplePaths.length;
   bool get hasBackgroundSample => backgroundSamplePaths.isNotEmpty;
-  bool get hasEnoughSamples => targetSampleCount >= 3;
+  bool get hasEnoughSamples =>
+      targetSampleCount >= kRequiredCustomSoundSamples &&
+      backgroundSampleCount >= kRequiredBackgroundSamples;
 
   CustomSoundProfile copyWith({
     String? id,

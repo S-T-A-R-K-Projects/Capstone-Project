@@ -395,9 +395,9 @@ class _AlertsPageState extends State<AlertsPage> {
         var busyLabel = '';
         var activeSampleNumber = 0;
         var isTraining = false;
-        var statusTitle = 'Record 3 samples';
+        var statusTitle = 'Record 5 samples';
         var statusDetail =
-            'Each recording lasts about 3 seconds. Keep the phone near the target sound and avoid talking over it.';
+            'Each recording lasts about 5 seconds. Keep the phone near the target sound and avoid talking over it.';
         var statusIcon = Icons.mic_none_rounded;
         var statusColor = scheme.primary;
 
@@ -429,7 +429,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 busyLabel = 'Recording $label';
                 statusTitle = 'Recording $label';
                 statusDetail =
-                    'Recording started. Hold steady for about 3 seconds until it finishes.';
+                    'Recording started. Hold steady for about 5 seconds until it finishes.';
                 statusIcon = Icons.mic_rounded;
                 statusColor = scheme.primary;
               });
@@ -437,7 +437,7 @@ class _AlertsPageState extends State<AlertsPage> {
               if (mounted) {
                 AdaptiveSnackBar.show(
                   this.context,
-                  message: '$label started. Hold steady for about 3 seconds.',
+                  message: '$label started. Hold steady for about 5 seconds.',
                   type: AdaptiveSnackBarType.success,
                 );
               }
@@ -501,35 +501,12 @@ class _AlertsPageState extends State<AlertsPage> {
                 busyLabel = 'Preparing training';
                 statusTitle = 'Preparing training';
                 statusDetail =
-                    'The app will briefly calibrate to room noise first, then train the custom detector.';
+                    'The app will train using the 5 saved sound samples and the saved background calibration.';
                 statusIcon = Icons.tune_rounded;
                 statusColor = scheme.primary;
               });
 
               try {
-                if (!currentProfile.hasBackgroundSample) {
-                  if (mounted) {
-                    AdaptiveSnackBar.show(
-                      this.context,
-                      message:
-                          'Calibrating room noise for about 3 seconds before training.',
-                      type: AdaptiveSnackBarType.success,
-                    );
-                  }
-
-                  setModalState(() {
-                    busyLabel = 'Calibrating room noise';
-                    statusTitle = 'Calibrating room noise';
-                    statusDetail =
-                        'Keep the room as quiet as possible for a moment so the detector can reject silence and ambient noise.';
-                    statusIcon = Icons.hearing_rounded;
-                    statusColor = scheme.secondary;
-                  });
-
-                  currentProfile = await _customSoundService
-                      .captureBackgroundSample(currentProfile);
-                }
-
                 setModalState(() {
                   busyLabel = 'Training custom model';
                   statusTitle = 'Training custom model';
@@ -623,7 +600,7 @@ class _AlertsPageState extends State<AlertsPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Record 3 examples of the target sound. When you train, the app will briefly calibrate to room noise automatically.',
+                      'Record 5 examples of the target sound. After that, record 1 background calibration sample, then train the custom model.',
                       style: GoogleFonts.inter(
                         color: scheme.onSurface.withValues(alpha: 0.72),
                       ),
@@ -634,8 +611,15 @@ class _AlertsPageState extends State<AlertsPage> {
                       runSpacing: 8,
                       children: [
                         _buildProgressChip(
-                          'Samples ${currentProfile.targetSampleCount}/3',
-                          currentProfile.targetSampleCount >= 3,
+                          'Samples ${currentProfile.targetSampleCount}/$kRequiredCustomSoundSamples',
+                          currentProfile.targetSampleCount >=
+                              kRequiredCustomSoundSamples,
+                        ),
+                        _buildProgressChip(
+                          currentProfile.hasBackgroundSample
+                              ? 'Background Ready'
+                              : 'Background Needed',
+                          currentProfile.hasBackgroundSample,
                         ),
                         _buildProgressChip(
                           _customStatusLabel(currentProfile),
@@ -698,7 +682,9 @@ class _AlertsPageState extends State<AlertsPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    for (var index = 0; index < 3; index++)
+                    for (var index = 0;
+                        index < kRequiredCustomSoundSamples;
+                        index++)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: AdaptiveButton(
@@ -725,19 +711,48 @@ class _AlertsPageState extends State<AlertsPage> {
                           style: AdaptiveButtonStyle.filled,
                         ),
                       ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: AdaptiveButton(
+                        key: ValueKey(
+                          'custom-background-${currentProfile.id}-${currentProfile.backgroundSampleCount}-$isBusy-$activeSampleNumber',
+                        ),
+                        enabled: !isBusy &&
+                            currentProfile.targetSampleCount >=
+                                kRequiredCustomSoundSamples,
+                        onPressed: isBusy ||
+                                currentProfile.targetSampleCount <
+                                    kRequiredCustomSoundSamples
+                            ? null
+                            : () => runCapture(
+                                  sampleNumber: kRequiredCustomSoundSamples + 1,
+                                  label: 'Background Calibration',
+                                  action: () => _customSoundService
+                                      .captureBackgroundSample(
+                                    currentProfile,
+                                  ),
+                                ),
+                        label: isBusy &&
+                                activeSampleNumber ==
+                                    kRequiredCustomSoundSamples + 1
+                            ? 'Recording Background Calibration...'
+                            : currentProfile.hasBackgroundSample
+                                ? 'Re-record Background Calibration'
+                                : 'Record Background Calibration',
+                        style: AdaptiveButtonStyle.filled,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       child: AdaptiveButton(
                         key: ValueKey(
-                          'custom-train-${currentProfile.id}-${currentProfile.targetSampleCount}-${currentProfile.status.value}-$isBusy',
+                          'custom-train-${currentProfile.id}-${currentProfile.targetSampleCount}-${currentProfile.backgroundSampleCount}-${currentProfile.status.value}-$isBusy',
                         ),
-                        enabled:
-                            !isBusy && currentProfile.targetSampleCount >= 3,
-                        onPressed:
-                            isBusy || currentProfile.targetSampleCount < 3
-                                ? null
-                                : runTraining,
+                        enabled: !isBusy && currentProfile.hasEnoughSamples,
+                        onPressed: isBusy || !currentProfile.hasEnoughSamples
+                            ? null
+                            : runTraining,
                         label: isBusy && isTraining
                             ? 'Training Custom Model...'
                             : currentProfile.status ==
@@ -872,8 +887,11 @@ class _AlertsPageState extends State<AlertsPage> {
       return 'Disabled';
     }
     return switch (profile.status) {
-      CustomSoundProfileStatus.draft =>
-        profile.hasEnoughSamples ? 'Ready to train' : 'Needs samples',
+      CustomSoundProfileStatus.draft => profile.hasEnoughSamples
+          ? 'Ready to train'
+          : profile.targetSampleCount >= kRequiredCustomSoundSamples
+              ? 'Needs background'
+              : 'Needs samples',
       CustomSoundProfileStatus.recording => 'Recording',
       CustomSoundProfileStatus.training => 'Training',
       CustomSoundProfileStatus.ready => 'Ready',
@@ -935,7 +953,7 @@ class _AlertsPageState extends State<AlertsPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add a sound, record 3 examples, then train the custom model.',
+                    'Add a sound, record 5 examples and 1 background calibration, then train the custom model.',
                     style: GoogleFonts.inter(
                       color: scheme.onSurface.withValues(alpha: 0.68),
                     ),
@@ -994,7 +1012,16 @@ class _AlertsPageState extends State<AlertsPage> {
               children: [
                 Chip(
                   label: Text(
-                    'Samples ${profile.targetSampleCount}/3',
+                    'Samples ${profile.targetSampleCount}/$kRequiredCustomSoundSamples',
+                    style: GoogleFonts.inter(fontSize: 10),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+                Chip(
+                  label: Text(
+                    profile.hasBackgroundSample
+                        ? 'Background Ready'
+                        : 'Background Needed',
                     style: GoogleFonts.inter(fontSize: 10),
                   ),
                   visualDensity: VisualDensity.compact,

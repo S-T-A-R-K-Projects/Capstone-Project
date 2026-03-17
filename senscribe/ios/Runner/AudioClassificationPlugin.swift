@@ -20,7 +20,7 @@ private struct CustomSoundProfileRecord: Codable {
   var lastError: String?
 
   var hasEnoughSamples: Bool {
-    targetSamplePaths.count >= 3
+    targetSamplePaths.count >= 5 && !backgroundSamplePaths.isEmpty
   }
 
   func toDictionary() -> [String: Any] {
@@ -43,7 +43,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   private let trainingQueue = DispatchQueue(label: "com.senscribe.customModelTrainingQueue", qos: .userInitiated)
   private let dateFormatter = ISO8601DateFormatter()
   private let backgroundLabel = "__background__"
-  private let recordingDuration: TimeInterval = 3.0
+  private let recordingDuration: TimeInterval = 5.0
   private let builtInConfidenceThreshold: Double = 0.25
   private let customConfidenceThreshold: Double = 0.94
   private let builtInThrottleInterval: TimeInterval = 0.5
@@ -473,7 +473,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
       do {
         let trainingData = try self.buildTrainingData(from: profiles)
         guard trainingData.keys.count >= 2 else {
-          throw NSError(domain: "AudioClassificationPlugin", code: -10, userInfo: [NSLocalizedDescriptionKey: "Training requires at least one custom sound and calibration audio."])
+          throw NSError(domain: "AudioClassificationPlugin", code: -10, userInfo: [NSLocalizedDescriptionKey: "Training requires 5 custom sound samples and 1 background calibration sample."])
         }
 
         let classifier = try MLSoundClassifier(

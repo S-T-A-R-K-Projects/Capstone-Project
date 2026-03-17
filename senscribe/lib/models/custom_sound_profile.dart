@@ -32,6 +32,7 @@ class CustomSoundProfile {
   final CustomSoundProfileStatus status;
   final List<String> targetSamplePaths;
   final List<String> backgroundSamplePaths;
+  final DateTime createdAt;
   final DateTime updatedAt;
   final String? lastError;
 

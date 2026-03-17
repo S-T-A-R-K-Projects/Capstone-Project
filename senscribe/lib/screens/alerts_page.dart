@@ -393,6 +393,8 @@ class _AlertsPageState extends State<AlertsPage> {
         final scheme = Theme.of(sheetContext).colorScheme;
         var isBusy = false;
         var busyLabel = '';
+        var activeSampleNumber = 0;
+        var isTraining = false;
         var statusTitle = 'Record 3 samples';
         var statusDetail =
             'Each recording lasts about 3 seconds. Keep the phone near the target sound and avoid talking over it.';
@@ -416,11 +418,14 @@ class _AlertsPageState extends State<AlertsPage> {
             }
 
             Future<void> runCapture({
+              required int sampleNumber,
               required String label,
               required Future<CustomSoundProfile> Function() action,
             }) async {
               setModalState(() {
                 isBusy = true;
+                isTraining = false;
+                activeSampleNumber = sampleNumber;
                 busyLabel = 'Recording $label';
                 statusTitle = 'Recording $label';
                 statusDetail =
@@ -439,8 +444,17 @@ class _AlertsPageState extends State<AlertsPage> {
 
               try {
                 final updated = await action();
+                currentProfile = updated;
+
+                final refreshedProfiles =
+                    await _customSoundService.loadProfiles();
+                final refreshedProfile = _findCustomProfile(
+                  refreshedProfiles,
+                  currentProfile.id,
+                );
+
                 setModalState(() {
-                  currentProfile = updated;
+                  currentProfile = refreshedProfile ?? updated;
                   statusTitle = '$label saved';
                   statusDetail =
                       'Recording finished. You can continue or re-record this sample.';
@@ -472,6 +486,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 if (sheetContext.mounted) {
                   setModalState(() {
                     isBusy = false;
+                    activeSampleNumber = 0;
                     busyLabel = '';
                   });
                 }
@@ -481,6 +496,8 @@ class _AlertsPageState extends State<AlertsPage> {
             Future<void> runTraining() async {
               setModalState(() {
                 isBusy = true;
+                isTraining = true;
+                activeSampleNumber = 0;
                 busyLabel = 'Preparing training';
                 statusTitle = 'Preparing training';
                 statusDetail =
@@ -578,6 +595,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 if (sheetContext.mounted) {
                   setModalState(() {
                     isBusy = false;
+                    isTraining = false;
                     busyLabel = '';
                   });
                 }
@@ -684,9 +702,14 @@ class _AlertsPageState extends State<AlertsPage> {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: AdaptiveButton(
+                          key: ValueKey(
+                            'custom-sample-${currentProfile.id}-${index + 1}-${currentProfile.targetSampleCount}-$isBusy-$activeSampleNumber',
+                          ),
+                          enabled: !isBusy,
                           onPressed: isBusy
                               ? null
                               : () => runCapture(
+                                    sampleNumber: index + 1,
                                     label: 'Sample ${index + 1}',
                                     action: () =>
                                         _customSoundService.captureTargetSample(
@@ -694,9 +717,11 @@ class _AlertsPageState extends State<AlertsPage> {
                                       index,
                                     ),
                                   ),
-                          label: index < currentProfile.targetSampleCount
-                              ? 'Re-record Sample ${index + 1}'
-                              : 'Record Sample ${index + 1}',
+                          label: isBusy && activeSampleNumber == index + 1
+                              ? 'Recording Sample ${index + 1}...'
+                              : index < currentProfile.targetSampleCount
+                                  ? 'Re-record Sample ${index + 1}'
+                                  : 'Record Sample ${index + 1}',
                           style: AdaptiveButtonStyle.filled,
                         ),
                       ),
@@ -704,14 +729,21 @@ class _AlertsPageState extends State<AlertsPage> {
                     SizedBox(
                       width: double.infinity,
                       child: AdaptiveButton(
+                        key: ValueKey(
+                          'custom-train-${currentProfile.id}-${currentProfile.targetSampleCount}-${currentProfile.status.value}-$isBusy',
+                        ),
+                        enabled:
+                            !isBusy && currentProfile.targetSampleCount >= 3,
                         onPressed:
                             isBusy || currentProfile.targetSampleCount < 3
                                 ? null
                                 : runTraining,
-                        label: currentProfile.status ==
-                                CustomSoundProfileStatus.ready
-                            ? 'Retrain Custom Model'
-                            : 'Train Custom Model',
+                        label: isBusy && isTraining
+                            ? 'Training Custom Model...'
+                            : currentProfile.status ==
+                                    CustomSoundProfileStatus.ready
+                                ? 'Retrain Custom Model'
+                                : 'Train Custom Model',
                         style: AdaptiveButtonStyle.filled,
                       ),
                     ),
@@ -903,7 +935,7 @@ class _AlertsPageState extends State<AlertsPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add a sound, record 3 examples and 1 background clip, then train the custom model.',
+                    'Add a sound, record 3 examples, then train the custom model.',
                     style: GoogleFonts.inter(
                       color: scheme.onSurface.withValues(alpha: 0.68),
                     ),

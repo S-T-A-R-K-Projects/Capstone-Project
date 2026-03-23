@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
+import 'home_tab.dart';
 import 'name_recognition_page.dart';
 import 'sound_direction_page.dart';
 import 'privacy_data_page.dart';
@@ -404,6 +406,64 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       label: 'Open',
                       style: AdaptiveButtonStyle.plain,
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+
+            const SizedBox(height: 8),
+
+            // Re-launch onboarding tour
+            AdaptiveCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.refresh_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Onboarding',
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Restart the step-by-step introduction whenever you want to revisit key features.',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AdaptiveButton(
+                      onPressed: () async {
+                        await HomeTab.homeTabKey.currentState?.showOnboarding();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Onboarding restarted. Go back to Home to continue.'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        if (Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                      label: 'Run Onboarding',
+                      style: AdaptiveButtonStyle.filled,
                     ),
                   ),
                 ],

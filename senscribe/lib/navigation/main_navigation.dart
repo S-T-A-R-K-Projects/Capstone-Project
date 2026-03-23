@@ -17,7 +17,7 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int _selectedIndex = 0;
   final List<Widget> _pages = [
-    const HomeTab(),
+    HomeTab(key: HomeTab.homeTabKey),
     const HistoryPage(),
     const AlertsPage(),
     const SettingsPage(),

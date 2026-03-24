@@ -931,7 +931,7 @@ class _AlertsPageState extends State<AlertsPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'These sounds are trained on iOS and run beside the built-in detector on the unified home screen.',
+          'These sounds are trained on-device and run beside the built-in detector on the unified home screen.',
           style: GoogleFonts.inter(
             color: scheme.onSurface.withValues(alpha: 0.7),
           ),
@@ -1360,7 +1360,7 @@ class _AlertsPageState extends State<AlertsPage> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Add words to monitor in speech-to-text, then add a custom sound below if you want a personal sound detector on iOS.',
+                                    'Add words to monitor in speech-to-text, then add a custom sound below if you want a personal sound detector on this device.',
                                     style: GoogleFonts.inter(
                                       color: scheme.onSurface
                                           .withValues(alpha: 0.68),

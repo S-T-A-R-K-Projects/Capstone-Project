@@ -27,7 +27,7 @@ class CustomSoundService {
     final prefs = await SharedPreferences.getInstance();
     final persisted = _decodeProfiles(prefs.getString(_kProfilesKey));
 
-    if (!Platform.isIOS) {
+    if (!Platform.isIOS && !Platform.isAndroid) {
       return persisted;
     }
 
@@ -105,7 +105,7 @@ class CustomSoundService {
   }
 
   Future<List<CustomSoundProfile>> trainOrRebuildModel() async {
-    if (!Platform.isIOS) {
+    if (!Platform.isIOS && !Platform.isAndroid) {
       return loadProfiles();
     }
 
@@ -119,7 +119,7 @@ class CustomSoundService {
   }
 
   Future<CustomSoundProfile> setEnabled(String profileId, bool enabled) async {
-    if (!Platform.isIOS) {
+    if (!Platform.isIOS && !Platform.isAndroid) {
       final profiles = await loadProfiles();
       final index = profiles.indexWhere((profile) => profile.id == profileId);
       if (index == -1) {
@@ -154,7 +154,7 @@ class CustomSoundService {
     final next = profiles.where((profile) => profile.id != profileId).toList();
     await saveProfiles(next);
 
-    if (!Platform.isIOS) {
+    if (!Platform.isIOS && !Platform.isAndroid) {
       return;
     }
 
@@ -191,8 +191,10 @@ class CustomSoundService {
     required String sampleKind,
     required int sampleIndex,
   }) async {
-    if (!Platform.isIOS) {
-      throw UnsupportedError('Custom sound enrollment is currently iOS only.');
+    if (!Platform.isIOS && !Platform.isAndroid) {
+      throw UnsupportedError(
+        'Custom sound enrollment is currently supported on iOS and Android only.',
+      );
     }
 
     final response = await _methodChannel.invokeMethod<dynamic>(

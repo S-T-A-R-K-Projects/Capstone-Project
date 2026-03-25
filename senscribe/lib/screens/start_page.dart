@@ -105,104 +105,153 @@ class _StartPageState extends State<StartPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return AdaptiveScaffold(
-      appBar: const AdaptiveAppBar(title: 'Welcome to SenScribe'),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'assets/images/real_logo.png',
-                      height: 36,
-                      width: 36,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'SenScribe',
-                    style: GoogleFonts.outfit(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _steps.length,
-                onPageChanged: (index) => setState(() => _pageIndex = index),
-                itemBuilder: (context, index) {
-                  final step = _steps[index];
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Icon(step.icon, size: 82, color: theme.colorScheme.primary),
-                      const SizedBox(height: 24),
-                      Text(
-                        step.title,
-                        style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
+    return SafeArea(
+      top: true,
+      bottom: true,
+      child: AdaptiveScaffold(
+        appBar: const AdaptiveAppBar(title: 'Welcome to SenScribe'),
+        body: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset(
+                        'assets/images/real_logo.png',
+                        height: 36,
+                        width: 36,
                       ),
-                      const SizedBox(height: 14),
-                      Text(
-                        step.description,
-                        style: theme.textTheme.bodyLarge,
-                        textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'SenScribe',
+                      style: GoogleFonts.outfit(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  _steps.length,
-                  (index) => Container(
-                    width: 10,
-                    height: 10,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color:
-                          _pageIndex == index ? theme.colorScheme.primary : theme.colorScheme.onSurface.withOpacity(0.25),
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: _steps.length,
+                  onPageChanged: (index) => setState(() => _pageIndex = index),
+                  itemBuilder: (context, index) {
+                    final step = _steps[index];
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 170,
+                          height: 170,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                theme.colorScheme.primary.withOpacity(0.85),
+                                theme.colorScheme.secondary.withOpacity(0.85),
+                              ],
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withOpacity(
+                                  0.3,
+                                ),
+                                blurRadius: 14,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Icon(
+                              step.icon,
+                              size: 72,
+                              color: theme.colorScheme.onPrimary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          step.title,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          step.description,
+                          style: theme.textTheme.bodyLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    _steps.length,
+                    (index) => Container(
+                      width: 10,
+                      height: 10,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _pageIndex == index
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface.withOpacity(0.25),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: _pageIndex > 0 ? _goBack : null,
-                  child: const Text('Back'),
+              Padding(
+                padding: EdgeInsets.only(bottom: 12 + bottomInset),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: _pageIndex > 0 ? _goBack : null,
+                          child: const Text('Back'),
+                        ),
+                        TextButton(
+                          onPressed: _completeOnboarding,
+                          child: const Text('Skip'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    AdaptiveButton(
+                      label: _pageIndex == _steps.length - 1
+                          ? 'Start using SenScribe'
+                          : 'Next',
+                      onPressed: _goNext,
+                      style: AdaptiveButtonStyle.filled,
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: _completeOnboarding,
-                  child: const Text('Skip'),
-                ),
-              ],
-            ),
-            AdaptiveButton(
-              label: _pageIndex == _steps.length - 1 ? 'Start using SenScribe' : 'Next',
-              onPressed: _goNext,
-              style: AdaptiveButtonStyle.filled,
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

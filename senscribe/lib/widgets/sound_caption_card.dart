@@ -142,6 +142,15 @@ class SoundCaptionCard extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         _buildInfoChip(
+                          caption.source == SoundCaptionSource.custom
+                              ? Icons.tune_rounded
+                              : Icons.library_music_rounded,
+                          caption.source == SoundCaptionSource.custom
+                              ? 'Custom'
+                              : 'Built-in',
+                          context,
+                        ),
+                        _buildInfoChip(
                           Icons.access_time_rounded,
                           TimeUtils.formatTimeAgoForSound(caption.timestamp),
                           context,

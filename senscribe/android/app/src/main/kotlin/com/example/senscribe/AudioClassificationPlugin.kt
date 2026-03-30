@@ -2,16 +2,25 @@ package com.example.senscribe
 
 import android.Manifest
 import android.app.Activity
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
+import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifier
 import com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifier.AudioClassifierOptions
@@ -179,6 +188,12 @@ class AudioClassificationPlugin private constructor(
     private const val CUSTOM_THROTTLE_MS = 1000L
     private const val CUSTOM_REQUIRED_CONSECUTIVE_MATCHES = 2
 
+    // Notification constants
+    private const val NOTIFICATION_CHANNEL_ID = "senscribe_live_updates"
+    private const val NOTIFICATION_CHANNEL_NAME = "Live Audio Updates"
+    private const val NOTIFICATION_ID = 0xAC02
+    private const val NOTIFICATION_UPDATE_THROTTLE_MS = 1000L
+
     fun register(
       messenger: BinaryMessenger,
       context: Context,
@@ -219,6 +234,12 @@ class AudioClassificationPlugin private constructor(
   private var lastCustomCandidateCount = 0
   private var activeCustomMatchers: List<CustomSoundMatcher> = emptyList()
 
+  // Notification state
+  private var isLiveUpdateEnabled = false
+  private var lastNotificationUpdateMs = 0L
+  private var currentNotificationContent = ""
+  private var notificationManager: NotificationManagerCompat? = null
+
   private val customSoundsRootDir: File by lazy {
     File(context.filesDir, "custom_sounds").apply { mkdirs() }
   }
@@ -231,10 +252,13 @@ class AudioClassificationPlugin private constructor(
     methodChannel.setMethodCallHandler(this)
     eventChannel.setStreamHandler(this)
     activeCustomMatchers = loadActiveCustomMatchers()
+    notificationManager = NotificationManagerCompat.from(context)
+    createNotificationChannel()
   }
 
   fun dispose() {
     stopClassification()
+    hideLiveUpdateNotification()
     methodChannel.setMethodCallHandler(null)
     eventChannel.setStreamHandler(null)
   }
@@ -269,6 +293,8 @@ class AudioClassificationPlugin private constructor(
         stopClassification()
         result.success(null)
       }
+      "startLiveUpdates" -> handleStartLiveUpdates(result)
+      "stopLiveUpdates" -> handleStopLiveUpdates(result)
       "loadCustomSounds" -> result.success(loadProfiles().map { it.toMap() })
       "captureSample" -> captureSample(call, result)
       "trainOrRebuildCustomModel" -> trainOrRebuildCustomModel(result)
@@ -297,6 +323,35 @@ class AudioClassificationPlugin private constructor(
       startClassification()
       result.success(null)
     }
+  }
+
+  private fun handleStartLiveUpdates(result: MethodChannel.Result) {
+    if (isLiveUpdateEnabled) {
+      result.success(null)
+      return
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+      result.error("notification_permission_denied", "Notification permission is required for live updates.", null)
+      return
+    }
+
+    isLiveUpdateEnabled = true
+    currentNotificationContent = "Listening for sounds..."
+    showLiveUpdateNotification()
+    result.success(null)
+  }
+
+  private fun handleStopLiveUpdates(result: MethodChannel.Result) {
+    if (!isLiveUpdateEnabled) {
+      result.success(null)
+      return
+    }
+
+    isLiveUpdateEnabled = false
+    hideLiveUpdateNotification()
+    result.success(null)
   }
 
   private fun runWithMicrophonePermission(
@@ -481,6 +536,12 @@ class AudioClassificationPlugin private constructor(
     )
 
     mainHandler.post { eventSink?.success(payload) }
+
+    // Update live notification if enabled
+    if (isLiveUpdateEnabled) {
+      val confidencePercent = (audioResult.score() * 100).toInt()
+      updateLiveUpdateNotification("Detected: $label (${confidencePercent}%)")
+    }
   }
 
   private fun processCustomEmbedding(
@@ -550,6 +611,12 @@ class AudioClassificationPlugin private constructor(
     )
 
     mainHandler.post { eventSink?.success(payload) }
+
+    // Update live notification if enabled
+    if (isLiveUpdateEnabled) {
+      val confidencePercent = (best.similarity * 100).toInt()
+      updateLiveUpdateNotification("Detected: ${best.matcher.label} (${confidencePercent}%)")
+    }
   }
 
   private fun stopClassification() {
@@ -1374,6 +1441,64 @@ class AudioClassificationPlugin private constructor(
   }
 
   private fun isoTimestamp(): String = Instant.now().toString()
+
+  private fun createNotificationChannel() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val channel = NotificationChannel(
+        NOTIFICATION_CHANNEL_ID,
+        NOTIFICATION_CHANNEL_NAME,
+        NotificationManager.IMPORTANCE_LOW
+      ).apply {
+        description = "Live updates for detected sounds"
+        setShowBadge(false)
+        enableLights(false)
+        enableVibration(false)
+      }
+      notificationManager?.createNotificationChannel(channel)
+    }
+  }
+
+  private fun showLiveUpdateNotification() {
+    val notification = createLiveUpdateNotification()
+    notificationManager?.notify(NOTIFICATION_ID, notification)
+  }
+
+  private fun updateLiveUpdateNotification(content: String) {
+    val now = System.currentTimeMillis()
+    if (now - lastNotificationUpdateMs < NOTIFICATION_UPDATE_THROTTLE_MS) {
+      return
+    }
+    lastNotificationUpdateMs = now
+    currentNotificationContent = content
+    val notification = createLiveUpdateNotification()
+    notificationManager?.notify(NOTIFICATION_ID, notification)
+  }
+
+  private fun hideLiveUpdateNotification() {
+    notificationManager?.cancel(NOTIFICATION_ID)
+    currentNotificationContent = ""
+  }
+
+  private fun createLiveUpdateNotification(): Notification {
+    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    val pendingIntent = PendingIntent.getActivity(
+      context,
+      0,
+      intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+      .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+      .setContentTitle("SenScribe Live Updates")
+      .setContentText(currentNotificationContent)
+      .setStyle(NotificationCompat.BigTextStyle().bigText(currentNotificationContent))
+      .setOngoing(true)
+      .setPriority(NotificationCompat.PRIORITY_LOW)
+      .setContentIntent(pendingIntent)
+      .setAutoCancel(false)
+      .build()
+  }
 }
 
 private fun JSONArray?.toStringList(): List<String> {

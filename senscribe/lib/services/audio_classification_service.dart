@@ -66,15 +66,24 @@ class AudioClassificationService {
   void _handleEvent(Map<String, dynamic> data) {
     final label = data['label'] as String? ?? 'Unknown';
     final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
+    final sourceValue = data['source'] as String? ?? 'builtIn';
+    final timestampMs = data['timestampMs'] as int?;
+    final customSoundId = data['customSoundId'] as String?;
 
     if (confidence < AppConstants.audioConfidenceThreshold) return;
 
     final caption = SoundCaption(
       sound: label,
-      timestamp: DateTime.now(),
+      timestamp: timestampMs == null
+          ? DateTime.now()
+          : DateTime.fromMillisecondsSinceEpoch(timestampMs),
       isCritical: CriticalSounds.isCritical(label),
       direction: 'Unknown',
       confidence: confidence,
+      source: sourceValue == 'custom'
+          ? SoundCaptionSource.custom
+          : SoundCaptionSource.builtIn,
+      customSoundId: customSoundId,
     );
 
     _history.insert(0, caption);

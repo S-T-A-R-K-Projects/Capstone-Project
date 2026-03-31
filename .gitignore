@@ -166,3 +166,5 @@ app.*.symbols
 .gclient_previous_custom_vars
 .gclient_previous_sync_commits
 .vscode/settings.json
+senscribe/Senscribe.ipa
+senscribe/Senscribe.apk

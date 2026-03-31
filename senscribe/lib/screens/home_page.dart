@@ -120,6 +120,11 @@ class _HomePageState extends State<HomePage> {
     if (_selectedFilter == 'Critical') {
       return _captions.where((caption) => caption.isCritical).toList();
     }
+    if (_selectedFilter == 'Custom') {
+      return _captions
+          .where((caption) => caption.source == SoundCaptionSource.custom)
+          .toList();
+    }
     return List<SoundCaption>.from(_captions);
   }
 

@@ -194,6 +194,9 @@ class AudioClassificationPlugin private constructor(
     const val NOTIFICATION_ID = 0xAC02
     private const val NOTIFICATION_UPDATE_THROTTLE_MS = 1000L
 
+    @Volatile
+    var isLiveUpdateMuted = false
+
     fun register(
       messenger: BinaryMessenger,
       context: Context,
@@ -229,6 +232,16 @@ class AudioClassificationPlugin private constructor(
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
       )
 
+      val muteIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
+        action = LiveUpdateForegroundService.ACTION_MUTE
+      }
+      val mutePendingIntent = PendingIntent.getService(
+        context,
+        1,
+        muteIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
+
       return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
         .setCustomContentView(remoteViews)
@@ -237,6 +250,20 @@ class AudioClassificationPlugin private constructor(
         .setOngoing(true)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentIntent(pendingIntent)
+        .addAction(
+          NotificationCompat.Action.Builder(
+            android.R.drawable.ic_menu_view,
+            "Open app",
+            pendingIntent
+          ).build()
+        )
+        .addAction(
+          NotificationCompat.Action.Builder(
+            android.R.drawable.ic_lock_silent_mode,
+            "Mute",
+            mutePendingIntent
+          ).build()
+        )
         .addAction(
           NotificationCompat.Action.Builder(
             android.R.drawable.ic_media_pause,
@@ -602,8 +629,8 @@ class AudioClassificationPlugin private constructor(
 
     mainHandler.post { eventSink?.success(payload) }
 
-    // Update live notification if enabled
-    if (isLiveUpdateEnabled) {
+    // Update live notification if enabled and not muted
+    if (isLiveUpdateEnabled && !isLiveUpdateMuted) {
       val confidencePercent = (audioResult.score() * 100).toInt()
       updateLiveUpdateNotification("Detected: $label (${confidencePercent}%)")
     }
@@ -677,8 +704,8 @@ class AudioClassificationPlugin private constructor(
 
     mainHandler.post { eventSink?.success(payload) }
 
-    // Update live notification if enabled
-    if (isLiveUpdateEnabled) {
+    // Update live notification if enabled and not muted
+    if (isLiveUpdateEnabled && !isLiveUpdateMuted) {
       val confidencePercent = (best.similarity * 100).toInt()
       updateLiveUpdateNotification("Detected: ${best.matcher.label} (${confidencePercent}%)")
     }

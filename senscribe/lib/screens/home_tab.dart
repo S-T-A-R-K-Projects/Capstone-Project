@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'start_page.dart';
+import 'introduction_page.dart';
 import 'unified_home_page.dart';
 
-/// HomeTab wraps the home page logic and shows StartPage only on first launch.
-/// After the user completes the start screen, it shows UnifiedHomePage.
+/// HomeTab wraps the home page logic and shows IntroductionPage only on first launch.
+/// After the user completes the introduction, it shows UnifiedHomePage.
 /// This design keeps the bottom navigation visible at all times.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -69,7 +69,7 @@ class _HomeTabState extends State<HomeTab> {
     }
 
     if (_isFirstLaunch) {
-      return StartPage(onGetStarted: _markFirstLaunchComplete);
+      return IntroductionPage(onDone: _markFirstLaunchComplete);
     }
 
     return const UnifiedHomePage();

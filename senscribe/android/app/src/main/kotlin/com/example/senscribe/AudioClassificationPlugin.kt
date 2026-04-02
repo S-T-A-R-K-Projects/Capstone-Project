@@ -216,10 +216,11 @@ class AudioClassificationPlugin private constructor(
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
       )
 
+      val muteStateText = if (isLiveUpdateMuted) "Muted - no content updates" else "Tap Stop to end monitoring"
       val remoteViews = RemoteViews(context.packageName, R.layout.live_update_notification).apply {
         setTextViewText(R.id.notification_title, title)
         setTextViewText(R.id.notification_content, content)
-        setTextViewText(R.id.notification_subtitle, "Tap Stop to end monitoring")
+        setTextViewText(R.id.notification_subtitle, muteStateText)
       }
 
       val stopIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
@@ -242,6 +243,9 @@ class AudioClassificationPlugin private constructor(
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
       )
 
+      val muteActionLabel = if (isLiveUpdateMuted) "Unmute" else "Mute"
+      val muteIcon = if (isLiveUpdateMuted) android.R.drawable.ic_lock_silent_mode_off else android.R.drawable.ic_lock_silent_mode
+
       return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
         .setCustomContentView(remoteViews)
@@ -259,8 +263,8 @@ class AudioClassificationPlugin private constructor(
         )
         .addAction(
           NotificationCompat.Action.Builder(
-            android.R.drawable.ic_lock_silent_mode,
-            "Mute",
+            muteIcon,
+            muteActionLabel,
             mutePendingIntent
           ).build()
         )

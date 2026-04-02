@@ -189,9 +189,9 @@ class AudioClassificationPlugin private constructor(
     private const val CUSTOM_REQUIRED_CONSECUTIVE_MATCHES = 2
 
     // Notification constants
-    private const val NOTIFICATION_CHANNEL_ID = "senscribe_live_updates"
-    private const val NOTIFICATION_CHANNEL_NAME = "Live Audio Updates"
-    private const val NOTIFICATION_ID = 0xAC02
+    const val NOTIFICATION_CHANNEL_ID = "senscribe_live_updates"
+    const val NOTIFICATION_CHANNEL_NAME = "Live Audio Updates"
+    const val NOTIFICATION_ID = 0xAC02
     private const val NOTIFICATION_UPDATE_THROTTLE_MS = 1000L
 
     fun register(
@@ -202,6 +202,43 @@ class AudioClassificationPlugin private constructor(
       val plugin = AudioClassificationPlugin(context, activity, messenger)
       plugin.setup()
       return plugin
+    }
+
+    fun buildNotification(context: Context, title: String, content: String): Notification {
+      val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+      val pendingIntent = PendingIntent.getActivity(
+        context,
+        0,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
+
+      return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+        .setContentTitle(title)
+        .setContentText(content)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+        .setOngoing(true)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setContentIntent(pendingIntent)
+        .addAction(
+          NotificationCompat.Action.Builder(
+            android.R.drawable.ic_media_pause,
+            "Stop",
+            PendingIntent.getService(
+              context,
+              0,
+              Intent(context, LiveUpdateForegroundService::class.java).apply {
+                action = LiveUpdateForegroundService.ACTION_STOP
+              },
+              PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+          ).build()
+        )
+        .setAutoCancel(false)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_SERVICE)
+        .build()
     }
   }
 
@@ -337,6 +374,20 @@ class AudioClassificationPlugin private constructor(
       return
     }
 
+    try {
+      val serviceIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
+        action = LiveUpdateForegroundService.ACTION_START
+      }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.startForegroundService(serviceIntent)
+      } else {
+        context.startService(serviceIntent)
+      }
+    } catch (e: Exception) {
+      result.error("service_start_failed", "Unable to start live update foreground service: ${e.message}", null)
+      return
+    }
+
     isLiveUpdateEnabled = true
     currentNotificationContent = "Listening for sounds..."
     showLiveUpdateNotification()
@@ -348,6 +399,11 @@ class AudioClassificationPlugin private constructor(
       result.success(null)
       return
     }
+
+    val stopIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
+      action = LiveUpdateForegroundService.ACTION_STOP
+    }
+    context.startService(stopIntent)
 
     isLiveUpdateEnabled = false
     hideLiveUpdateNotification()
@@ -1453,6 +1509,7 @@ class AudioClassificationPlugin private constructor(
         setShowBadge(false)
         enableLights(false)
         enableVibration(false)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
       }
       notificationManager?.createNotificationChannel(channel)
     }
@@ -1480,24 +1537,7 @@ class AudioClassificationPlugin private constructor(
   }
 
   private fun createLiveUpdateNotification(): Notification {
-    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-    val pendingIntent = PendingIntent.getActivity(
-      context,
-      0,
-      intent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-
-    return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
-      .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-      .setContentTitle("SenScribe Live Updates")
-      .setContentText(currentNotificationContent)
-      .setStyle(NotificationCompat.BigTextStyle().bigText(currentNotificationContent))
-      .setOngoing(true)
-      .setPriority(NotificationCompat.PRIORITY_LOW)
-      .setContentIntent(pendingIntent)
-      .setAutoCancel(false)
-      .build()
+    return buildNotification(context, "SenScribe Live Updates", currentNotificationContent)
   }
 }
 

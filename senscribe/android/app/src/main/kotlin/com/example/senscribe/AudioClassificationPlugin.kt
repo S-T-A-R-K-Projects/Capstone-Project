@@ -213,11 +213,27 @@ class AudioClassificationPlugin private constructor(
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
       )
 
+      val remoteViews = RemoteViews(context.packageName, R.layout.live_update_notification).apply {
+        setTextViewText(R.id.notification_title, title)
+        setTextViewText(R.id.notification_content, content)
+        setTextViewText(R.id.notification_subtitle, "Tap Stop to end monitoring")
+      }
+
+      val stopIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
+        action = LiveUpdateForegroundService.ACTION_STOP
+      }
+      val stopPendingIntent = PendingIntent.getService(
+        context,
+        0,
+        stopIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
+
       return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-        .setContentTitle(title)
-        .setContentText(content)
-        .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+        .setCustomContentView(remoteViews)
+        .setCustomBigContentView(remoteViews)
+        .setStyle(NotificationCompat.DecoratedCustomViewStyle())
         .setOngoing(true)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentIntent(pendingIntent)
@@ -225,14 +241,7 @@ class AudioClassificationPlugin private constructor(
           NotificationCompat.Action.Builder(
             android.R.drawable.ic_media_pause,
             "Stop",
-            PendingIntent.getService(
-              context,
-              0,
-              Intent(context, LiveUpdateForegroundService::class.java).apply {
-                action = LiveUpdateForegroundService.ACTION_STOP
-              },
-              PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            stopPendingIntent
           ).build()
         )
         .setAutoCancel(false)

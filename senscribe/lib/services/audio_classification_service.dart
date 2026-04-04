@@ -15,13 +15,16 @@ class AudioClassificationService {
       EventChannel('senscribe/audio_classifier_events');
 
   final List<SoundCaption> _history = [];
-  List<SoundCaption> get history => List.unmodifiable(_history);
+  List<SoundCaption> get history => _visibleHistorySnapshot();
+  int? _historyLimit = AppConstants.soundHistoryMaxItems;
+  int? get historyLimit => _historyLimit;
 
   final _historyController = StreamController<List<SoundCaption>>.broadcast();
   Stream<List<SoundCaption>> get historyStream => _historyController.stream;
 
   StreamSubscription? _nativeSubscription;
   bool _isMonitoring = false;
+  String? _lastEmittedSoundKey;
   bool get isMonitoring => _isMonitoring;
 
   void _log(String message) {
@@ -56,6 +59,7 @@ class AudioClassificationService {
     try {
       await _methodChannel.invokeMethod('stop');
       _isMonitoring = false;
+      _lastEmittedSoundKey = null;
       await _nativeSubscription?.cancel();
       _nativeSubscription = null;
     } catch (e) {
@@ -85,10 +89,62 @@ class AudioClassificationService {
       customSoundId: customSoundId,
     );
 
-    _history.insert(0, caption);
-    if (_history.length > AppConstants.soundHistoryMaxItems) {
-      _history.removeLast();
+    final soundKey = _buildSoundKey(caption);
+    if (soundKey == _lastEmittedSoundKey) {
+      return;
     }
-    _historyController.add(_history);
+
+    _lastEmittedSoundKey = soundKey;
+    _history.insert(0, caption);
+    _broadcastHistory();
+  }
+
+  String _buildSoundKey(SoundCaption caption) {
+    final normalizedLabel = caption.sound.trim().toLowerCase();
+    if (caption.source == SoundCaptionSource.custom) {
+      final customId = caption.customSoundId?.trim();
+      if (customId != null && customId.isNotEmpty) {
+        return 'custom:$customId';
+      }
+      return 'custom:$normalizedLabel';
+    }
+    return 'builtIn:$normalizedLabel';
+  }
+
+  void clearHistory() {
+    if (_history.isEmpty && _lastEmittedSoundKey == null) return;
+    _history.clear();
+    _lastEmittedSoundKey = null;
+    _broadcastHistory();
+  }
+
+  bool deleteCaption(SoundCaption caption) {
+    final removed = _history.remove(caption);
+    if (!removed) return false;
+    _lastEmittedSoundKey =
+        _history.isEmpty ? null : _buildSoundKey(_history.first);
+    _broadcastHistory();
+    return true;
+  }
+
+  void setHistoryLimit(int? limit) {
+    if (limit != null && limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be greater than zero.');
+    }
+    if (_historyLimit == limit) return;
+    _historyLimit = limit;
+    _broadcastHistory();
+  }
+
+  List<SoundCaption> _visibleHistorySnapshot() {
+    final limit = _historyLimit;
+    if (limit == null) {
+      return List<SoundCaption>.unmodifiable(_history);
+    }
+    return List<SoundCaption>.unmodifiable(_history.take(limit));
+  }
+
+  void _broadcastHistory() {
+    _historyController.add(_visibleHistorySnapshot());
   }
 }

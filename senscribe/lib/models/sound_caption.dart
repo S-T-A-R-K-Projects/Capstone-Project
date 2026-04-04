@@ -16,4 +16,9 @@ class SoundCaption {
     this.source = SoundCaptionSource.builtIn,
     this.customSoundId,
   });
+
+  String get displaySound {
+    final normalized = sound.trim().replaceAll(RegExp(r'[_\s]+'), ' ');
+    return normalized.isEmpty ? 'Unknown' : normalized;
+  }
 }

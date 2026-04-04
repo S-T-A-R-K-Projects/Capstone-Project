@@ -7,8 +7,15 @@ import '../utils/time_utils.dart';
 
 class SoundCaptionCard extends StatelessWidget {
   final SoundCaption caption;
+  final VoidCallback? onDelete;
+  final VoidCallback? onViewDetails;
 
-  const SoundCaptionCard({super.key, required this.caption});
+  const SoundCaptionCard({
+    super.key,
+    required this.caption,
+    this.onDelete,
+    this.onViewDetails,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +93,9 @@ class SoundCaptionCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            caption.sound,
+                            caption.displaySound,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -162,16 +171,16 @@ class SoundCaptionCard extends StatelessWidget {
                     value: 'details',
                   ),
                   AdaptivePopupMenuItem(
-                    label: 'Create Alert',
-                    value: 'alert',
-                  ),
-                  AdaptivePopupMenuItem(
-                    label: 'Train Custom',
-                    value: 'train',
+                    label: 'Delete',
+                    value: 'delete',
                   ),
                 ],
                 onSelected: (index, item) {
-                  //
+                  if (item.value == 'delete') {
+                    onDelete?.call();
+                  } else if (item.value == 'details') {
+                    onViewDetails?.call();
+                  }
                 },
               ),
             ],

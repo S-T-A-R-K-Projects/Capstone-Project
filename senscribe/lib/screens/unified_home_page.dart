@@ -676,8 +676,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
             shrinkWrap: true, // Needed inside SingleChildScrollView
             itemCount: _soundEvents.length,
             itemBuilder: (context, index) {
-              final screenWidth = MediaQuery.of(context).size.width;
-              final trailingWidth = screenWidth < 360 ? 116.0 : 136.0;
               final event = _soundEvents[index];
               final matchLabel =
                   '${(event.confidence * 100).toStringAsFixed(0)}%';
@@ -690,7 +688,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   color: event.isCritical ? scheme.error : scheme.primary,
                 ),
                 title: Text(
-                  event.sound,
+                  event.displaySound,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
@@ -707,8 +705,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                     color: scheme.onSurface.withValues(alpha: 0.68),
                   ),
                 ),
-                trailing: SizedBox(
-                  width: trailingWidth,
+                trailing: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48),
                   child: Text(
                     matchLabel,
                     maxLines: 1,

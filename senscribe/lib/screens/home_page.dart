@@ -116,6 +116,136 @@ class _HomePageState extends State<HomePage> {
     await _audioService.stop();
   }
 
+  void _deleteCaption(SoundCaption caption) {
+    final removed = _audioService.deleteCaption(caption);
+    if (!removed || !mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Sound removed from the feed',
+      type: AdaptiveSnackBarType.info,
+    );
+  }
+
+  void _clearCaptions() {
+    if (_captions.isEmpty) {
+      AdaptiveSnackBar.show(
+        context,
+        message: 'The sound feed is already empty',
+        type: AdaptiveSnackBarType.info,
+      );
+      return;
+    }
+    _audioService.clearHistory();
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Sound feed cleared',
+      type: AdaptiveSnackBarType.success,
+    );
+  }
+
+  Future<void> _showHistoryLimitOptions() async {
+    String customValue = _audioService.historyLimit?.toString() ?? '';
+    final selection = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Latest sound items',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHistoryLimitOption(dialogContext, '15 latest', '15'),
+                  _buildHistoryLimitOption(dialogContext, '30 latest', '30'),
+                  _buildHistoryLimitOption(dialogContext, '50 latest', '50'),
+                  _buildHistoryLimitOption(dialogContext, '100 latest', '100'),
+                  _buildHistoryLimitOption(
+                    dialogContext,
+                    'Unlimited',
+                    'unlimited',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Custom',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    initialValue: customValue,
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) => customValue = value,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter number of latest sound items',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop('custom:${customValue.trim()}'),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || selection == null) return;
+
+    if (selection.startsWith('custom:')) {
+      final rawValue = selection.substring('custom:'.length);
+      final value = int.tryParse(rawValue);
+      if (value == null || value <= 0) {
+        AdaptiveSnackBar.show(
+          context,
+          message: 'Enter a number greater than 0',
+          type: AdaptiveSnackBarType.warning,
+        );
+        return;
+      }
+      _audioService.setHistoryLimit(value);
+      setState(() {});
+      return;
+    }
+
+    final nextLimit = selection == 'unlimited' ? null : int.tryParse(selection);
+    _audioService.setHistoryLimit(nextLimit);
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildHistoryLimitOption(
+    BuildContext context,
+    String label,
+    String value,
+  ) {
+    return TextButton(
+      onPressed: () => Navigator.of(context).pop(value),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(label, style: GoogleFonts.inter()),
+      ),
+    );
+  }
+
+  String get _historyLimitLabel {
+    final limit = _audioService.historyLimit;
+    return limit == null ? 'Unlimited' : limit.toString();
+  }
+
   List<SoundCaption> get _filteredCaptions {
     if (_selectedFilter == 'Critical') {
       return _captions.where((caption) => caption.isCritical).toList();
@@ -296,6 +426,31 @@ class _HomePageState extends State<HomePage> {
                 ],
               ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _clearCaptions,
+                      label: 'Clear',
+                      style: AdaptiveButtonStyle.plain,
+                      color: scheme.error,
+                      size: AdaptiveButtonSize.small,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _showHistoryLimitOptions,
+                      label: 'Latest: $_historyLimitLabel',
+                      style: AdaptiveButtonStyle.plain,
+                      size: AdaptiveButtonSize.small,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
             // Sound Captions List
             Expanded(
@@ -331,6 +486,7 @@ class _HomePageState extends State<HomePage> {
                       ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.2),
                     )
                   : ListView.builder(
+                      padding: const EdgeInsets.only(top: 0, bottom: 8),
                       itemCount: filteredCaptions.length,
                       itemBuilder: (context, index) {
                         return AnimationConfiguration.staggeredList(
@@ -346,6 +502,8 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 child: SoundCaptionCard(
                                   caption: filteredCaptions[index],
+                                  onDelete: () =>
+                                      _deleteCaption(filteredCaptions[index]),
                                 ),
                               ),
                             ),

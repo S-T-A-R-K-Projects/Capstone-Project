@@ -21,6 +21,8 @@ import '../models/trigger_word.dart';
 import '../services/stt_transcript_service.dart';
 import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
+import '../services/app_settings_service.dart';
+import '../services/live_update_service.dart';
 
 class UnifiedHomePage extends StatefulWidget {
   const UnifiedHomePage({super.key});
@@ -35,6 +37,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   final AudioClassificationService _audioService = AudioClassificationService();
   final SpeechToText _speech = SpeechToText();
   final TextToSpeechService _ttsService = TextToSpeechService();
+  final AppSettingsService _settingsService = AppSettingsService();
+  final LiveUpdateService _liveUpdateService = LiveUpdateService();
 
   // State
   List<SoundCaption> _soundEvents = [];
@@ -88,6 +92,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
     if (_isSoundMonitoring) {
       _soundPulseController.repeat(reverse: true);
+      unawaited(_syncLiveUpdatesForMonitoring());
     }
 
     _ttsController.addListener(() {
@@ -200,12 +205,25 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   Future<void> _startSoundMonitoring() async {
     await _audioService.start();
     _soundPulseController.repeat(reverse: true);
+    await _syncLiveUpdatesForMonitoring();
   }
 
   Future<void> _stopSoundMonitoring() async {
     await _audioService.stop();
     _soundPulseController.stop();
     _soundPulseController.reset();
+    await _liveUpdateService.stopLiveUpdates();
+  }
+
+  Future<void> _syncLiveUpdatesForMonitoring() async {
+    if (!_isSoundMonitoring) return;
+
+    final liveUpdatesEnabled = await _settingsService.loadLiveUpdatesEnabled();
+    if (liveUpdatesEnabled) {
+      await _liveUpdateService.startLiveUpdates();
+    } else {
+      await _liveUpdateService.stopLiveUpdates();
+    }
   }
 
   // _handleSoundEvent removed as it's handled by service
@@ -661,7 +679,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
               final screenWidth = MediaQuery.of(context).size.width;
               final trailingWidth = screenWidth < 360 ? 116.0 : 136.0;
               final event = _soundEvents[index];
-              final matchLabel = '${(event.confidence * 100).toStringAsFixed(0)}%';
+              final matchLabel =
+                  '${(event.confidence * 100).toStringAsFixed(0)}%';
 
               return AdaptiveListTile(
                 leading: Icon(

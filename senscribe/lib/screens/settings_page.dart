@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../main.dart';
+import '../services/app_settings_service.dart';
+import '../services/audio_classification_service.dart';
 import '../services/live_update_service.dart';
 import 'alerts_page.dart';
 import 'about_support.dart';
@@ -22,36 +25,52 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  final AppSettingsService _settingsService = AppSettingsService();
+  final AudioClassificationService _audioService = AudioClassificationService();
   final LiveUpdateService _liveUpdateService = LiveUpdateService();
-  StreamSubscription<bool>? _liveUpdateSubscription;
   bool _isLiveUpdateEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    _isLiveUpdateEnabled = _liveUpdateService.isEnabled;
-    _liveUpdateSubscription = _liveUpdateService.statusStream.listen((enabled) {
-      if (!mounted) return;
-      setState(() {
-        _isLiveUpdateEnabled = enabled;
-      });
-    });
+    unawaited(_loadSettings());
   }
 
   @override
   void dispose() {
-    _liveUpdateSubscription?.cancel();
     super.dispose();
   }
 
+  Future<void> _loadSettings() async {
+    final liveUpdatesEnabled = await _settingsService.loadLiveUpdatesEnabled();
+    if (!mounted) return;
+    setState(() {
+      _isLiveUpdateEnabled = liveUpdatesEnabled;
+    });
+  }
+
   Future<void> _toggleLiveUpdates(bool enabled) async {
+    setState(() {
+      _isLiveUpdateEnabled = enabled;
+    });
+
+    await _settingsService.saveLiveUpdatesEnabled(enabled);
+
     try {
-      if (enabled) {
+      if (!Platform.isAndroid) return;
+
+      if (enabled && _audioService.isMonitoring) {
         await _liveUpdateService.startLiveUpdates();
-      } else {
+      } else if (!enabled && _liveUpdateService.isEnabled) {
         await _liveUpdateService.stopLiveUpdates();
       }
     } catch (error) {
+      await _settingsService.saveLiveUpdatesEnabled(!enabled);
+      if (mounted) {
+        setState(() {
+          _isLiveUpdateEnabled = !enabled;
+        });
+      }
       if (!mounted) return;
       AdaptiveSnackBar.show(
         context,
@@ -262,12 +281,16 @@ class _SettingsPageState extends State<SettingsPage> {
                         size: 24,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        'Trigger Words & Custom Sounds',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
+                      Expanded(
+                        child: Text(
+                          'Trigger Words & Custom Sounds',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                       ),
                     ],
@@ -378,52 +401,56 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Microphone, Notifications, Haptics, and Background processing permissions.',
+                    Platform.isIOS
+                        ? 'Microphone, speech recognition, notifications, and background audio behavior.'
+                        : 'Microphone, notifications, battery optimization, and background monitoring behavior.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.notifications_active_rounded,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Live Updates',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Show local notification updates while sound monitoring is active.',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color,
-                              ),
-                            ),
-                          ],
+                  if (Platform.isAndroid) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.notifications_active_rounded,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Switch.adaptive(
-                        value: _isLiveUpdateEnabled,
-                        onChanged: _toggleLiveUpdates,
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Live Updates',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Keep the Android foreground notification active while sound monitoring is running in the background.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Switch.adaptive(
+                          value: _isLiveUpdateEnabled,
+                          onChanged: _toggleLiveUpdates,
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -483,7 +510,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         await HomeTab.homeTabKey.currentState?.showOnboarding();
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Onboarding restarted. Go back to Home to continue.'),
+                            content: Text(
+                                'Onboarding restarted. Go back to Home to continue.'),
                             duration: Duration(seconds: 2),
                           ),
                         );

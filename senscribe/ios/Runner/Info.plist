@@ -74,5 +74,9 @@
 	<string>SenScribe needs access to the microphone to classify sounds in your environment.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>SenScribe needs access to speech recognition to transcribe spoken words into text.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>

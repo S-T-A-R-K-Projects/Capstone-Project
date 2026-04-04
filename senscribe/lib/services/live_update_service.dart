@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -25,6 +26,7 @@ class LiveUpdateService {
   }
 
   Future<void> startLiveUpdates() async {
+    if (!Platform.isAndroid) return;
     if (_isEnabled) return;
 
     // Request notification permission if needed
@@ -48,6 +50,7 @@ class LiveUpdateService {
   }
 
   Future<void> stopLiveUpdates() async {
+    if (!Platform.isAndroid) return;
     if (!_isEnabled) return;
     try {
       await _methodChannel.invokeMethod('stopLiveUpdates');

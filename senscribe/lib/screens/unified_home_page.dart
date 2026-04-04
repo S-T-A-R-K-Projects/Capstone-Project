@@ -21,7 +21,6 @@ import '../models/trigger_word.dart';
 import '../services/stt_transcript_service.dart';
 import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
-import '../services/app_settings_service.dart';
 import '../services/live_update_service.dart';
 
 class UnifiedHomePage extends StatefulWidget {
@@ -37,7 +36,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   final AudioClassificationService _audioService = AudioClassificationService();
   final SpeechToText _speech = SpeechToText();
   final TextToSpeechService _ttsService = TextToSpeechService();
-  final AppSettingsService _settingsService = AppSettingsService();
   final LiveUpdateService _liveUpdateService = LiveUpdateService();
 
   // State
@@ -92,7 +90,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
     if (_isSoundMonitoring) {
       _soundPulseController.repeat(reverse: true);
-      unawaited(_syncLiveUpdatesForMonitoring());
+      unawaited(_syncLiveUpdatesSafely(isMonitoring: true));
     }
 
     _ttsController.addListener(() {
@@ -204,25 +202,29 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   Future<void> _startSoundMonitoring() async {
     await _audioService.start();
+    if (!_audioService.isMonitoring) {
+      if (!mounted) return;
+      setState(() {
+        _isSoundMonitoring = false;
+      });
+      return;
+    }
     _soundPulseController.repeat(reverse: true);
-    await _syncLiveUpdatesForMonitoring();
+    await _syncLiveUpdatesSafely(isMonitoring: true);
   }
 
   Future<void> _stopSoundMonitoring() async {
     await _audioService.stop();
     _soundPulseController.stop();
     _soundPulseController.reset();
-    await _liveUpdateService.stopLiveUpdates();
+    await _syncLiveUpdatesSafely(isMonitoring: false);
   }
 
-  Future<void> _syncLiveUpdatesForMonitoring() async {
-    if (!_isSoundMonitoring) return;
-
-    final liveUpdatesEnabled = await _settingsService.loadLiveUpdatesEnabled();
-    if (liveUpdatesEnabled) {
-      await _liveUpdateService.startLiveUpdates();
-    } else {
-      await _liveUpdateService.stopLiveUpdates();
+  Future<void> _syncLiveUpdatesSafely({required bool isMonitoring}) async {
+    try {
+      await _liveUpdateService.syncMonitoringState(isMonitoring: isMonitoring);
+    } catch (error) {
+      debugPrint('Live update sync failed: $error');
     }
   }
 

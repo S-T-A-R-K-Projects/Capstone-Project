@@ -57,13 +57,9 @@ class _SettingsPageState extends State<SettingsPage> {
     await _settingsService.saveLiveUpdatesEnabled(enabled);
 
     try {
-      if (!Platform.isAndroid) return;
-
-      if (enabled && _audioService.isMonitoring) {
-        await _liveUpdateService.startLiveUpdates();
-      } else if (!enabled && _liveUpdateService.isEnabled) {
-        await _liveUpdateService.stopLiveUpdates();
-      }
+      await _liveUpdateService.syncMonitoringState(
+        isMonitoring: _audioService.isMonitoring,
+      );
     } catch (error) {
       await _settingsService.saveLiveUpdatesEnabled(!enabled);
       if (mounted) {
@@ -402,55 +398,57 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 12),
                   Text(
                     Platform.isIOS
-                        ? 'Microphone, speech recognition, notifications, and background audio behavior.'
+                        ? 'Microphone, speech recognition, local alerts, Live Activities, and background audio behavior.'
                         : 'Microphone, notifications, battery optimization, and background monitoring behavior.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
                   ),
-                  if (Platform.isAndroid) ...[
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.notifications_active_rounded,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Live Updates',
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(
+                        Platform.isIOS
+                            ? Icons.play_circle_outline_rounded
+                            : Icons.notifications_active_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Live Updates',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Keep the Android foreground notification active while sound monitoring is running in the background.',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.color,
-                                ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              Platform.isIOS
+                                  ? 'Show an iPhone Live Activity while sound monitoring is running, including Lock Screen and Notification Center status.'
+                                  : 'Keep the Android foreground notification active while sound monitoring is running in the background.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.color,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Switch.adaptive(
-                          value: _isLiveUpdateEnabled,
-                          onChanged: _toggleLiveUpdates,
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: 12),
+                      Switch.adaptive(
+                        value: _isLiveUpdateEnabled,
+                        onChanged: _toggleLiveUpdates,
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerLeft,

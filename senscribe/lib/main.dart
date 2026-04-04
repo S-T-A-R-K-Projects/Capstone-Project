@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'services/audio_classification_service.dart';
 import 'services/app_settings_service.dart';
+import 'services/live_update_service.dart';
 import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
 
@@ -12,6 +14,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = true;
   await ThemeProvider.instance.load();
+  await LiveUpdateService().initialize(
+    audioService: AudioClassificationService(),
+  );
   runApp(const SenScribeApp());
 }
 

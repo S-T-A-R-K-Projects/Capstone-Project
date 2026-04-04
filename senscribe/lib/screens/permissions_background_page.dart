@@ -240,7 +240,7 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
                     const SizedBox(height: 8),
                     Text(
                       Platform.isIOS
-                          ? 'Monitor microphone, speech recognition, notifications, and background audio readiness.'
+                          ? 'Monitor microphone, speech recognition, local alerts, Live Activities, and background audio readiness.'
                           : 'Monitor microphone, notifications, battery optimization, and background monitoring readiness.',
                       style: GoogleFonts.inter(
                         fontSize: 14,
@@ -267,8 +267,9 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
                     const SizedBox(height: 16),
                     _buildPermissionCard(
                       title: 'Notifications',
-                      description:
-                          'Required for local alerts and Android live update notifications.',
+                      description: Platform.isIOS
+                          ? 'Used for local alerts. Live Activities are managed separately by iOS when supported.'
+                          : 'Required for local alerts and Android live update notifications.',
                       icon: Icons.notifications_rounded,
                       status: _snapshot!.notifications,
                       onEnable: () => _requestPermission(
@@ -354,7 +355,7 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
                           const SizedBox(height: 12),
                           Text(
                             Platform.isIOS
-                                ? 'SenScribe is configured for background audio activity on iOS 17 and later. Microphone permission is required, and speech recognition remains a separate iOS permission for transcription only.'
+                                ? 'SenScribe is configured for background audio activity on iOS 17 and later. When Live Updates are enabled, sound monitoring can surface in a Live Activity while the app remains active in the background. Microphone permission is required, and speech recognition remains a separate iOS permission for transcription only.'
                                 : 'SenScribe uses an Android foreground microphone service for background live updates. For the most reliable background behavior, keep notifications enabled and disable battery optimization for the app.',
                             style: GoogleFonts.inter(
                               fontSize: 14,

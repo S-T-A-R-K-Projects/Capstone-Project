@@ -21,6 +21,7 @@ import '../models/trigger_word.dart';
 import '../services/stt_transcript_service.dart';
 import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
+import '../services/live_update_service.dart';
 
 class UnifiedHomePage extends StatefulWidget {
   const UnifiedHomePage({super.key});
@@ -35,6 +36,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   final AudioClassificationService _audioService = AudioClassificationService();
   final SpeechToText _speech = SpeechToText();
   final TextToSpeechService _ttsService = TextToSpeechService();
+  final LiveUpdateService _liveUpdateService = LiveUpdateService();
 
   // State
   List<SoundCaption> _soundEvents = [];
@@ -50,6 +52,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   bool _isSoundMonitoring = false;
   bool _isSpeechMonitoring = false;
   bool _isSpeechAvailable = false;
+  bool _isLiveUpdateEnabled = false;
 
   StreamSubscription? _audioSubscription;
   StreamSubscription<SttTranscriptSnapshot>? _transcriptSubscription;
@@ -77,6 +80,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       if (mounted) {
         setState(() {
           _soundEvents = events;
+        });
+      }
+    });
+
+    // Subscribe to live update status
+    _liveUpdateService.statusStream.listen((enabled) {
+      if (mounted) {
+        setState(() {
+          _isLiveUpdateEnabled = enabled;
         });
       }
     });
@@ -206,6 +218,24 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     await _audioService.stop();
     _soundPulseController.stop();
     _soundPulseController.reset();
+  }
+
+  void _toggleLiveUpdates() async {
+    try {
+      if (_isLiveUpdateEnabled) {
+        await _liveUpdateService.stopLiveUpdates();
+      } else {
+        await _liveUpdateService.startLiveUpdates();
+      }
+    } catch (e) {
+      if (mounted) {
+        AdaptiveSnackBar.show(
+          context,
+          message: 'Failed to toggle live updates: $e',
+          type: AdaptiveSnackBarType.error,
+        );
+      }
+    }
   }
 
   // _handleSoundEvent removed as it's handled by service
@@ -638,66 +668,106 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    if (_soundEvents.isEmpty) {
-      return Center(
-          child: Text("No sounds detected",
-              style: GoogleFonts.inter(
-                  color: scheme.onSurface.withValues(alpha: 0.72))));
-    }
-
-    return ListView.builder(
-      physics: const NeverScrollableScrollPhysics(), // Nested scrolling
-      shrinkWrap: true, // Needed inside SingleChildScrollView
-      itemCount: _soundEvents.length,
-      itemBuilder: (context, index) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final trailingWidth = screenWidth < 360 ? 116.0 : 136.0;
-        final event = _soundEvents[index];
-        final directionLabel =
-            event.direction.trim().isEmpty ? 'Unknown' : event.direction;
-        final matchLabel = '${(event.confidence * 100).toStringAsFixed(0)}%';
-
-        return AdaptiveListTile(
-          leading: Icon(
-            event.isCritical
-                ? Icons.warning_amber_rounded
-                : Icons.music_note_rounded,
-            color: event.isCritical ? scheme.error : scheme.primary,
+    return Column(
+      children: [
+        // Live Updates Toggle
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.notifications_active_rounded,
+                size: 20,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Live Updates',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _isLiveUpdateEnabled,
+                onChanged: (value) => _toggleLiveUpdates(),
+                activeThumbColor: scheme.primary,
+              ),
+            ],
           ),
-          title: Text(
-            event.sound,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.bold,
-              color: scheme.onSurface,
-            ),
-          ),
-          subtitle: Text(
-            TimeUtils.formatTimeAgo(event.timestamp),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: scheme.onSurface.withValues(alpha: 0.68),
-            ),
-          ),
-          trailing: SizedBox(
-            width: trailingWidth,
-            child: Text(
-              '$matchLabel • $directionLabel',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: scheme.onSurface.withValues(alpha: 0.84),
+        ),
+        // Sound Events List
+        if (_soundEvents.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                "No sounds detected",
+                style: GoogleFonts.inter(
+                  color: scheme.onSurface.withValues(alpha: 0.72),
+                ),
               ),
             ),
+          )
+        else
+          ListView.builder(
+            physics: const NeverScrollableScrollPhysics(), // Nested scrolling
+            shrinkWrap: true, // Needed inside SingleChildScrollView
+            itemCount: _soundEvents.length,
+            itemBuilder: (context, index) {
+              final screenWidth = MediaQuery.of(context).size.width;
+              final trailingWidth = screenWidth < 360 ? 116.0 : 136.0;
+              final event = _soundEvents[index];
+              final directionLabel =
+                  event.direction.trim().isEmpty ? 'Unknown' : event.direction;
+              final matchLabel = '${(event.confidence * 100).toStringAsFixed(0)}%';
+
+              return AdaptiveListTile(
+                leading: Icon(
+                  event.isCritical
+                      ? Icons.warning_amber_rounded
+                      : Icons.music_note_rounded,
+                  color: event.isCritical ? scheme.error : scheme.primary,
+                ),
+                title: Text(
+                  event.sound,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.bold,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                subtitle: Text(
+                  TimeUtils.formatTimeAgo(event.timestamp),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: scheme.onSurface.withValues(alpha: 0.68),
+                  ),
+                ),
+                trailing: SizedBox(
+                  width: trailingWidth,
+                  child: Text(
+                    '$matchLabel • $directionLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface.withValues(alpha: 0.84),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-        );
-      },
+      ],
     );
   }
 

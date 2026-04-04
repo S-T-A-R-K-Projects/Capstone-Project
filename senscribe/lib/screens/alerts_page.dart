@@ -10,7 +10,12 @@ import '../models/trigger_alert.dart';
 import '../utils/time_utils.dart';
 
 class AlertsPage extends StatefulWidget {
-  const AlertsPage({super.key});
+  final int initialTabIndex;
+
+  const AlertsPage({
+    super.key,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<AlertsPage> createState() => _AlertsPageState();
@@ -23,6 +28,18 @@ class _AlertsPageState extends State<AlertsPage> {
   int _selectedTabIndex = 0; // 0 = Alerts, 1 = Trigger Words
   bool _isAlertSelectionMode = false;
   final Set<String> _selectedAlertIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialTabIndex < 0) {
+      _selectedTabIndex = 0;
+    } else if (widget.initialTabIndex > 1) {
+      _selectedTabIndex = 1;
+    } else {
+      _selectedTabIndex = widget.initialTabIndex;
+    }
+  }
 
   @override
   void dispose() {

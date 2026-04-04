@@ -1,12 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../main.dart';
+import '../services/live_update_service.dart';
+import 'alerts_page.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
 import 'home_tab.dart';
-import 'name_recognition_page.dart';
 import 'privacy_data_page.dart';
 import 'permissions_background_page.dart';
 import 'model_settings_page.dart';
@@ -19,6 +22,45 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  final LiveUpdateService _liveUpdateService = LiveUpdateService();
+  StreamSubscription<bool>? _liveUpdateSubscription;
+  bool _isLiveUpdateEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLiveUpdateEnabled = _liveUpdateService.isEnabled;
+    _liveUpdateSubscription = _liveUpdateService.statusStream.listen((enabled) {
+      if (!mounted) return;
+      setState(() {
+        _isLiveUpdateEnabled = enabled;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _liveUpdateSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _toggleLiveUpdates(bool enabled) async {
+    try {
+      if (enabled) {
+        await _liveUpdateService.startLiveUpdates();
+      } else {
+        await _liveUpdateService.stopLiveUpdates();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Failed to update live updates: $error',
+        type: AdaptiveSnackBarType.error,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = ThemeProvider.instance;
@@ -206,7 +248,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
             const SizedBox(height: 8),
 
-            // Name Recognition - styled card like About & Support
+            // Trigger Words & Custom Sounds
             AdaptiveCard(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -215,13 +257,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   Row(
                     children: [
                       Icon(
-                        Icons.person_rounded,
+                        Icons.notifications_active_rounded,
                         color: Theme.of(context).colorScheme.primary,
                         size: 24,
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Name Recognition',
+                        'Trigger Words & Custom Sounds',
                         style: GoogleFonts.inter(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -232,7 +274,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Enter name, enable recognition, and choose a haptic pattern.',
+                    'Add trigger words for speech monitoring and train custom sounds for local audio alerts. Everything stays on this device.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
@@ -244,10 +286,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: AdaptiveButton(
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const NameRecognitionPage(),
+                          builder: (_) => const AlertsPage(initialTabIndex: 1),
                         ),
                       ),
-                      label: 'Open',
+                      label: 'Open Trigger Words',
                       style: AdaptiveButtonStyle.plain,
                     ),
                   ),
@@ -283,7 +325,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'On-device processing, export/delete history, and consent preferences.',
+                    'No data collection, no cloud upload, and local-only storage for the items you create in the app.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
@@ -341,6 +383,46 @@ class _SettingsPageState extends State<SettingsPage> {
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.notifications_active_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Live Updates',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Show local notification updates while sound monitoring is active.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.color,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Switch.adaptive(
+                        value: _isLiveUpdateEnabled,
+                        onChanged: _toggleLiveUpdates,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Align(
@@ -468,6 +550,4 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-
-  // no disposable controllers yet
 }

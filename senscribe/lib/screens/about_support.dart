@@ -7,6 +7,28 @@ class AboutSupportPage extends StatelessWidget {
   const AboutSupportPage({super.key});
 
   static const _supportEmail = 'support@senscribe.example';
+  static const List<String> _directDependencies = [
+    'adaptive_platform_ui',
+    'animated_bottom_navigation_bar',
+    'cupertino_icons',
+    'dio',
+    'flutter_animate',
+    'flutter_localizations',
+    'flutter_speed_dial',
+    'flutter_staggered_animations',
+    'flutter_tts',
+    'google_fonts',
+    'liquid_ai',
+    'lottie',
+    'path',
+    'path_provider',
+    'permission_handler',
+    'shared_preferences',
+    'shimmer',
+    'speech_to_text',
+    'url_launcher',
+    'uuid',
+  ];
 
   void _copyEmail(BuildContext context) async {
     await Clipboard.setData(const ClipboardData(text: _supportEmail));
@@ -15,6 +37,14 @@ class AboutSupportPage extends StatelessWidget {
       context,
       message: 'Support email copied to clipboard',
       type: AdaptiveSnackBarType.success,
+    );
+  }
+
+  void _showLicenses(BuildContext context) {
+    showLicensePage(
+      context: context,
+      applicationName: 'SenScribe',
+      applicationVersion: '1.0.0',
     );
   }
 
@@ -44,7 +74,7 @@ class AboutSupportPage extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Accessibility-focused audio classification and speech processing.',
+                'On-device sound recognition, speech tools, trigger words, and custom sound alerts.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: Theme.of(context).textTheme.bodySmall?.color,
@@ -58,7 +88,7 @@ class AboutSupportPage extends StatelessWidget {
                 'What is SenScribe?',
                 Icons.info_rounded,
                 'SenScribe is a mobile application that provides real-time audio classification and speech processing capabilities for accessibility and productivity.\n\n'
-                    'The app classifies environmental sounds, converts speech to text, converts text to speech, and provides customizable alerts for critical sounds.\n\n'
+                    'The app classifies environmental sounds, converts speech to text, converts text to speech, checks speech for trigger words, and lets you train custom sounds for local alerts.\n\n'
                     'All processing happens on your device—no data is sent to external servers.',
               ),
               const SizedBox(height: 16),
@@ -71,8 +101,9 @@ class AboutSupportPage extends StatelessWidget {
                 '• Real-time sound classification using AI/ML\n'
                     '• Speech-to-Text for voice input\n'
                     '• Text-to-Speech for audio output\n'
-                    '• Custom name recognition alerts\n'
-                    '• History tracking and export\n'
+                    '• Trigger words for speech alerts\n'
+                    '• Custom sound training and detection\n'
+                    '• Local history tracking\n'
                     '• Privacy-first design (on-device processing)',
               ),
               const SizedBox(height: 16),
@@ -112,8 +143,8 @@ class AboutSupportPage extends StatelessWidget {
                 context,
                 'Platform Support',
                 Icons.devices_rounded,
-                '• Android 6.0+ (API 23+)\n'
-                    '• iOS 12.0+\n'
+                '• Android 12+ (API 31+)\n'
+                    '• iOS 17.0+\n'
                     '• Requires microphone permissions\n'
                     '• Works offline (no internet required)\n'
                     '• Optimized for Bluetooth/headset microphones',
@@ -148,22 +179,7 @@ class AboutSupportPage extends StatelessWidget {
               const SizedBox(height: 16),
 
               // Dependencies
-              _buildSection(
-                context,
-                'Open Source Dependencies',
-                Icons.extension_rounded,
-                '• flutter_animate\n'
-                    '• google_fonts\n'
-                    '• animated_bottom_navigation_bar\n'
-                    '• flutter_speed_dial\n'
-                    '• flutter_staggered_animations\n'
-                    '• permission_handler\n'
-                    '• speech_to_text\n'
-                    '• shared_preferences\n'
-                    '• lottie\n'
-                    '• shimmer\n'
-                    '& more...',
-              ),
+              _buildDependenciesSection(context),
               const SizedBox(height: 16),
 
               // Support & Contact
@@ -190,7 +206,7 @@ class AboutSupportPage extends StatelessWidget {
                     'Q: Why is accuracy sometimes low?\n'
                     'A: Accuracy depends on sound clarity and background noise.\n\n'
                     'Q: Can I export my history?\n'
-                    'A: Yes, you can export all your data anytime.',
+                    'A: Not currently. Saved app data stays local on this device unless you delete it.',
               ),
               const SizedBox(height: 24),
 
@@ -251,6 +267,83 @@ class AboutSupportPage extends StatelessWidget {
             style: GoogleFonts.inter(
               fontSize: 14,
               height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDependenciesSection(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return AdaptiveCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.extension_rounded,
+                color: scheme.primary,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Open Source Dependencies',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: scheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'This build uses the direct Flutter dependencies listed below. Use View Licenses to inspect bundled package attributions and full license text available in the app.',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _directDependencies
+                .map(
+                  (dependency) => Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      dependency,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AdaptiveButton(
+              onPressed: () => _showLicenses(context),
+              label: 'View Licenses',
+              style: AdaptiveButtonStyle.plain,
             ),
           ),
         ],

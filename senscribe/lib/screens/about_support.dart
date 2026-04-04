@@ -72,7 +72,6 @@ class AboutSupportPage extends StatelessWidget {
                     '• Speech-to-Text for voice input\n'
                     '• Text-to-Speech for audio output\n'
                     '• Custom name recognition alerts\n'
-                    '• Sound direction detection\n'
                     '• History tracking and export\n'
                     '• Privacy-first design (on-device processing)',
               ),

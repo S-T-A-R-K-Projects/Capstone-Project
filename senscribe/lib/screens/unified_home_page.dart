@@ -721,8 +721,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
               final screenWidth = MediaQuery.of(context).size.width;
               final trailingWidth = screenWidth < 360 ? 116.0 : 136.0;
               final event = _soundEvents[index];
-              final directionLabel =
-                  event.direction.trim().isEmpty ? 'Unknown' : event.direction;
               final matchLabel = '${(event.confidence * 100).toStringAsFixed(0)}%';
 
               return AdaptiveListTile(
@@ -753,7 +751,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                 trailing: SizedBox(
                   width: trailingWidth,
                   child: Text(
-                    '$matchLabel • $directionLabel',
+                    matchLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,

@@ -78,7 +78,6 @@ class AudioClassificationService {
           ? DateTime.now()
           : DateTime.fromMillisecondsSinceEpoch(timestampMs),
       isCritical: CriticalSounds.isCritical(label),
-      direction: 'Unknown',
       confidence: confidence,
       source: sourceValue == 'custom'
           ? SoundCaptionSource.custom

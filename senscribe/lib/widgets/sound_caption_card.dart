@@ -10,25 +10,16 @@ class SoundCaptionCard extends StatelessWidget {
 
   const SoundCaptionCard({super.key, required this.caption});
 
-  IconData _getDirectionIcon(String direction) {
-    switch (direction.toLowerCase()) {
-      case 'front':
-        return Icons.arrow_upward_rounded;
-      case 'back':
-        return Icons.arrow_downward_rounded;
-      case 'left':
-        return Icons.arrow_back_rounded;
-      case 'right':
-        return Icons.arrow_forward_rounded;
-      default:
-        return Icons.my_location_rounded;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final leadingIcon = caption.isCritical
+        ? Icons.warning_rounded
+        : caption.source == SoundCaptionSource.custom
+            ? Icons.tune_rounded
+            : Icons.music_note_rounded;
+    final leadingColor = caption.isCritical ? Colors.red : scheme.primary;
 
     return AdaptiveCard(
       padding: const EdgeInsets.all(0),
@@ -54,7 +45,7 @@ class SoundCaptionCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Sound Direction Indicator
+              // Sound event indicator
               Container(
                 width: 48,
                 height: 48,
@@ -79,12 +70,8 @@ class SoundCaptionCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  caption.isCritical
-                      ? Icons.warning_rounded
-                      : _getDirectionIcon(caption.direction),
-                  color: caption.isCritical
-                      ? Colors.red
-                      : Theme.of(context).colorScheme.primary,
+                  leadingIcon,
+                  color: leadingColor,
                   size: 24,
                 ),
               ),
@@ -153,11 +140,6 @@ class SoundCaptionCard extends StatelessWidget {
                         _buildInfoChip(
                           Icons.access_time_rounded,
                           TimeUtils.formatTimeAgoForSound(caption.timestamp),
-                          context,
-                        ),
-                        _buildInfoChip(
-                          _getDirectionIcon(caption.direction),
-                          caption.direction,
                           context,
                         ),
                         _buildInfoChip(

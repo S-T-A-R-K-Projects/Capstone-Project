@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
 import 'home_tab.dart';
 import 'name_recognition_page.dart';
-import 'sound_direction_page.dart';
 import 'privacy_data_page.dart';
 import 'permissions_background_page.dart';
 import 'model_settings_page.dart';
@@ -250,57 +248,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                       ),
                       label: 'Open',
-                      style: AdaptiveButtonStyle.plain,
-                    ),
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
-
-            const SizedBox(height: 8),
-
-            // Sound Direction - styled card like About & Support
-            AdaptiveCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.navigation_rounded,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Sound Direction',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Enable sound direction detection, run a calibration routine, and view tips.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: AdaptiveButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SoundDirectionPage(),
-                        ),
-                      ),
-                      label: 'Calibrate',
                       style: AdaptiveButtonStyle.plain,
                     ),
                   ),

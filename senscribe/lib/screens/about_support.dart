@@ -9,17 +9,14 @@ class AboutSupportPage extends StatelessWidget {
   static const _supportEmail = 'support@senscribe.example';
   static const List<String> _directDependencies = [
     'adaptive_platform_ui',
-    'animated_bottom_navigation_bar',
     'cupertino_icons',
     'dio',
     'flutter_animate',
     'flutter_localizations',
-    'flutter_speed_dial',
     'flutter_staggered_animations',
     'flutter_tts',
     'google_fonts',
     'liquid_ai',
-    'lottie',
     'path',
     'path_provider',
     'permission_handler',

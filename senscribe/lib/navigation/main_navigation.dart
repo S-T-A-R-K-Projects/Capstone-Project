@@ -17,7 +17,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   final AppPermissionService _permissionService = AppPermissionService();
   int _selectedIndex = 0;
   final List<Widget> _pages = [
-    HomeTab(key: HomeTab.homeTabKey),
+    HomeTab(key: HomeTab.navigationKey),
     const HistoryPage(),
     const AlertsPage(),
     const SettingsPage(),

@@ -507,13 +507,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     alignment: Alignment.centerLeft,
                     child: AdaptiveButton(
                       onPressed: () async {
-                        await HomeTab.homeTabKey.currentState?.showOnboarding();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                'Onboarding restarted. Go back to Home to continue.'),
-                            duration: Duration(seconds: 2),
-                          ),
+                        await HomeTab.restartOnboarding();
+                        if (!context.mounted) return;
+                        AdaptiveSnackBar.show(
+                          context,
+                          message:
+                              'Onboarding restarted. Go back to Home to continue.',
+                          type: AdaptiveSnackBarType.success,
                         );
                         if (Navigator.of(context).canPop()) {
                           Navigator.of(context).pop();

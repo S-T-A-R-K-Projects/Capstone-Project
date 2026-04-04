@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 class StartPage extends StatefulWidget {
   final VoidCallback? onGetStarted;
 
-  const StartPage({Key? key, this.onGetStarted}) : super(key: key);
+  const StartPage({super.key, this.onGetStarted});
 
   @override
   State<StartPage> createState() => _StartPageState();
@@ -159,15 +159,17 @@ class _StartPageState extends State<StartPage> {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                theme.colorScheme.primary.withOpacity(0.85),
-                                theme.colorScheme.secondary.withOpacity(0.85),
+                                theme.colorScheme.primary
+                                    .withValues(alpha: 0.85),
+                                theme.colorScheme.secondary
+                                    .withValues(alpha: 0.85),
                               ],
                             ),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: theme.colorScheme.primary.withOpacity(
-                                  0.3,
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.3,
                                 ),
                                 blurRadius: 14,
                                 offset: const Offset(0, 8),
@@ -215,7 +217,8 @@ class _StartPageState extends State<StartPage> {
                         shape: BoxShape.circle,
                         color: _pageIndex == index
                             ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface.withOpacity(0.25),
+                            : theme.colorScheme.onSurface
+                                .withValues(alpha: 0.25),
                       ),
                     ),
                   ),

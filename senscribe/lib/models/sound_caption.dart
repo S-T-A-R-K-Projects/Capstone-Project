@@ -17,8 +17,12 @@ class SoundCaption {
     this.customSoundId,
   });
 
-  String get displaySound {
-    final normalized = sound.trim().replaceAll(RegExp(r'[_\s]+'), ' ');
+  static final RegExp _displaySoundPattern = RegExp(r'[_\s]+');
+
+  late final String displaySound = _computeDisplaySound();
+
+  String _computeDisplaySound() {
+    final normalized = sound.trim().replaceAll(_displaySoundPattern, ' ');
     return normalized.isEmpty ? 'Unknown' : normalized;
   }
 }

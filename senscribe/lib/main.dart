@@ -12,7 +12,7 @@ import 'navigation/main_navigation.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  GoogleFonts.config.allowRuntimeFetching = true;
+  GoogleFonts.config.allowRuntimeFetching = false;
   await ThemeProvider.instance.load();
   await LiveUpdateService().initialize(
     audioService: AudioClassificationService(),

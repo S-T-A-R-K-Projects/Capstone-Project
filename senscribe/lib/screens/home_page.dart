@@ -34,6 +34,9 @@ class _HomePageState extends State<HomePage> {
   StreamSubscription<List<SoundCaption>>? _classificationSubscription;
   late bool _isMonitoring;
 
+  // Cached filtered list — invalidated when _captions or _selectedFilter change.
+  List<SoundCaption>? _filteredCaptionsCache;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +49,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _captions = events;
+          _filteredCaptionsCache = null; // invalidate
         });
       }
     });
@@ -247,15 +251,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<SoundCaption> get _filteredCaptions {
+    if (_filteredCaptionsCache != null) return _filteredCaptionsCache!;
+    final List<SoundCaption> result;
     if (_selectedFilter == 'Critical') {
-      return _captions.where((caption) => caption.isCritical).toList();
-    }
-    if (_selectedFilter == 'Custom') {
-      return _captions
+      result = _captions.where((caption) => caption.isCritical).toList();
+    } else if (_selectedFilter == 'Custom') {
+      result = _captions
           .where((caption) => caption.source == SoundCaptionSource.custom)
           .toList();
+    } else {
+      result = List<SoundCaption>.from(_captions);
     }
-    return List<SoundCaption>.from(_captions);
+    _filteredCaptionsCache = result;
+    return result;
   }
 
   @override
@@ -382,6 +390,7 @@ class _HomePageState extends State<HomePage> {
                               onSelected: (selected) {
                                 setState(() {
                                   _selectedFilter = filter;
+                                  _filteredCaptionsCache = null;
                                 });
                               },
                               selectedColor: scheme.primary,

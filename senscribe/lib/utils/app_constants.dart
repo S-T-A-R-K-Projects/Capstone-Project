@@ -31,7 +31,7 @@ class AppConstants {
 class CriticalSounds {
   CriticalSounds._();
 
-  static const List<String> labels = [
+  static const Set<String> labels = {
     'siren',
     'fire_alarm',
     'smoke_alarm',
@@ -39,7 +39,7 @@ class CriticalSounds {
     'baby_crying',
     'glass_breaking',
     'gunshot',
-  ];
+  };
 
   static bool isCritical(String label) {
     return labels.contains(label.toLowerCase().replaceAll(' ', '_'));

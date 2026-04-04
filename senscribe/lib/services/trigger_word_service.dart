@@ -22,12 +22,19 @@ class TriggerWordService {
       _triggerWordsController.stream;
   Stream<List<TriggerAlert>> get alertsStream => _alertsController.stream;
 
+  // In-memory caches — invalidated on every write operation.
+  List<TriggerWord>? _triggerWordsCache;
+  List<TriggerAlert>? _alertsCache;
+
   Future<List<TriggerWord>> loadTriggerWords() async {
+    if (_triggerWordsCache != null) return _triggerWordsCache!;
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_kTriggerWordsKey);
     if (json == null || json.isEmpty) return [];
     try {
-      return TriggerWord.decodeList(json);
+      final words = TriggerWord.decodeList(json);
+      _triggerWordsCache = words;
+      return words;
     } catch (_) {
       return [];
     }
@@ -37,6 +44,7 @@ class TriggerWordService {
     final prefs = await SharedPreferences.getInstance();
     final json = TriggerWord.encodeList(words);
     await prefs.setString(_kTriggerWordsKey, json);
+    _triggerWordsCache = words;
     _triggerWordsController.add(words);
   }
 
@@ -96,11 +104,14 @@ class TriggerWordService {
 
   // Alert management
   Future<List<TriggerAlert>> loadAlerts() async {
+    if (_alertsCache != null) return _alertsCache!;
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_kTriggerAlertsKey);
     if (json == null || json.isEmpty) return [];
     try {
-      return TriggerAlert.decodeList(json);
+      final alerts = TriggerAlert.decodeList(json);
+      _alertsCache = alerts;
+      return alerts;
     } catch (_) {
       return [];
     }
@@ -110,6 +121,7 @@ class TriggerWordService {
     final prefs = await SharedPreferences.getInstance();
     final json = TriggerAlert.encodeList(alerts);
     await prefs.setString(_kTriggerAlertsKey, json);
+    _alertsCache = alerts;
     _alertsController.add(alerts);
   }
 
@@ -126,6 +138,7 @@ class TriggerWordService {
   Future<void> clearAlerts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kTriggerAlertsKey);
+    _alertsCache = null;
     _alertsController.add([]);
   }
 

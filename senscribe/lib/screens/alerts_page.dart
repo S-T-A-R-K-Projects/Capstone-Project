@@ -1093,6 +1093,7 @@ class _AlertsPageState extends State<AlertsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final topInset = PlatformInfo.isIOS26OrHigher()
         ? MediaQuery.of(context).padding.top + kToolbarHeight
         : 0.0;
@@ -1112,18 +1113,26 @@ class _AlertsPageState extends State<AlertsPage> {
                 width: double.infinity,
                 child: SizedBox(
                   height: 44,
-                  child: AdaptiveSegmentedControl(
-                    labels: const ['Recent Alerts', 'Trigger Words'],
-                    color: Theme.of(context).colorScheme.surface,
-                    selectedIndex: _selectedTabIndex,
-                    onValueChanged: (index) {
-                      setState(() {
-                        _selectedTabIndex = index;
-                        if (_selectedTabIndex != 0) {
-                          _clearAlertSelection();
-                        }
-                      });
-                    },
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      platformBrightness: theme.brightness,
+                    ),
+                    child: AdaptiveSegmentedControl(
+                      key: ValueKey(
+                        'alerts-tabs-${theme.brightness.name}',
+                      ),
+                      labels: const ['Recent Alerts', 'Trigger Words'],
+                      color: theme.colorScheme.surface,
+                      selectedIndex: _selectedTabIndex,
+                      onValueChanged: (index) {
+                        setState(() {
+                          _selectedTabIndex = index;
+                          if (_selectedTabIndex != 0) {
+                            _clearAlertSelection();
+                          }
+                        });
+                      },
+                    ),
                   ),
                 ),
               ),

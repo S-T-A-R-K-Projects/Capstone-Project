@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../services/app_settings_service.dart';
 import '../services/app_permission_service.dart';
+import '../services/audio_classification_service.dart';
+import '../services/live_update_service.dart';
 
 class PermissionsBackgroundPage extends StatefulWidget {
   const PermissionsBackgroundPage({super.key});
@@ -17,9 +20,13 @@ class PermissionsBackgroundPage extends StatefulWidget {
 
 class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
     with WidgetsBindingObserver {
+  final AppSettingsService _settingsService = AppSettingsService();
   final AppPermissionService _permissionService = AppPermissionService();
+  final AudioClassificationService _audioService = AudioClassificationService();
+  final LiveUpdateService _liveUpdateService = LiveUpdateService();
   AppPermissionSnapshot? _snapshot;
   bool _isLoading = true;
+  bool _isLiveUpdateEnabled = false;
 
   @override
   void initState() {
@@ -43,11 +50,48 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
 
   Future<void> _refreshStatuses() async {
     final snapshot = await _permissionService.loadStatuses();
+    final liveUpdatesEnabled = await _settingsService.loadLiveUpdatesEnabled();
     if (!mounted) return;
     setState(() {
       _snapshot = snapshot;
+      _isLiveUpdateEnabled = liveUpdatesEnabled;
       _isLoading = false;
     });
+  }
+
+  Future<void> _toggleLiveUpdates() async {
+    final nextValue = !_isLiveUpdateEnabled;
+
+    setState(() {
+      _isLiveUpdateEnabled = nextValue;
+    });
+
+    await _settingsService.saveLiveUpdatesEnabled(nextValue);
+
+    try {
+      await _liveUpdateService.syncMonitoringState(
+        isMonitoring: _audioService.isMonitoring,
+      );
+    } catch (error) {
+      await _settingsService.saveLiveUpdatesEnabled(!nextValue);
+      if (!mounted) return;
+      setState(() {
+        _isLiveUpdateEnabled = !nextValue;
+      });
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Failed to update live updates: $error',
+        type: AdaptiveSnackBarType.error,
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: nextValue ? 'Live updates enabled' : 'Live updates disabled',
+      type: AdaptiveSnackBarType.success,
+    );
   }
 
   Future<void> _requestPermission(
@@ -325,6 +369,89 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
                             'Use system settings if you want Android battery optimization enabled again for SenScribe.',
                       ),
                     ],
+                    const SizedBox(height: 16),
+                    AdaptiveCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Platform.isIOS
+                                    ? Icons.play_circle_outline_rounded
+                                    : Icons.notifications_active_rounded,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Live Updates',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: (_isLiveUpdateEnabled
+                                          ? Colors.green
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .outline)
+                                      .withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  _isLiveUpdateEnabled ? 'Enabled' : 'Disabled',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: _isLiveUpdateEnabled
+                                        ? Colors.green
+                                        : Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            Platform.isIOS
+                                ? 'Show an iPhone Live Activity while sound monitoring is running, including Lock Screen and Notification Center status.'
+                                : 'Keep the Android foreground notification active while sound monitoring is running in the background.',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: AdaptiveButton(
+                              onPressed: _toggleLiveUpdates,
+                              label: _isLiveUpdateEnabled
+                                  ? 'Disable Live Updates'
+                                  : 'Enable Live Updates',
+                              style: _isLiveUpdateEnabled
+                                  ? AdaptiveButtonStyle.bordered
+                                  : AdaptiveButtonStyle.filled,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     AdaptiveCard(
                       padding: const EdgeInsets.all(16),

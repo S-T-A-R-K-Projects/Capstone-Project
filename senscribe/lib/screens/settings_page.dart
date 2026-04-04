@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,9 +5,6 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../main.dart';
-import '../services/app_settings_service.dart';
-import '../services/audio_classification_service.dart';
-import '../services/live_update_service.dart';
 import 'alerts_page.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
@@ -25,60 +21,10 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final AppSettingsService _settingsService = AppSettingsService();
-  final AudioClassificationService _audioService = AudioClassificationService();
-  final LiveUpdateService _liveUpdateService = LiveUpdateService();
-  bool _isLiveUpdateEnabled = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_loadSettings());
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  Future<void> _loadSettings() async {
-    final liveUpdatesEnabled = await _settingsService.loadLiveUpdatesEnabled();
-    if (!mounted) return;
-    setState(() {
-      _isLiveUpdateEnabled = liveUpdatesEnabled;
-    });
-  }
-
-  Future<void> _toggleLiveUpdates(bool enabled) async {
-    setState(() {
-      _isLiveUpdateEnabled = enabled;
-    });
-
-    await _settingsService.saveLiveUpdatesEnabled(enabled);
-
-    try {
-      await _liveUpdateService.syncMonitoringState(
-        isMonitoring: _audioService.isMonitoring,
-      );
-    } catch (error) {
-      await _settingsService.saveLiveUpdatesEnabled(!enabled);
-      if (mounted) {
-        setState(() {
-          _isLiveUpdateEnabled = !enabled;
-        });
-      }
-      if (!mounted) return;
-      AdaptiveSnackBar.show(
-        context,
-        message: 'Failed to update live updates: $error',
-        type: AdaptiveSnackBarType.error,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final themeProvider = ThemeProvider.instance;
+    final theme = Theme.of(context);
     final topInset = PlatformInfo.isIOS26OrHigher()
         ? MediaQuery.of(context).padding.top + kToolbarHeight + 16
         : 16.0;
@@ -142,15 +88,23 @@ class _SettingsPageState extends State<SettingsPage> {
                   SizedBox(
                     width: double.infinity,
                     height: 44,
-                    child: AdaptiveSegmentedControl(
-                      labels: const ['System', 'Light', 'Dark'],
-                      color: Theme.of(context).colorScheme.surface,
-                      shrinkWrap: false,
-                      selectedIndex: themeProvider.themeMode.index,
-                      onValueChanged: (int index) {
-                        themeProvider.setTheme(ThemeMode.values[index]);
-                        if (mounted) setState(() {});
-                      },
+                    child: MediaQuery(
+                      data: MediaQuery.of(context).copyWith(
+                        platformBrightness: theme.brightness,
+                      ),
+                      child: AdaptiveSegmentedControl(
+                        key: ValueKey(
+                          'settings-theme-${theme.brightness.name}',
+                        ),
+                        labels: const ['System', 'Light', 'Dark'],
+                        color: theme.colorScheme.surface,
+                        shrinkWrap: false,
+                        selectedIndex: themeProvider.themeMode.index,
+                        onValueChanged: (int index) {
+                          themeProvider.setTheme(ThemeMode.values[index]);
+                          if (mounted) setState(() {});
+                        },
+                      ),
                     ),
                   ),
                 ],
@@ -404,50 +358,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Icon(
-                        Platform.isIOS
-                            ? Icons.play_circle_outline_rounded
-                            : Icons.notifications_active_rounded,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Live Updates',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              Platform.isIOS
-                                  ? 'Show an iPhone Live Activity while sound monitoring is running, including Lock Screen and Notification Center status.'
-                                  : 'Keep the Android foreground notification active while sound monitoring is running in the background.',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Switch.adaptive(
-                        value: _isLiveUpdateEnabled,
-                        onChanged: _toggleLiveUpdates,
-                      ),
-                    ],
                   ),
                   const SizedBox(height: 12),
                   Align(

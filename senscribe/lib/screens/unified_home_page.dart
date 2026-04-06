@@ -5,6 +5,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../services/audio_classification_service.dart';
 import '../services/text_to_speech_service.dart';
@@ -472,7 +473,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                       ),
                       const SizedBox(width: 12),
                       Text("SenScribe",
-                          style: GoogleFonts.outfit(
+                          style: GoogleFonts.inter(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5)),
@@ -481,6 +482,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                 ),
 
                 // 1. Sound Recognition Section (Top)
+                Animate(
+                  effects: [FadeEffect(duration: 400.ms), SlideEffect(begin: Offset(0, 0.1), duration: 400.ms, curve: Curves.easeOutQuad)],
+                  child:
                 _buildSectionContainer(
                   title: "Sound Recognition",
                   icon: Icons.hearing_rounded,
@@ -501,7 +505,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   child: _buildSoundContent(),
                 ),
 
+                ),
                 // 2. STT Section (Middle)
+                Animate(
+                  effects: [FadeEffect(duration: 400.ms, delay: 100.ms), SlideEffect(begin: Offset(0, 0.1), duration: 400.ms, curve: Curves.easeOutQuad, delay: 100.ms)],
+                  child:
                 _buildSectionContainer(
                   title: "Speech to Text",
                   icon: Icons.mic_rounded,
@@ -515,7 +523,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   child: _buildSTTContent(),
                 ),
 
+                ),
                 // 3. TTS Section (Bottom)
+                Animate(
+                  effects: [FadeEffect(duration: 400.ms, delay: 200.ms), SlideEffect(begin: Offset(0, 0.1), duration: 400.ms, curve: Curves.easeOutQuad, delay: 200.ms)],
+                  child:
                 _buildSectionContainer(
                   title: "Text to Speech",
                   icon: Icons.record_voice_over_rounded,
@@ -531,6 +543,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                       onToggleMonitoring: () {})),
                   child: _buildTTSContent(),
                 ),
+                ),
               ],
             ),
           ),
@@ -543,7 +556,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     required String title,
     required IconData icon,
     required Widget child,
-    required double height,
+    double? height, // Made optional/unused
     required bool isExpanded,
     required VoidCallback onCollapseToggle,
     bool isMonitoring = false,
@@ -551,25 +564,31 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     required VoidCallback onExpand,
     VoidCallback? onToggle,
   }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      height: isExpanded ? height : 80,
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: Colors.transparent,
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: AdaptiveCard(
         padding: EdgeInsets.zero,
         borderRadius: BorderRadius.circular(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   // Circular Expand/Collapse Button
@@ -635,24 +654,32 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
               ),
             ),
 
-            if (isExpanded) ...[
+                        if (isExpanded) ...[
               const Divider(height: 1, thickness: 0.5),
               // Content
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
+              if (height != null)
+                SizedBox(
+                  height: height - 80, // Approximate height remaining
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: child,
+                    ),
+                  ),
+                )
+              else
+                 Padding(
+                    padding: const EdgeInsets.all(12.0),
                     child: child,
                   ),
-                ),
-              ),
             ],
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSoundContent() {
     final scheme = Theme.of(context).colorScheme;

@@ -407,22 +407,14 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // Real-time Feed Header
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.hearing_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 24,
-                    ),
+                  Icon(
+                    Icons.hearing_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 28,
                   ),
                   const SizedBox(width: 12),
                   Text(
@@ -433,10 +425,10 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ],
-              ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 8),
               child: Row(
                 children: [
                   Expanded(

@@ -108,21 +108,15 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
                               runSpacing: 8,
                               children: [
                                 if (_isSpeaking)
-                                  SizedBox(
-                                    width: 70,
-                                    child: AdaptiveButton(
-                                      onPressed: _stop,
-                                      label: 'Stop',
-                                      style: AdaptiveButtonStyle.bordered,
-                                    ),
+                                  AdaptiveButton(
+                                    onPressed: _stop,
+                                    label: 'Stop',
+                                    style: AdaptiveButtonStyle.bordered,
                                   ),
-                                SizedBox(
-                                  width: 80,
-                                  child: AdaptiveButton(
-                                    onPressed: _speak,
-                                    label: 'Speak',
-                                    style: AdaptiveButtonStyle.filled,
-                                  ),
+                                AdaptiveButton(
+                                  onPressed: _speak,
+                                  label: 'Speak',
+                                  style: AdaptiveButtonStyle.filled,
                                 ),
                               ],
                             ),

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
 import '../main.dart';
 import 'alerts_page.dart';
 import 'about_support.dart';
@@ -109,7 +109,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -160,7 +160,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -213,7 +213,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -268,7 +268,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -319,7 +319,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -374,7 +374,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -433,7 +433,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -480,7 +480,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
           ],
         ),
       ),

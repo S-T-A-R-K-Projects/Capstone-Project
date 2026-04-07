@@ -40,7 +40,6 @@ class TextToSpeechService {
     await flutterTts.setSpeechRate(0.5);
     await flutterTts.setVolume(1.0);
     await flutterTts.setPitch(1.0);
-        true); // Ensure speak returns only after completion
     await flutterTts.awaitSpeakCompletion(true);
     flutterTts.setStartHandler(() => _setSpeaking(true));
     flutterTts.setCompletionHandler(() => _setSpeaking(false));

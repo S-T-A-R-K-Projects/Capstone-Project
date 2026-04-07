@@ -96,11 +96,12 @@ class CustomSoundService {
 
   Future<CustomSoundProfile> captureBackgroundSample(
     CustomSoundProfile profile,
+    int sampleIndex,
   ) {
     return _captureSample(
       profile,
       sampleKind: 'background',
-      sampleIndex: 0,
+      sampleIndex: sampleIndex,
     );
   }
 

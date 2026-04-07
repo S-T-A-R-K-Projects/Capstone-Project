@@ -20,7 +20,8 @@ private struct CustomSoundProfileRecord: Codable {
   var lastError: String?
 
   var hasEnoughSamples: Bool {
-    targetSamplePaths.count >= 5 && !backgroundSamplePaths.isEmpty
+    targetSamplePaths.count >= AudioClassificationPlugin.requiredTargetSamples &&
+      backgroundSamplePaths.count >= AudioClassificationPlugin.requiredBackgroundSamples
   }
 
   func toDictionary() -> [String: Any] {
@@ -39,6 +40,11 @@ private struct CustomSoundProfileRecord: Codable {
 }
 
 class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, SNResultsObserving {
+  static let requiredTargetSamples = 10
+  static let requiredBackgroundSamples = 3
+  static let customTrainingSampleRate = 16_000.0
+  static let customTrainingBitDepth = 16
+
   private let analyzerQueue = DispatchQueue(label: "com.senscribe.audioAnalyzerQueue")
   private let trainingQueue = DispatchQueue(label: "com.senscribe.customModelTrainingQueue", qos: .userInitiated)
   private let dateFormatter = ISO8601DateFormatter()
@@ -60,8 +66,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   private var isMonitoring = false
   private var isCapturingSample = false
   private var resumeMonitoringAfterCapture = false
-  private var lastEmittedEventKey: String?
-  private var lastEmittedEventDate: Date?
+  private var lastEmittedEventDateByKey: [String: Date] = [:]
   private var latestInputRMS: Float = 0
   private var latestInputPeak: Float = 0
   private var lastCustomCandidateIdentifier: String?
@@ -155,8 +160,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
           try self.configureAudioSession()
           try self.startMonitoringSession()
           self.isMonitoring = true
-          self.lastEmittedEventKey = nil
-          self.lastEmittedEventDate = nil
+          self.lastEmittedEventDateByKey.removeAll()
           self.sendStatus("started")
           result(nil)
         } catch {
@@ -181,8 +185,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     customRequest = nil
     audioEngine = nil
     isMonitoring = false
-    lastEmittedEventKey = nil
-    lastEmittedEventDate = nil
+    lastEmittedEventDateByKey.removeAll()
     lastCustomCandidateIdentifier = nil
     lastCustomCandidateCount = 0
 
@@ -251,6 +254,9 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
 
   @available(iOS 15.0, *)
   private func makeCustomAnalysisRequestIfAvailable() throws -> SNClassifySoundRequest? {
+    guard loadProfiles().contains(where: { $0.enabled && $0.hasEnoughSamples }) else {
+      return nil
+    }
     guard FileManager.default.fileExists(atPath: compiledModelURL.path) else {
       return nil
     }
@@ -336,9 +342,9 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
 
           let recorder = try AVAudioRecorder(url: outputURL, settings: [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
-            AVSampleRateKey: 44_100,
+            AVSampleRateKey: Self.customTrainingSampleRate,
             AVNumberOfChannelsKey: 1,
-            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMBitDepthKey: Self.customTrainingBitDepth,
             AVLinearPCMIsBigEndianKey: false,
             AVLinearPCMIsFloatKey: false,
           ])
@@ -369,6 +375,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   private func configureRecordingSession() throws {
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
+    try session.setPreferredSampleRate(Self.customTrainingSampleRate)
     try session.setActive(true, options: .notifyOthersOnDeactivation)
   }
 
@@ -480,7 +487,14 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
       do {
         let trainingData = try self.buildTrainingData(from: profiles)
         guard trainingData.keys.count >= 2 else {
-          throw NSError(domain: "AudioClassificationPlugin", code: -10, userInfo: [NSLocalizedDescriptionKey: "Training requires 5 custom sound samples and 1 background calibration sample."])
+          throw NSError(
+            domain: "AudioClassificationPlugin",
+            code: -10,
+            userInfo: [
+              NSLocalizedDescriptionKey:
+                "Training requires \(Self.requiredTargetSamples) custom sound samples and \(Self.requiredBackgroundSamples) background calibration samples."
+            ]
+          )
         }
 
         let classifier = try MLSoundClassifier(
@@ -601,13 +615,11 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     let throttleInterval = isCustomRequest ? customThrottleInterval : builtInThrottleInterval
     let throttleKey = "\(source):\(identifier)"
     let now = Date()
-    if let lastEventDate = lastEmittedEventDate,
-       lastEmittedEventKey == throttleKey,
+    if let lastEventDate = lastEmittedEventDateByKey[throttleKey],
        now.timeIntervalSince(lastEventDate) < throttleInterval {
       return
     }
-    lastEmittedEventKey = throttleKey
-    lastEmittedEventDate = now
+    lastEmittedEventDateByKey[throttleKey] = now
 
     var payload: [String: Any] = [
       "type": "result",
@@ -632,8 +644,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   }
 
   func requestDidComplete(_ request: SNRequest) {
-    lastEmittedEventKey = nil
-    lastEmittedEventDate = nil
+    lastEmittedEventDateByKey.removeAll()
     lastCustomCandidateIdentifier = nil
     lastCustomCandidateCount = 0
   }
@@ -645,6 +656,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
 
     do {
       return try JSONDecoder().decode([CustomSoundProfileRecord].self, from: data)
+        .map(normalizeProfileForRequirements)
     } catch {
       return []
     }
@@ -739,9 +751,23 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
       .appendingPathComponent(sampleKind, isDirectory: true)
     try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true, attributes: nil)
     let filename = sampleKind == "background"
-      ? "background_1.caf"
+      ? "background_\(sampleIndex + 1).caf"
       : "target_\(sampleIndex + 1).caf"
     return directoryURL.appendingPathComponent(filename)
+  }
+
+  private func normalizeProfileForRequirements(_ profile: CustomSoundProfileRecord) -> CustomSoundProfileRecord {
+    guard !profile.hasEnoughSamples else {
+      return profile
+    }
+
+    if profile.status == "ready" || profile.status == "training" {
+      var updated = profile
+      updated.status = "draft"
+      return updated
+    }
+
+    return profile
   }
 
   private func updateInputLevels(from buffer: AVAudioPCMBuffer) {

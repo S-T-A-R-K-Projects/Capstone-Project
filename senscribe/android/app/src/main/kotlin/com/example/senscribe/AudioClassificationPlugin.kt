@@ -52,7 +52,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-private data class CustomSoundProfileRecord(
+internal data class CustomSoundProfileRecord(
   val id: String,
   var name: String,
   var enabled: Boolean,
@@ -62,13 +62,14 @@ private data class CustomSoundProfileRecord(
   val createdAt: String,
   var updatedAt: String,
   var lastError: String?,
-  var prototypeEmbedding: List<Float>?,
-  var backgroundEmbedding: List<Float>?,
+  var targetEmbeddingBank: List<List<Float>>?,
+  var backgroundEmbeddingBank: List<List<Float>>?,
   var detectionThreshold: Double?,
   var backgroundMargin: Double?,
 ) {
   val hasEnoughSamples: Boolean
-    get() = targetSamplePaths.size >= 5 && backgroundSamplePaths.isNotEmpty()
+    get() = targetSamplePaths.size >= AudioClassificationPlugin.REQUIRED_TARGET_SAMPLES &&
+      backgroundSamplePaths.size >= AudioClassificationPlugin.REQUIRED_BACKGROUND_SAMPLES
 
   fun toMap(): Map<String, Any?> {
     return mapOf(
@@ -81,8 +82,8 @@ private data class CustomSoundProfileRecord(
       "createdAt" to createdAt,
       "updatedAt" to updatedAt,
       "lastError" to lastError,
-      "prototypeEmbedding" to prototypeEmbedding,
-      "backgroundEmbedding" to backgroundEmbedding,
+      "targetEmbeddingBank" to targetEmbeddingBank,
+      "backgroundEmbeddingBank" to backgroundEmbeddingBank,
       "detectionThreshold" to detectionThreshold,
       "backgroundMargin" to backgroundMargin,
     )
@@ -99,8 +100,8 @@ private data class CustomSoundProfileRecord(
       put("createdAt", createdAt)
       put("updatedAt", updatedAt)
       put("lastError", lastError)
-      put("prototypeEmbedding", prototypeEmbedding?.let { floatsToJsonArray(it) })
-      put("backgroundEmbedding", backgroundEmbedding?.let { floatsToJsonArray(it) })
+      put("targetEmbeddingBank", targetEmbeddingBank?.let { embeddingBankToJsonArray(it) })
+      put("backgroundEmbeddingBank", backgroundEmbeddingBank?.let { embeddingBankToJsonArray(it) })
       put("detectionThreshold", detectionThreshold)
       put("backgroundMargin", backgroundMargin)
     }
@@ -118,16 +119,20 @@ private data class CustomSoundProfileRecord(
         createdAt = json.optString("createdAt", Instant.now().toString()),
         updatedAt = json.optString("updatedAt", Instant.now().toString()),
         lastError = json.optStringOrNull("lastError"),
-        prototypeEmbedding = json.optJSONArray("prototypeEmbedding").toFloatListOrNull(),
-        backgroundEmbedding = json.optJSONArray("backgroundEmbedding").toFloatListOrNull(),
+        targetEmbeddingBank = json.optJSONArray("targetEmbeddingBank").toEmbeddingBankOrNull(),
+        backgroundEmbeddingBank = json.optJSONArray("backgroundEmbeddingBank").toEmbeddingBankOrNull(),
         detectionThreshold = json.optDoubleOrNull("detectionThreshold"),
         backgroundMargin = json.optDoubleOrNull("backgroundMargin"),
-      )
+      ).normalizedForRequirements()
     }
 
-    private fun floatsToJsonArray(values: List<Float>): JSONArray {
+    private fun embeddingBankToJsonArray(values: List<List<Float>>): JSONArray {
       val array = JSONArray()
-      values.forEach { array.put(it.toDouble()) }
+      values.forEach { embedding ->
+        val nested = JSONArray()
+        embedding.forEach { nested.put(it.toDouble()) }
+        array.put(nested)
+      }
       return array
     }
   }
@@ -136,8 +141,8 @@ private data class CustomSoundProfileRecord(
 private data class CustomSoundMatcher(
   val profileId: String,
   val label: String,
-  val prototype: FloatArray,
-  val backgroundPrototype: FloatArray?,
+  val targetBank: List<FloatArray>,
+  val backgroundBank: List<FloatArray>,
   val detectionThreshold: Double,
   val backgroundMargin: Double,
 )
@@ -172,8 +177,8 @@ class AudioClassificationPlugin private constructor(
     private const val CAPTURE_DURATION_SECONDS = 5
     private const val CAPTURE_SAMPLE_COUNT = SAMPLE_RATE * CAPTURE_DURATION_SECONDS
 
-    private const val REQUIRED_TARGET_SAMPLES = 5
-    private const val REQUIRED_BACKGROUND_SAMPLES = 1
+    internal const val REQUIRED_TARGET_SAMPLES = 10
+    internal const val REQUIRED_BACKGROUND_SAMPLES = 3
 
     private const val MODEL_ASSET_PATH = "yamnet/yamnet.tflite"
 
@@ -182,9 +187,6 @@ class AudioClassificationPlugin private constructor(
 
     private const val CUSTOM_MIN_SIGNAL_RMS = 0.008f
     private const val CUSTOM_MIN_SIGNAL_PEAK = 0.024f
-    private const val CUSTOM_MIN_DETECTION_THRESHOLD = 0.64
-    private const val CUSTOM_MAX_DETECTION_THRESHOLD = 0.94
-    private const val CUSTOM_MIN_BACKGROUND_MARGIN = 0.005
     private const val CUSTOM_MIN_WIN_MARGIN = 0.03
     private const val CUSTOM_THROTTLE_MS = 10_000L
     private const val CUSTOM_REQUIRED_CONSECUTIVE_MATCHES = 2
@@ -318,8 +320,7 @@ class AudioClassificationPlugin private constructor(
     .setSampleRate(SAMPLE_RATE.toFloat())
     .build()
 
-  private var lastEmittedSoundKey: String? = null
-  private var lastEmittedAtMs: Long = 0L
+  private val lastEmittedAtByKey = mutableMapOf<String, Long>()
   private var lastCustomCandidateId: String? = null
   private var lastCustomCandidateCount = 0
   private var activeCustomMatchers: List<CustomSoundMatcher> = emptyList()
@@ -490,15 +491,8 @@ class AudioClassificationPlugin private constructor(
 
     pendingPermissionResult = result
     pendingPermissionContinuation = onGranted
-    val currentActivity = activity
-    if (currentActivity == null) {
-      pendingPermissionResult = null
-      pendingPermissionContinuation = null
-      result.error("activity_unavailable", "Unable to request microphone permission.", null)
-      return
-    }
     ActivityCompat.requestPermissions(
-      currentActivity,
+      activity,
       arrayOf(Manifest.permission.RECORD_AUDIO),
       PERMISSION_REQUEST_CODE,
     )
@@ -547,8 +541,7 @@ class AudioClassificationPlugin private constructor(
     audioEmbedder = embedder
     audioRecord = recorder
 
-    lastEmittedSoundKey = null
-    lastEmittedAtMs = 0L
+    lastEmittedAtByKey.clear()
     lastCustomCandidateId = null
     lastCustomCandidateCount = 0
     isRunning.set(true)
@@ -612,9 +605,9 @@ class AudioClassificationPlugin private constructor(
         stopClassification()
         return
       }
+      val builtInPayload = processBuiltInResult(classificationResult)
 
-      processBuiltInResult(classificationResult)
-
+      var customPayload: Map<String, Any>? = null
       if (embedder != null && activeCustomMatchers.isNotEmpty()) {
         val embedding = try {
           extractEmbedding(embedder.embed(audioData))
@@ -625,11 +618,17 @@ class AudioClassificationPlugin private constructor(
         }
 
         if (embedding != null) {
-          processCustomEmbedding(embedding, calculateSignalLevels(floatBuffer))
+          customPayload = processCustomEmbedding(
+            embedding,
+            calculateSignalLevels(floatBuffer),
+          )
         } else {
           resetCustomCandidate()
         }
       }
+
+      customPayload?.let(::emitDetectionPayload)
+      builtInPayload?.let(::emitDetectionPayload)
 
       if (isRunning.get()) {
         workHandler?.post(this)
@@ -637,61 +636,55 @@ class AudioClassificationPlugin private constructor(
     }
   }
 
-  private fun processBuiltInResult(result: AudioClassifierResult) {
+  private fun processBuiltInResult(result: AudioClassifierResult): Map<String, Any>? {
     val audioResult = result.classificationResults()
       .firstOrNull()
       ?.classifications()
       ?.firstOrNull()
       ?.categories()
       ?.maxByOrNull { it.score() }
-      ?: return
+      ?: return null
 
     if (audioResult.score() < BUILT_IN_SCORE_THRESHOLD) {
-      return
+      return null
     }
 
     val label = audioResult.displayName().takeIf { it.isNotBlank() } ?: audioResult.categoryName()
     val now = System.currentTimeMillis()
     if (!shouldEmit("builtIn:${label.trim().lowercase()}", now, BUILT_IN_THROTTLE_MS)) {
-      return
+      return null
     }
 
-    val payload = mapOf(
+    return mapOf(
       "type" to "result",
       "label" to label,
       "confidence" to audioResult.score().toDouble(),
       "source" to "builtIn",
       "timestampMs" to now,
     )
-
-    mainHandler.post { eventSink?.success(payload) }
-
-    // Update live notification if enabled and not muted
-    if (isLiveUpdateEnabled && !isLiveUpdateMuted) {
-      val confidencePercent = (audioResult.score() * 100).toInt()
-      updateLiveUpdateNotification("Detected: $label (${confidencePercent}%)")
-    }
   }
 
   private fun processCustomEmbedding(
     embedding: FloatArray,
     signalLevels: SignalLevels,
-  ) {
+  ): Map<String, Any>? {
     if (signalLevels.rms < CUSTOM_MIN_SIGNAL_RMS && signalLevels.peak < CUSTOM_MIN_SIGNAL_PEAK) {
       resetCustomCandidate()
-      return
+      return null
     }
 
+    val normalizedEmbedding = CustomSoundMatching.normalizeEmbedding(embedding)
     val candidates = activeCustomMatchers.mapNotNull { matcher ->
-      val similarity = cosineSimilarity(embedding, matcher.prototype)
-      val backgroundSimilarity = matcher.backgroundPrototype?.let { cosineSimilarity(embedding, it) } ?: -1.0
+      val similarity = CustomSoundMatching.scoreAgainstBank(normalizedEmbedding, matcher.targetBank)
+      val backgroundSimilarity = CustomSoundMatching.scoreAgainstBank(
+        normalizedEmbedding,
+        matcher.backgroundBank,
+      )
 
       if (similarity < matcher.detectionThreshold) {
         return@mapNotNull null
       }
-      if (matcher.backgroundPrototype != null &&
-        similarity < backgroundSimilarity + matcher.backgroundMargin
-      ) {
+      if (similarity < backgroundSimilarity + matcher.backgroundMargin) {
         return@mapNotNull null
       }
 
@@ -706,12 +699,12 @@ class AudioClassificationPlugin private constructor(
     val runnerUp = candidates.getOrNull(1)
     if (best == null) {
       resetCustomCandidate()
-      return
+      return null
     }
 
     if (runnerUp != null && best.similarity < runnerUp.similarity + CUSTOM_MIN_WIN_MARGIN) {
       resetCustomCandidate()
-      return
+      return null
     }
 
     if (lastCustomCandidateId == best.matcher.profileId) {
@@ -722,15 +715,15 @@ class AudioClassificationPlugin private constructor(
     }
 
     if (lastCustomCandidateCount < CUSTOM_REQUIRED_CONSECUTIVE_MATCHES) {
-      return
+      return null
     }
 
     val now = System.currentTimeMillis()
     if (!shouldEmit("custom:${best.matcher.profileId}", now, CUSTOM_THROTTLE_MS)) {
-      return
+      return null
     }
 
-    val payload = mapOf(
+    return mapOf(
       "type" to "result",
       "label" to best.matcher.label,
       "confidence" to best.similarity,
@@ -738,14 +731,6 @@ class AudioClassificationPlugin private constructor(
       "timestampMs" to now,
       "customSoundId" to best.matcher.profileId,
     )
-
-    mainHandler.post { eventSink?.success(payload) }
-
-    // Update live notification if enabled and not muted
-    if (isLiveUpdateEnabled && !isLiveUpdateMuted) {
-      val confidencePercent = (best.similarity * 100).toInt()
-      updateLiveUpdateNotification("Detected: ${best.matcher.label} (${confidencePercent}%)")
-    }
   }
 
   private fun stopClassification() {
@@ -781,8 +766,7 @@ class AudioClassificationPlugin private constructor(
     audioEmbedder = null
     releaseWakeLock()
 
-    lastEmittedSoundKey = null
-    lastEmittedAtMs = 0L
+    lastEmittedAtByKey.clear()
     resetCustomCandidate()
 
     if (shouldSendStatus) {
@@ -850,8 +834,8 @@ class AudioClassificationPlugin private constructor(
       status = "recording",
       updatedAt = now,
       lastError = null,
-      prototypeEmbedding = null,
-      backgroundEmbedding = null,
+      targetEmbeddingBank = null,
+      backgroundEmbeddingBank = null,
       detectionThreshold = null,
       backgroundMargin = null,
     ) ?: CustomSoundProfileRecord(
@@ -864,8 +848,8 @@ class AudioClassificationPlugin private constructor(
       createdAt = now,
       updatedAt = now,
       lastError = null,
-      prototypeEmbedding = null,
-      backgroundEmbedding = null,
+      targetEmbeddingBank = null,
+      backgroundEmbeddingBank = null,
       detectionThreshold = null,
       backgroundMargin = null,
     )
@@ -895,8 +879,8 @@ class AudioClassificationPlugin private constructor(
           backgroundSamplePaths = samplePathsFor(soundId, "background"),
           updatedAt = isoTimestamp(),
           lastError = null,
-          prototypeEmbedding = null,
-          backgroundEmbedding = null,
+          targetEmbeddingBank = null,
+          backgroundEmbeddingBank = null,
           detectionThreshold = null,
           backgroundMargin = null,
         )
@@ -1001,8 +985,8 @@ class AudioClassificationPlugin private constructor(
                 status = "failed",
                 updatedAt = isoTimestamp(),
                 lastError = error.message ?: "Unable to train custom sound.",
-                prototypeEmbedding = null,
-                backgroundEmbedding = null,
+                targetEmbeddingBank = null,
+                backgroundEmbeddingBank = null,
                 detectionThreshold = null,
                 backgroundMargin = null,
               )
@@ -1045,47 +1029,17 @@ class AudioClassificationPlugin private constructor(
       throw IllegalStateException("No valid background embeddings were generated for ${profile.name}.")
     }
 
-    val prototype = averageNormalizedEmbedding(targetEmbeddings)
-    val backgroundPrototype = averageNormalizedEmbedding(backgroundEmbeddings)
-
-    val targetSimilarities = targetEmbeddings.map { cosineSimilarity(it, prototype) }
-    val backgroundSimilarities = backgroundEmbeddings.map { cosineSimilarity(it, prototype) }
-
-    val targetMeanSimilarity = targetSimilarities.average()
-    val minTargetSimilarity = targetSimilarities.minOrNull()
-      ?: throw IllegalStateException("Unable to determine target similarity for ${profile.name}.")
-    val maxBackgroundSimilarity = backgroundSimilarities.maxOrNull()
-      ?: throw IllegalStateException("Unable to determine background similarity for ${profile.name}.")
-    val targetP20Similarity = percentile(targetSimilarities, 0.20)
-    val backgroundP85Similarity = percentile(backgroundSimilarities, 0.85)
-
-    var threshold = ((targetMeanSimilarity * 0.6) + (backgroundP85Similarity * 0.4))
-      .coerceIn(CUSTOM_MIN_DETECTION_THRESHOLD, CUSTOM_MAX_DETECTION_THRESHOLD)
-
-    val targetBiasedThreshold = minTargetSimilarity - 0.03
-    if (threshold > targetBiasedThreshold) {
-      threshold = targetBiasedThreshold
-    }
-
-    if (threshold < backgroundP85Similarity + CUSTOM_MIN_BACKGROUND_MARGIN) {
-      threshold = backgroundP85Similarity + CUSTOM_MIN_BACKGROUND_MARGIN
-    }
-
-    if (threshold >= targetMeanSimilarity) {
-      threshold = targetMeanSimilarity - 0.01
-    }
-
-    threshold = threshold.coerceIn(CUSTOM_MIN_DETECTION_THRESHOLD, CUSTOM_MAX_DETECTION_THRESHOLD)
-
-    val backgroundMargin = (threshold - maxBackgroundSimilarity - 0.0025)
-      .coerceIn(CUSTOM_MIN_BACKGROUND_MARGIN, 0.03)
+    val calibratedBank = CustomSoundMatching.calibrate(
+      targetEmbeddings = targetEmbeddings,
+      backgroundEmbeddings = backgroundEmbeddings,
+    )
 
     Log.d(
       TAG,
       "Trained custom sound '${profile.name}' " +
-        "targetMean=$targetMeanSimilarity minTarget=$minTargetSimilarity " +
-        "targetP20=$targetP20Similarity backgroundMax=$maxBackgroundSimilarity " +
-        "backgroundP85=$backgroundP85Similarity threshold=$threshold margin=$backgroundMargin",
+        "targetBank=${calibratedBank.targetEmbeddingBank.size} " +
+        "backgroundBank=${calibratedBank.backgroundEmbeddingBank.size} " +
+        "threshold=${calibratedBank.detectionThreshold} margin=${calibratedBank.backgroundMargin}",
     )
 
     return profile.copy(
@@ -1094,10 +1048,10 @@ class AudioClassificationPlugin private constructor(
       lastError = null,
       targetSamplePaths = samplePathsFor(profile.id, "target"),
       backgroundSamplePaths = samplePathsFor(profile.id, "background"),
-      prototypeEmbedding = prototype.toList(),
-      backgroundEmbedding = backgroundPrototype.toList(),
-      detectionThreshold = threshold,
-      backgroundMargin = backgroundMargin,
+      targetEmbeddingBank = calibratedBank.targetEmbeddingBank,
+      backgroundEmbeddingBank = calibratedBank.backgroundEmbeddingBank,
+      detectionThreshold = calibratedBank.detectionThreshold,
+      backgroundMargin = calibratedBank.backgroundMargin,
     )
   }
 
@@ -1183,7 +1137,7 @@ class AudioClassificationPlugin private constructor(
     return profile.copy(
       targetSamplePaths = samplePathsFor(profile.id, "target"),
       backgroundSamplePaths = samplePathsFor(profile.id, "background"),
-    )
+    ).normalizedForRequirements()
   }
 
   private fun upsertProfile(
@@ -1209,7 +1163,7 @@ class AudioClassificationPlugin private constructor(
 
   private fun outputFileFor(soundId: String, sampleKind: String, sampleIndex: Int): File {
     val fileName = if (sampleKind == "background") {
-      "background_1.wav"
+      "background_${sampleIndex + 1}.wav"
     } else {
       "target_${sampleIndex + 1}.wav"
     }
@@ -1363,19 +1317,19 @@ class AudioClassificationPlugin private constructor(
       if (!profile.hasEnoughSamples) {
         return@mapNotNull null
       }
-      val prototype = profile.prototypeEmbedding?.toFloatArray()
-      val background = profile.backgroundEmbedding?.toFloatArray()
+      val targetBank = profile.targetEmbeddingBank?.map { it.toFloatArray() }
+      val backgroundBank = profile.backgroundEmbeddingBank?.map { it.toFloatArray() }
       val threshold = profile.detectionThreshold
-      val margin = profile.backgroundMargin ?: CUSTOM_MIN_BACKGROUND_MARGIN
-      if (prototype == null || threshold == null) {
+      val margin = profile.backgroundMargin ?: CustomSoundMatching.MIN_BACKGROUND_MARGIN
+      if (targetBank.isNullOrEmpty() || backgroundBank.isNullOrEmpty() || threshold == null) {
         return@mapNotNull null
       }
 
       CustomSoundMatcher(
         profileId = profile.id,
         label = profile.name,
-        prototype = prototype,
-        backgroundPrototype = background,
+        targetBank = targetBank,
+        backgroundBank = backgroundBank,
         detectionThreshold = threshold,
         backgroundMargin = margin,
       )
@@ -1430,12 +1384,22 @@ class AudioClassificationPlugin private constructor(
     nowMs: Long,
     throttleMs: Long,
   ): Boolean {
-    if (lastEmittedSoundKey == key && nowMs - lastEmittedAtMs < throttleMs) {
+    val lastEmittedAtMs = lastEmittedAtByKey[key]
+    if (lastEmittedAtMs != null && nowMs - lastEmittedAtMs < throttleMs) {
       return false
     }
-    lastEmittedSoundKey = key
-    lastEmittedAtMs = nowMs
+    lastEmittedAtByKey[key] = nowMs
     return true
+  }
+
+  private fun emitDetectionPayload(payload: Map<String, Any>) {
+    mainHandler.post { eventSink?.success(payload) }
+
+    if (isLiveUpdateEnabled && !isLiveUpdateMuted) {
+      val label = payload["label"] as? String ?: "Unknown"
+      val confidence = ((payload["confidence"] as? Number)?.toDouble() ?: 0.0) * 100
+      updateLiveUpdateNotification("Detected: $label (${confidence.toInt()}%)")
+    }
   }
 
   private fun resetCustomCandidate() {
@@ -1464,73 +1428,6 @@ class AudioClassificationPlugin private constructor(
     }
     val rms = sqrt(sumSquares / buffer.size).toFloat()
     return SignalLevels(rms = rms, peak = peak)
-  }
-
-  private fun averageNormalizedEmbedding(embeddings: List<FloatArray>): FloatArray {
-    val length = embeddings.firstOrNull()?.size
-      ?: throw IllegalStateException("No embeddings were available to average.")
-    val aggregate = FloatArray(length)
-    embeddings.forEach { embedding ->
-      require(embedding.size == length) { "Embedding dimensions do not match." }
-      for (i in embedding.indices) {
-        aggregate[i] += embedding[i]
-      }
-    }
-
-    for (i in aggregate.indices) {
-      aggregate[i] /= embeddings.size.toFloat()
-    }
-    normalizeInPlace(aggregate)
-    return aggregate
-  }
-
-  private fun cosineSimilarity(
-    left: FloatArray,
-    right: FloatArray,
-  ): Double {
-    if (left.size != right.size) {
-      throw IllegalArgumentException("Embedding sizes do not match.")
-    }
-    var dot = 0.0
-    var leftNorm = 0.0
-    var rightNorm = 0.0
-    for (i in left.indices) {
-      val l = left[i].toDouble()
-      val r = right[i].toDouble()
-      dot += l * r
-      leftNorm += l * l
-      rightNorm += r * r
-    }
-    if (leftNorm == 0.0 || rightNorm == 0.0) {
-      return -1.0
-    }
-    return dot / (sqrt(leftNorm) * sqrt(rightNorm))
-  }
-
-  private fun normalizeInPlace(values: FloatArray) {
-    var sumSquares = 0.0
-    values.forEach { value ->
-      sumSquares += value * value
-    }
-    if (sumSquares <= 0.0) {
-      return
-    }
-    val magnitude = sqrt(sumSquares).toFloat()
-    for (i in values.indices) {
-      values[i] /= magnitude
-    }
-  }
-
-  private fun percentile(
-    values: List<Double>,
-    ratio: Double,
-  ): Double {
-    if (values.isEmpty()) {
-      throw IllegalArgumentException("Cannot compute a percentile for an empty list.")
-    }
-    val sorted = values.sorted()
-    val index = ((sorted.lastIndex) * ratio).toInt().coerceIn(0, sorted.lastIndex)
-    return sorted[index]
   }
 
   private fun writeWavHeader(
@@ -1663,9 +1560,18 @@ private fun JSONArray?.toStringList(): List<String> {
   return List(length()) { index -> optString(index) }.filter { it.isNotBlank() }
 }
 
-private fun JSONArray?.toFloatListOrNull(): List<Float>? {
+private fun JSONArray?.toEmbeddingBankOrNull(): List<List<Float>>? {
   if (this == null) return null
-  return List(length()) { index -> optDouble(index).toFloat() }
+  return buildList {
+    for (index in 0 until length()) {
+      val embedding = optJSONArray(index)?.let { nested ->
+        List(nested.length()) { nestedIndex -> nested.optDouble(nestedIndex).toFloat() }
+      }
+      if (!embedding.isNullOrEmpty()) {
+        add(embedding)
+      }
+    }
+  }.takeIf { it.isNotEmpty() }
 }
 
 private fun JSONObject.optStringOrNull(key: String): String? {
@@ -1674,4 +1580,30 @@ private fun JSONObject.optStringOrNull(key: String): String? {
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? {
   return if (has(key) && !isNull(key)) optDouble(key) else null
+}
+
+internal fun CustomSoundProfileRecord.normalizedForRequirements(): CustomSoundProfileRecord {
+  if (!hasEnoughSamples) {
+    return copy(
+      status = if (status == "ready" || status == "training") "draft" else status,
+      targetEmbeddingBank = null,
+      backgroundEmbeddingBank = null,
+      detectionThreshold = null,
+      backgroundMargin = null,
+    )
+  }
+
+  if (status == "ready" &&
+    (targetEmbeddingBank.isNullOrEmpty() || backgroundEmbeddingBank.isNullOrEmpty() || detectionThreshold == null)
+  ) {
+    return copy(
+      status = "draft",
+      targetEmbeddingBank = null,
+      backgroundEmbeddingBank = null,
+      detectionThreshold = null,
+      backgroundMargin = null,
+    )
+  }
+
+  return this
 }

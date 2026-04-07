@@ -71,8 +71,11 @@ class AudioClassificationService {
     final sourceValue = data['source'] as String? ?? 'builtIn';
     final timestampMs = data['timestampMs'] as int?;
     final customSoundId = data['customSoundId'] as String?;
+    final isCustom = sourceValue == 'custom';
 
-    if (confidence < AppConstants.audioConfidenceThreshold) return;
+    if (!isCustom && confidence < AppConstants.audioConfidenceThreshold) {
+      return;
+    }
 
     final caption = SoundCaption(
       sound: label,
@@ -81,9 +84,7 @@ class AudioClassificationService {
           : DateTime.fromMillisecondsSinceEpoch(timestampMs),
       isCritical: CriticalSounds.isCritical(label),
       confidence: confidence,
-      source: sourceValue == 'custom'
-          ? SoundCaptionSource.custom
-          : SoundCaptionSource.builtIn,
+      source: isCustom ? SoundCaptionSource.custom : SoundCaptionSource.builtIn,
       customSoundId: customSoundId,
     );
 

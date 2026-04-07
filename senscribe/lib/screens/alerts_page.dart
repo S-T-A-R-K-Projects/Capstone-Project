@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/custom_sound_profile.dart';
+import 'custom_sound_enrollment_page.dart';
 import '../services/trigger_word_service.dart';
 import '../services/custom_sound_service.dart';
 import '../models/trigger_word.dart';
@@ -382,7 +383,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 );
                 if (!dialogContext.mounted) return;
                 Navigator.of(dialogContext).pop();
-                await _showCustomSoundSheet(profile);
+                await _openCustomSoundEnrollmentPage(profile);
               } catch (error) {
                 if (!mounted) return;
                 AdaptiveSnackBar.show(
@@ -399,409 +400,15 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
-  Future<void> _showCustomSoundSheet(CustomSoundProfile initialProfile) async {
-    var currentProfile = initialProfile;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        var isBusy = false;
-        var busyLabel = '';
-        var activeSampleNumber = 0;
-        var isTraining = false;
-        var statusTitle = 'Record 5 samples';
-        var statusDetail =
-            'Each recording lasts about 5 seconds. Keep the phone near the target sound and avoid talking over it.';
-        var statusIcon = Icons.mic_none_rounded;
-        var statusColor = scheme.primary;
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            void setStatus({
-              required String title,
-              required String detail,
-              required IconData icon,
-              required Color color,
-            }) {
-              setModalState(() {
-                statusTitle = title;
-                statusDetail = detail;
-                statusIcon = icon;
-                statusColor = color;
-              });
-            }
-
-            Future<void> runCapture({
-              required int sampleNumber,
-              required String label,
-              required Future<CustomSoundProfile> Function() action,
-            }) async {
-              setModalState(() {
-                isBusy = true;
-                isTraining = false;
-                activeSampleNumber = sampleNumber;
-                busyLabel = 'Recording $label';
-                statusTitle = 'Recording $label';
-                statusDetail =
-                    'Recording started. Hold steady for about 5 seconds until it finishes.';
-                statusIcon = Icons.mic_rounded;
-                statusColor = scheme.primary;
-              });
-
-              if (mounted) {
-                AdaptiveSnackBar.show(
-                  this.context,
-                  message: '$label started. Hold steady for about 5 seconds.',
-                  type: AdaptiveSnackBarType.success,
-                );
-              }
-
-              try {
-                final updated = await action();
-                currentProfile = updated;
-
-                final refreshedProfiles =
-                    await _customSoundService.loadProfiles();
-                final refreshedProfile = _findCustomProfile(
-                  refreshedProfiles,
-                  currentProfile.id,
-                );
-
-                setModalState(() {
-                  currentProfile = refreshedProfile ?? updated;
-                  statusTitle = '$label saved';
-                  statusDetail =
-                      'Recording finished. You can continue or re-record this sample.';
-                  statusIcon = Icons.check_circle_rounded;
-                  statusColor = Colors.green;
-                });
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: '$label complete',
-                    type: AdaptiveSnackBarType.success,
-                  );
-                }
-              } catch (error) {
-                setStatus(
-                  title: '$label failed',
-                  detail: '$error',
-                  icon: Icons.error_outline_rounded,
-                  color: scheme.error,
-                );
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: '$error',
-                    type: AdaptiveSnackBarType.error,
-                  );
-                }
-              } finally {
-                if (sheetContext.mounted) {
-                  setModalState(() {
-                    isBusy = false;
-                    activeSampleNumber = 0;
-                    busyLabel = '';
-                  });
-                }
-              }
-            }
-
-            Future<void> runTraining() async {
-              setModalState(() {
-                isBusy = true;
-                isTraining = true;
-                activeSampleNumber = 0;
-                busyLabel = 'Preparing training';
-                statusTitle = 'Preparing training';
-                statusDetail =
-                    'The app will train using the 5 saved sound samples and the saved background calibration.';
-                statusIcon = Icons.tune_rounded;
-                statusColor = scheme.primary;
-              });
-
-              try {
-                setModalState(() {
-                  busyLabel = 'Training custom model';
-                  statusTitle = 'Training custom model';
-                  statusDetail =
-                      'Training is in progress. This may take a short moment.';
-                  statusIcon = Icons.model_training_rounded;
-                  statusColor = scheme.primary;
-                });
-
-                final profiles =
-                    await _customSoundService.trainOrRebuildModel();
-                final updated = _findCustomProfile(profiles, currentProfile.id);
-                if (updated != null) {
-                  setModalState(() {
-                    currentProfile = updated;
-                  });
-                }
-
-                setStatus(
-                  title: currentProfile.status == CustomSoundProfileStatus.ready
-                      ? 'Custom sound ready'
-                      : 'Training finished',
-                  detail: currentProfile.status ==
-                          CustomSoundProfileStatus.ready
-                      ? 'You can now start sound recognition from the unified home screen.'
-                      : _customStatusLabel(currentProfile),
-                  icon: currentProfile.status == CustomSoundProfileStatus.ready
-                      ? Icons.check_circle_rounded
-                      : Icons.info_outline_rounded,
-                  color: currentProfile.status == CustomSoundProfileStatus.ready
-                      ? Colors.green
-                      : scheme.primary,
-                );
-
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: currentProfile.status ==
-                            CustomSoundProfileStatus.ready
-                        ? 'Custom sound is ready to detect'
-                        : 'Training finished with status: ${_customStatusLabel(currentProfile)}',
-                    type:
-                        currentProfile.status == CustomSoundProfileStatus.failed
-                            ? AdaptiveSnackBarType.error
-                            : AdaptiveSnackBarType.success,
-                  );
-                }
-              } catch (error) {
-                setStatus(
-                  title: 'Training failed',
-                  detail: '$error',
-                  icon: Icons.error_outline_rounded,
-                  color: scheme.error,
-                );
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: '$error',
-                    type: AdaptiveSnackBarType.error,
-                  );
-                }
-              } finally {
-                if (sheetContext.mounted) {
-                  setModalState(() {
-                    isBusy = false;
-                    isTraining = false;
-                    busyLabel = '';
-                  });
-                }
-              }
-            }
-
-            return SafeArea(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  8,
-                  20,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      currentProfile.name,
-                      style: GoogleFonts.inter(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Record 5 examples of the target sound. After that, record 1 background calibration sample, then train the custom model.',
-                      style: GoogleFonts.inter(
-                        color: scheme.onSurface.withValues(alpha: 0.72),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _buildProgressChip(
-                          'Samples ${currentProfile.targetSampleCount}/$kRequiredCustomSoundSamples',
-                          currentProfile.targetSampleCount >=
-                              kRequiredCustomSoundSamples,
-                        ),
-                        _buildProgressChip(
-                          currentProfile.hasBackgroundSample
-                              ? 'Background Ready'
-                              : 'Background Needed',
-                          currentProfile.hasBackgroundSample,
-                        ),
-                        _buildProgressChip(
-                          _customStatusLabel(currentProfile),
-                          currentProfile.status ==
-                              CustomSoundProfileStatus.ready,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    AdaptiveCard(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            statusIcon,
-                            color: statusColor,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  statusTitle,
-                                  style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w700,
-                                    color: scheme.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  statusDetail,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color:
-                                        scheme.onSurface.withValues(alpha: 0.7),
-                                  ),
-                                ),
-                                if (isBusy) ...[
-                                  const SizedBox(height: 10),
-                                  LinearProgressIndicator(
-                                    minHeight: 6,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    busyLabel,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: scheme.onSurface
-                                          .withValues(alpha: 0.62),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    for (var index = 0;
-                        index < kRequiredCustomSoundSamples;
-                        index++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: AdaptiveButton(
-                          key: ValueKey(
-                            'custom-sample-${currentProfile.id}-${index + 1}-${currentProfile.targetSampleCount}-$isBusy-$activeSampleNumber',
-                          ),
-                          enabled: !isBusy,
-                          onPressed: isBusy
-                              ? null
-                              : () => runCapture(
-                                    sampleNumber: index + 1,
-                                    label: 'Sample ${index + 1}',
-                                    action: () =>
-                                        _customSoundService.captureTargetSample(
-                                      currentProfile,
-                                      index,
-                                    ),
-                                  ),
-                          label: isBusy && activeSampleNumber == index + 1
-                              ? 'Recording Sample ${index + 1}...'
-                              : index < currentProfile.targetSampleCount
-                                  ? 'Re-record Sample ${index + 1}'
-                                  : 'Record Sample ${index + 1}',
-                          style: AdaptiveButtonStyle.filled,
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: AdaptiveButton(
-                        key: ValueKey(
-                          'custom-background-${currentProfile.id}-${currentProfile.backgroundSampleCount}-$isBusy-$activeSampleNumber',
-                        ),
-                        enabled: !isBusy &&
-                            currentProfile.targetSampleCount >=
-                                kRequiredCustomSoundSamples,
-                        onPressed: isBusy ||
-                                currentProfile.targetSampleCount <
-                                    kRequiredCustomSoundSamples
-                            ? null
-                            : () => runCapture(
-                                  sampleNumber: kRequiredCustomSoundSamples + 1,
-                                  label: 'Background Calibration',
-                                  action: () => _customSoundService
-                                      .captureBackgroundSample(
-                                    currentProfile,
-                                  ),
-                                ),
-                        label: isBusy &&
-                                activeSampleNumber ==
-                                    kRequiredCustomSoundSamples + 1
-                            ? 'Recording Background Calibration...'
-                            : currentProfile.hasBackgroundSample
-                                ? 'Re-record Background Calibration'
-                                : 'Record Background Calibration',
-                        style: AdaptiveButtonStyle.filled,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: AdaptiveButton(
-                        key: ValueKey(
-                          'custom-train-${currentProfile.id}-${currentProfile.targetSampleCount}-${currentProfile.backgroundSampleCount}-${currentProfile.status.value}-$isBusy',
-                        ),
-                        enabled: !isBusy && currentProfile.hasEnoughSamples,
-                        onPressed: isBusy || !currentProfile.hasEnoughSamples
-                            ? null
-                            : runTraining,
-                        label: isBusy && isTraining
-                            ? 'Training Custom Model...'
-                            : currentProfile.status ==
-                                    CustomSoundProfileStatus.ready
-                                ? 'Retrain Custom Model'
-                                : 'Train Custom Model',
-                        style: AdaptiveButtonStyle.filled,
-                      ),
-                    ),
-                    if (currentProfile.lastError != null &&
-                        currentProfile.lastError!.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      AdaptiveCard(
-                        child: Text(
-                          currentProfile.lastError!,
-                          style: GoogleFonts.inter(
-                            color: scheme.error,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+  Future<void> _openCustomSoundEnrollmentPage(
+    CustomSoundProfile profile,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CustomSoundEnrollmentPage(initialProfile: profile),
+      ),
     );
-
-    await _customSoundService.discardDraft(currentProfile.id);
+    await _customSoundService.discardDraft(profile.id);
     await _customSoundService.refresh();
   }
 
@@ -887,18 +494,6 @@ class _AlertsPageState extends State<AlertsPage> {
     }
   }
 
-  CustomSoundProfile? _findCustomProfile(
-    List<CustomSoundProfile> profiles,
-    String profileId,
-  ) {
-    for (final profile in profiles) {
-      if (profile.id == profileId) {
-        return profile;
-      }
-    }
-    return null;
-  }
-
   String _customStatusLabel(CustomSoundProfile profile) {
     if (!profile.enabled) {
       return 'Disabled';
@@ -914,20 +509,6 @@ class _AlertsPageState extends State<AlertsPage> {
       CustomSoundProfileStatus.ready => 'Ready',
       CustomSoundProfileStatus.failed => 'Failed',
     };
-  }
-
-  Widget _buildProgressChip(String label, bool isComplete) {
-    return Chip(
-      avatar: Icon(
-        isComplete ? Icons.check_circle : Icons.radio_button_unchecked,
-        size: 16,
-      ),
-      label: Text(
-        label,
-        style: GoogleFonts.inter(fontSize: 11),
-      ),
-      visualDensity: VisualDensity.compact,
-    );
   }
 
   Widget _buildCustomSoundSection(
@@ -970,7 +551,7 @@ class _AlertsPageState extends State<AlertsPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add a sound, record 5 examples and 1 background calibration, then train the custom model.',
+                    'Add a sound, record 10 target examples and 3 background samples, then train the custom model.',
                     style: GoogleFonts.inter(
                       color: scheme.onSurface.withValues(alpha: 0.68),
                     ),
@@ -1036,9 +617,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 ),
                 Chip(
                   label: Text(
-                    profile.hasBackgroundSample
-                        ? 'Background Ready'
-                        : 'Background Needed',
+                    'Background ${profile.backgroundSampleCount}/$kRequiredBackgroundSamples',
                     style: GoogleFonts.inter(fontSize: 10),
                   ),
                   visualDensity: VisualDensity.compact,
@@ -1071,7 +650,7 @@ class _AlertsPageState extends State<AlertsPage> {
             onSelected: (index, item) async {
               switch (item.value) {
                 case 'open':
-                  await _showCustomSoundSheet(profile);
+                  await _openCustomSoundEnrollmentPage(profile);
                   break;
                 case 'retrain':
                   await _retrainCustomSounds();
@@ -1085,7 +664,7 @@ class _AlertsPageState extends State<AlertsPage> {
               }
             },
           ),
-          onTap: () => _showCustomSoundSheet(profile),
+          onTap: () => _openCustomSoundEnrollmentPage(profile),
         ),
       ),
     ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1);

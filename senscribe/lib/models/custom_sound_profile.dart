@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-const int kRequiredCustomSoundSamples = 5;
-const int kRequiredBackgroundSamples = 1;
+const int kRequiredCustomSoundSamples = 10;
+const int kRequiredBackgroundSamples = 3;
 
 enum CustomSoundProfileStatus {
   draft,
@@ -57,6 +57,10 @@ class CustomSoundProfile {
   bool get hasEnoughSamples =>
       targetSampleCount >= kRequiredCustomSoundSamples &&
       backgroundSampleCount >= kRequiredBackgroundSamples;
+  bool get needsMoreTargetSamples =>
+      targetSampleCount < kRequiredCustomSoundSamples;
+  bool get needsMoreBackgroundSamples =>
+      backgroundSampleCount < kRequiredBackgroundSamples;
 
   CustomSoundProfile copyWith({
     String? id,
@@ -97,7 +101,7 @@ class CustomSoundProfile {
       };
 
   factory CustomSoundProfile.fromJson(Map<String, dynamic> json) {
-    return CustomSoundProfile(
+    final profile = CustomSoundProfile(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       enabled: json['enabled'] as bool? ?? true,
@@ -115,6 +119,12 @@ class CustomSoundProfile {
           DateTime.now(),
       lastError: json['lastError'] as String?,
     );
+    if (!profile.hasEnoughSamples &&
+        (profile.status == CustomSoundProfileStatus.ready ||
+            profile.status == CustomSoundProfileStatus.training)) {
+      return profile.copyWith(status: CustomSoundProfileStatus.draft);
+    }
+    return profile;
   }
 
   static String encodeList(List<CustomSoundProfile> items) =>

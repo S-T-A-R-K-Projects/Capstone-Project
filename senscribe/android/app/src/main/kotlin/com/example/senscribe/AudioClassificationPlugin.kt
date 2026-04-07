@@ -324,6 +324,8 @@ class AudioClassificationPlugin private constructor(
   private var classifierWindowFillCount = 0
 
   private val lastEmittedAtByKey = mutableMapOf<String, Long>()
+  private var lastBuiltInThrottleKey: String? = null
+  private var lastCustomThrottleKey: String? = null
   private var lastBuiltInCandidateLabel: String? = null
   private var lastBuiltInCandidateCount = 0
   private var lastCustomCandidateId: String? = null
@@ -540,7 +542,7 @@ class AudioClassificationPlugin private constructor(
 
     classifierWindowFillCount = 0
     classifierRollingWindow.fill(0f)
-    lastEmittedAtByKey.clear()
+    resetEmissionThrottleState()
     resetBuiltInCandidate()
     resetCustomCandidate()
     isRunning.set(true)
@@ -672,7 +674,14 @@ class AudioClassificationPlugin private constructor(
     }
 
     val now = System.currentTimeMillis()
-    if (!shouldEmit("builtIn:$normalizedLabel", now, BUILT_IN_THROTTLE_MS)) {
+    if (
+      !shouldEmit(
+        key = "builtIn:$normalizedLabel",
+        nowMs = now,
+        throttleMs = BUILT_IN_THROTTLE_MS,
+        source = "builtIn",
+      )
+    ) {
       return null
     }
 
@@ -806,7 +815,14 @@ class AudioClassificationPlugin private constructor(
     }
 
     val now = System.currentTimeMillis()
-    if (!shouldEmit("custom:${best.matcher.profileId}", now, CUSTOM_THROTTLE_MS)) {
+    if (
+      !shouldEmit(
+        key = "custom:${best.matcher.profileId}",
+        nowMs = now,
+        throttleMs = CUSTOM_THROTTLE_MS,
+        source = "custom",
+      )
+    ) {
       return null
     }
 
@@ -852,7 +868,7 @@ class AudioClassificationPlugin private constructor(
 
     classifierWindowFillCount = 0
     classifierRollingWindow.fill(0f)
-    lastEmittedAtByKey.clear()
+    resetEmissionThrottleState()
     resetBuiltInCandidate()
     resetCustomCandidate()
 
@@ -1479,12 +1495,28 @@ class AudioClassificationPlugin private constructor(
     key: String,
     nowMs: Long,
     throttleMs: Long,
+    source: String,
   ): Boolean {
+    val previousKey =
+      when (source) {
+        "custom" -> lastCustomThrottleKey
+        else -> lastBuiltInThrottleKey
+      }
+
+    if (previousKey != null && previousKey != key) {
+      lastEmittedAtByKey.remove(previousKey)
+    }
+
     val lastEmittedAtMs = lastEmittedAtByKey[key]
     if (lastEmittedAtMs != null && nowMs - lastEmittedAtMs < throttleMs) {
       return false
     }
     lastEmittedAtByKey[key] = nowMs
+
+    when (source) {
+      "custom" -> lastCustomThrottleKey = key
+      else -> lastBuiltInThrottleKey = key
+    }
     return true
   }
 
@@ -1506,6 +1538,12 @@ class AudioClassificationPlugin private constructor(
   private fun resetCustomCandidate() {
     lastCustomCandidateId = null
     lastCustomCandidateCount = 0
+  }
+
+  private fun resetEmissionThrottleState() {
+    lastEmittedAtByKey.clear()
+    lastBuiltInThrottleKey = null
+    lastCustomThrottleKey = null
   }
 
   private fun calculateSignalLevels(buffer: FloatArray): SignalLevels {

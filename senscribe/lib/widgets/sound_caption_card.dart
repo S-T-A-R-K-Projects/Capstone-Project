@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
@@ -19,99 +18,6 @@ class SoundCaptionCard extends StatelessWidget {
     this.onViewDetails,
     this.onSaveToAlerts,
   });
-
-  void _showActionsSheet(BuildContext context) {
-    final actions = <_SoundCardAction>[
-      if (onViewDetails != null)
-        _SoundCardAction(
-          label: 'View Details',
-          value: _SoundCardActionValue.details,
-        ),
-      if (onSaveToAlerts != null)
-        _SoundCardAction(
-          label: 'Save to Alerts',
-          value: _SoundCardActionValue.saveToAlerts,
-        ),
-      if (onDelete != null)
-        _SoundCardAction(
-          label: 'Delete',
-          value: _SoundCardActionValue.delete,
-          isDestructive: true,
-        ),
-    ];
-
-    if (actions.isEmpty) return;
-
-    final selectionFuture = PlatformInfo.isIOS
-        ? showCupertinoModalPopup<_SoundCardActionValue>(
-            context: context,
-            builder: (sheetContext) {
-              return CupertinoActionSheet(
-                actions: actions
-                    .map(
-                      (action) => CupertinoActionSheetAction(
-                        isDestructiveAction: action.isDestructive,
-                        onPressed: () => Navigator.of(sheetContext).pop(
-                          action.value,
-                        ),
-                        child: Text(action.label),
-                      ),
-                    )
-                    .toList(),
-                cancelButton: CupertinoActionSheetAction(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                  isDefaultAction: true,
-                  child: const Text('Cancel'),
-                ),
-              );
-            },
-          )
-        : showModalBottomSheet<_SoundCardActionValue>(
-            context: context,
-            showDragHandle: true,
-            builder: (sheetContext) {
-              final scheme = Theme.of(sheetContext).colorScheme;
-              return SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final action in actions)
-                      ListTile(
-                        title: Text(
-                          action.label,
-                          style: GoogleFonts.inter(
-                            color: action.isDestructive
-                                ? scheme.error
-                                : scheme.onSurface,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        onTap: () => Navigator.of(sheetContext).pop(
-                          action.value,
-                        ),
-                      ),
-                  ],
-                ),
-              );
-            },
-          );
-
-    selectionFuture.then((selected) {
-      switch (selected) {
-        case _SoundCardActionValue.details:
-          onViewDetails?.call();
-          break;
-        case _SoundCardActionValue.saveToAlerts:
-          onSaveToAlerts?.call();
-          break;
-        case _SoundCardActionValue.delete:
-          onDelete?.call();
-          break;
-        case null:
-          break;
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -258,29 +164,10 @@ class SoundCaptionCard extends StatelessWidget {
                 ),
               ),
 
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => _showActionsSheet(context),
-                  borderRadius: BorderRadius.circular(22),
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: scheme.surface.withValues(alpha: 0.92),
-                      border: Border.all(
-                        color: scheme.outline.withValues(alpha: 0.18),
-                      ),
-                    ),
-                    child: Icon(
-                      PlatformInfo.isIOS26OrHigher()
-                          ? CupertinoIcons.ellipsis
-                          : Icons.more_horiz_rounded,
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                ),
+              _SoundCaptionMenuButton(
+                onViewDetails: onViewDetails,
+                onSaveToAlerts: onSaveToAlerts,
+                onDelete: onDelete,
               ),
             ],
           ),
@@ -314,16 +201,89 @@ class SoundCaptionCard extends StatelessWidget {
   }
 }
 
-enum _SoundCardActionValue { details, saveToAlerts, delete }
-
 class _SoundCardAction {
   const _SoundCardAction({
     required this.label,
     required this.value,
-    this.isDestructive = false,
   });
 
   final String label;
-  final _SoundCardActionValue value;
-  final bool isDestructive;
+  final String value;
+}
+
+class _SoundCaptionMenuButton extends StatefulWidget {
+  const _SoundCaptionMenuButton({
+    this.onViewDetails,
+    this.onSaveToAlerts,
+    this.onDelete,
+  });
+
+  final VoidCallback? onViewDetails;
+  final VoidCallback? onSaveToAlerts;
+  final VoidCallback? onDelete;
+
+  @override
+  State<_SoundCaptionMenuButton> createState() => _SoundCaptionMenuButtonState();
+}
+
+class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
+  List<_SoundCardAction> get _actions => [
+        if (widget.onViewDetails != null)
+          const _SoundCardAction(label: 'View Details', value: 'details'),
+        if (widget.onSaveToAlerts != null)
+          const _SoundCardAction(
+            label: 'Save to Alerts',
+            value: 'save_to_alerts',
+          ),
+        if (widget.onDelete != null)
+          const _SoundCardAction(label: 'Delete', value: 'delete'),
+      ];
+
+  List<AdaptivePopupMenuEntry> get _menuItems => _actions
+      .map(
+        (action) => AdaptivePopupMenuItem<String>(
+          label: action.label,
+          icon: switch (action.value) {
+            'details' => PlatformInfo.isIOS26OrHigher() ? 'info.circle' : Icons.info_outline_rounded,
+            'save_to_alerts' => PlatformInfo.isIOS26OrHigher() ? 'bookmark' : Icons.bookmark_border_rounded,
+            'delete' => PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
+            _ => null,
+          },
+          value: action.value,
+        ),
+      )
+      .toList();
+
+  void _handleMenuSelection(String value) {
+    switch (value) {
+      case 'details':
+        widget.onViewDetails?.call();
+        break;
+      case 'save_to_alerts':
+        widget.onSaveToAlerts?.call();
+        break;
+      case 'delete':
+        widget.onDelete?.call();
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: AdaptivePopupMenuButton.icon<String>(
+        icon: PlatformInfo.isIOS26OrHigher()
+            ? 'ellipsis.circle'
+            : Icons.more_horiz_rounded,
+        items: _menuItems,
+        onSelected: (index, item) {
+          final value = item.value;
+          if (value == null) return;
+          _handleMenuSelection(value);
+        },
+      ),
+    );
+  }
 }

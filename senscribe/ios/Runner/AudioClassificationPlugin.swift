@@ -67,6 +67,8 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   private var isCapturingSample = false
   private var resumeMonitoringAfterCapture = false
   private var lastEmittedEventDateByKey: [String: Date] = [:]
+  private var lastBuiltInThrottleKey: String?
+  private var lastCustomThrottleKey: String?
   private var latestInputRMS: Float = 0
   private var latestInputPeak: Float = 0
   private var lastCustomCandidateIdentifier: String?
@@ -160,7 +162,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
           try self.configureAudioSession()
           try self.startMonitoringSession()
           self.isMonitoring = true
-          self.lastEmittedEventDateByKey.removeAll()
+          self.resetEmissionThrottleState()
           self.sendStatus("started")
           result(nil)
         } catch {
@@ -185,7 +187,7 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     customRequest = nil
     audioEngine = nil
     isMonitoring = false
-    lastEmittedEventDateByKey.removeAll()
+    resetEmissionThrottleState()
     lastCustomCandidateIdentifier = nil
     lastCustomCandidateCount = 0
 
@@ -613,13 +615,15 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
 
     let source = isCustomRequest ? "custom" : "builtIn"
     let throttleInterval = isCustomRequest ? customThrottleInterval : builtInThrottleInterval
-    let throttleKey = "\(source):\(identifier)"
     let now = Date()
-    if let lastEventDate = lastEmittedEventDateByKey[throttleKey],
-       now.timeIntervalSince(lastEventDate) < throttleInterval {
+    if !shouldEmitEvent(
+      for: source,
+      identifier: identifier,
+      throttleInterval: throttleInterval,
+      now: now
+    ) {
       return
     }
-    lastEmittedEventDateByKey[throttleKey] = now
 
     var payload: [String: Any] = [
       "type": "result",
@@ -644,9 +648,42 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   }
 
   func requestDidComplete(_ request: SNRequest) {
-    lastEmittedEventDateByKey.removeAll()
+    resetEmissionThrottleState()
     lastCustomCandidateIdentifier = nil
     lastCustomCandidateCount = 0
+  }
+
+  private func shouldEmitEvent(
+    for source: String,
+    identifier: String,
+    throttleInterval: TimeInterval,
+    now: Date
+  ) -> Bool {
+    let throttleKey = "\(source):\(identifier)"
+    let previousKey = source == "custom" ? lastCustomThrottleKey : lastBuiltInThrottleKey
+
+    if let previousKey, previousKey != throttleKey {
+      lastEmittedEventDateByKey.removeValue(forKey: previousKey)
+    }
+
+    if let lastEventDate = lastEmittedEventDateByKey[throttleKey],
+       now.timeIntervalSince(lastEventDate) < throttleInterval {
+      return false
+    }
+
+    lastEmittedEventDateByKey[throttleKey] = now
+    if source == "custom" {
+      lastCustomThrottleKey = throttleKey
+    } else {
+      lastBuiltInThrottleKey = throttleKey
+    }
+    return true
+  }
+
+  private func resetEmissionThrottleState() {
+    lastEmittedEventDateByKey.removeAll()
+    lastBuiltInThrottleKey = nil
+    lastCustomThrottleKey = nil
   }
 
   private func loadProfiles() -> [CustomSoundProfileRecord] {

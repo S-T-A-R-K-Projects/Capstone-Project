@@ -183,7 +183,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
 
     await service.add(item);
     if (!mounted) return;
-    _showSnackBar('Saved to history');
+    _showSnackBar('Text saved');
     setState(() => _isSaving = false);
   }
 

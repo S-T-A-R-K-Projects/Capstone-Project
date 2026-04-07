@@ -102,8 +102,8 @@ class _HistoryPageState extends State<HistoryPage> {
     var shouldClear = false;
     await AdaptiveAlertDialog.show(
       context: context,
-      title: 'Clear history?',
-      message: 'This will remove all history entries.',
+      title: 'Clear saved texts?',
+      message: 'This will remove all saved text entries.',
       actions: [
         AlertAction(
           title: 'Cancel',
@@ -146,7 +146,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(
-        title: 'History',
+        title: 'Saved Texts',
         actions: [
           if (_items.isNotEmpty)
             AdaptiveAppBarAction(
@@ -170,7 +170,7 @@ class _HistoryPageState extends State<HistoryPage> {
                     child: Padding(
                       padding: EdgeInsets.only(top: topInset),
                       child: Text(
-                        'No history yet',
+                        'No saved texts yet',
                         style: GoogleFonts.inter(
                           color: theme.colorScheme.onSurface
                               .withValues(alpha: 0.72),

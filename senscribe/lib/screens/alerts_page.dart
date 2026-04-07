@@ -26,7 +26,7 @@ class _AlertsPageState extends State<AlertsPage> {
   final TriggerWordService _triggerWordService = TriggerWordService();
   final CustomSoundService _customSoundService = CustomSoundService();
   final TextEditingController _newWordController = TextEditingController();
-  int _selectedTabIndex = 0; // 0 = Alerts, 1 = Trigger Words
+  int _selectedTabIndex = 0; // 0 = Alerts, 1 = Alert Triggers
   bool _isAlertSelectionMode = false;
   final Set<String> _selectedAlertIds = <String>{};
 
@@ -46,6 +46,147 @@ class _AlertsPageState extends State<AlertsPage> {
   void dispose() {
     _newWordController.dispose();
     super.dispose();
+  }
+
+  bool _isSoundAlert(TriggerAlert alert) {
+    return alert.source == TriggerAlert.sourceSoundRecognition ||
+        alert.source == TriggerAlert.sourceCustomSound;
+  }
+
+  IconData _alertIcon(TriggerAlert alert) {
+    if (alert.source == TriggerAlert.sourceCustomSound) {
+      return Icons.tune_rounded;
+    }
+    if (alert.source == TriggerAlert.sourceSoundRecognition) {
+      return Icons.hearing_rounded;
+    }
+    return Icons.warning_rounded;
+  }
+
+  Color _alertIconColor(TriggerAlert alert, ColorScheme scheme) {
+    if (_isSoundAlert(alert)) {
+      return scheme.primary;
+    }
+    return scheme.error;
+  }
+
+  String _alertTitle(TriggerAlert alert) {
+    if (_isSoundAlert(alert)) {
+      return 'Sound: "${alert.triggerWord}"';
+    }
+    return 'Trigger: "${alert.triggerWord}"';
+  }
+
+  Future<void> _showAlertDetails(TriggerAlert alert) async {
+    final isSoundAlert = _isSoundAlert(alert);
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: alert.triggerWord,
+      message: isSoundAlert
+          ? _buildSoundAlertDetails(alert)
+          : 'Detected text: ${alert.detectedText}\n'
+              'Source: Speech trigger\n'
+              'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}',
+      icon: _detailIconForAlert(alert),
+      iconSize: 36,
+      iconColor: Theme.of(context).colorScheme.primary,
+      actions: [
+        AlertAction(
+          title: 'Close',
+          style: AlertActionStyle.primary,
+          onPressed: () {},
+        ),
+      ],
+    );
+  }
+
+  String _buildSoundAlertSummary(TriggerAlert alert) {
+    final confidence = alert.soundConfidencePercent;
+    final confidenceLabel = confidence == null ? 'Unknown' : '$confidence%';
+    return '$confidenceLabel confidence • ${alert.soundDetectorLabel}';
+  }
+
+  String _buildSoundAlertDetails(TriggerAlert alert) {
+    final confidence = alert.soundConfidencePercent;
+    final confidenceLabel = confidence == null ? 'Unknown' : '$confidence%';
+    return 'Detector: ${alert.soundDetectorLabel}\n'
+        'Confidence: $confidenceLabel\n'
+        'Priority: ${alert.soundPriorityLabel}\n'
+        'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}';
+  }
+
+  Widget _buildAlertSubtitle(TriggerAlert alert, ColorScheme scheme) {
+    if (_isSoundAlert(alert)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          Text(
+            TimeUtils.formatExactDateTime(alert.timestamp),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: scheme.onSurface.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _buildSoundAlertSummary(alert),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: scheme.onSurface.withValues(alpha: 0.68),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        Text(
+          alert.detectedText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: scheme.onSurface.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          TimeUtils.formatTimeAgoShort(alert.timestamp),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: scheme.onSurface.withValues(alpha: 0.68),
+          ),
+        ),
+      ],
+    );
+  }
+
+  dynamic _detailIconForAlert(TriggerAlert alert) {
+    if (PlatformInfo.isIOS26OrHigher()) {
+      if (alert.source == TriggerAlert.sourceCustomSound) {
+        return 'tuningfork';
+      }
+      if (_isSoundAlert(alert)) {
+        return 'waveform';
+      }
+      return 'exclamationmark.bubble';
+    }
+
+    if (alert.source == TriggerAlert.sourceCustomSound) {
+      return Icons.tune_rounded;
+    }
+    if (_isSoundAlert(alert)) {
+      return Icons.graphic_eq_rounded;
+    }
+    return Icons.warning_rounded;
   }
 
   void _showAddTriggerWordDialog() {
@@ -700,7 +841,7 @@ class _AlertsPageState extends State<AlertsPage> {
                       key: ValueKey(
                         'alerts-tabs-${theme.brightness.name}',
                       ),
-                      labels: const ['Recent Alerts', 'Trigger Words'],
+                      labels: const ['Recent Alerts', 'Alert Triggers'],
                       color: theme.colorScheme.surface,
                       selectedIndex: _selectedTabIndex,
                       onValueChanged: (index) {
@@ -760,7 +901,7 @@ class _AlertsPageState extends State<AlertsPage> {
                     ).animate().scale(duration: 600.ms),
                     const SizedBox(height: 24),
                     Text(
-                      'No trigger word alerts yet',
+                      'No recent alerts yet',
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -769,7 +910,7 @@ class _AlertsPageState extends State<AlertsPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Add trigger words and use text-to-speech to generate alerts',
+                      'Trigger detections and saved sounds will appear here',
                       style: GoogleFonts.inter(
                         color: scheme.onSurface.withValues(alpha: 0.68),
                       ),
@@ -844,16 +985,16 @@ class _AlertsPageState extends State<AlertsPage> {
                                       ? (isSelected
                                           ? Icons.check_circle
                                           : Icons.radio_button_unchecked)
-                                      : Icons.warning_rounded,
+                                      : _alertIcon(alert),
                                   color: _isAlertSelectionMode
                                       ? (isSelected
                                           ? scheme.primary
                                           : scheme.onSurface
                                               .withValues(alpha: 0.65))
-                                      : scheme.error,
+                                      : _alertIconColor(alert, scheme),
                                 ),
                                 title: Text(
-                                  'Trigger: "${alert.triggerWord}"',
+                                  _alertTitle(alert),
                                   style: GoogleFonts.inter(
                                     fontWeight: FontWeight.bold,
                                     color: scheme.onSurface,
@@ -862,27 +1003,7 @@ class _AlertsPageState extends State<AlertsPage> {
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      alert.detectedText,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        color: scheme.onSurface
-                                            .withValues(alpha: 0.8),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      TimeUtils.formatTimeAgoShort(
-                                          alert.timestamp),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: scheme.onSurface
-                                            .withValues(alpha: 0.68),
-                                      ),
-                                    ),
+                                    _buildAlertSubtitle(alert, scheme),
                                   ],
                                 ),
                                 trailing: _isAlertSelectionMode
@@ -898,6 +1019,8 @@ class _AlertsPageState extends State<AlertsPage> {
                                 onTap: () {
                                   if (_isAlertSelectionMode) {
                                     _toggleAlertSelection(alert.id);
+                                  } else if (_isSoundAlert(alert)) {
+                                    _showAlertDetails(alert);
                                   }
                                 },
                               ),

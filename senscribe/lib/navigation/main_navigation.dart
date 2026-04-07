@@ -63,9 +63,8 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
             label: 'Home',
           ),
           AdaptiveNavigationDestination(
-            icon:
-                useNativeBar ? 'clock.arrow.circlepath' : Icons.history_rounded,
-            label: 'History',
+            icon: useNativeBar ? 'doc.text.fill' : Icons.description_rounded,
+            label: 'Texts',
           ),
           AdaptiveNavigationDestination(
             icon: useNativeBar ? 'bell.fill' : Icons.notifications_rounded,

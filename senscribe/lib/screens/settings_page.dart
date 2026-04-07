@@ -217,7 +217,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
             const SizedBox(height: 8),
 
-            // Trigger Words & Custom Sounds
+            // Alert Triggers
             AdaptiveCard(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -233,7 +233,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Trigger Words & Custom Sounds',
+                          'Alert Triggers',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.inter(
@@ -247,7 +247,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Add trigger words for speech monitoring and train custom sounds for local audio alerts. Everything stays on this device.',
+                    'Manage trigger words for speech monitoring and custom sounds for local audio alerts. Everything stays on this device.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
@@ -262,7 +262,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           builder: (_) => const AlertsPage(initialTabIndex: 1),
                         ),
                       ),
-                      label: 'Open Trigger Words',
+                      label: 'Open Alert Triggers',
                       style: AdaptiveButtonStyle.plain,
                     ),
                   ),

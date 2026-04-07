@@ -109,7 +109,7 @@ class TriggerWordService {
     final json = prefs.getString(_kTriggerAlertsKey);
     if (json == null || json.isEmpty) return [];
     try {
-      final alerts = TriggerAlert.decodeList(json);
+      final alerts = _normalizeAlerts(TriggerAlert.decodeList(json));
       _alertsCache = alerts;
       return alerts;
     } catch (_) {
@@ -119,20 +119,31 @@ class TriggerWordService {
 
   Future<void> saveAlerts(List<TriggerAlert> alerts) async {
     final prefs = await SharedPreferences.getInstance();
-    final json = TriggerAlert.encodeList(alerts);
+    final normalizedAlerts = _normalizeAlerts(alerts);
+    final json = TriggerAlert.encodeList(normalizedAlerts);
     await prefs.setString(_kTriggerAlertsKey, json);
-    _alertsCache = alerts;
-    _alertsController.add(alerts);
+    _alertsCache = normalizedAlerts;
+    _alertsController.add(normalizedAlerts);
   }
 
-  Future<void> addAlert(TriggerAlert alert) async {
+  Future<bool> addAlert(TriggerAlert alert) async {
     final alerts = await loadAlerts();
+    if (alert.isSoundAlert) {
+      final alreadySaved = alerts.any(
+        (existingAlert) =>
+            existingAlert.isSoundAlert &&
+            existingAlert.normalizedSoundKey == alert.normalizedSoundKey,
+      );
+      if (alreadySaved) return false;
+    }
+
     alerts.insert(0, alert);
     if (alerts.length > AppConstants.alertHistoryMaxItems) {
       alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
     }
     await saveAlerts(alerts);
     // TODO: Add vibration/haptic feedback for alert trigger.
+    return true;
   }
 
   Future<void> clearAlerts() async {
@@ -146,6 +157,31 @@ class TriggerWordService {
     final alerts = await loadAlerts();
     alerts.removeWhere((a) => a.id == alertId);
     await saveAlerts(alerts);
+  }
+
+  List<TriggerAlert> _normalizeAlerts(List<TriggerAlert> alerts) {
+    final seenSoundAlerts = <String>{};
+    final normalized = <TriggerAlert>[];
+
+    for (final alert in alerts) {
+      if (!alert.isSoundAlert) {
+        normalized.add(alert);
+        continue;
+      }
+
+      if (seenSoundAlerts.add(alert.normalizedSoundKey)) {
+        normalized.add(alert);
+      }
+    }
+
+    if (normalized.length > AppConstants.alertHistoryMaxItems) {
+      normalized.removeRange(
+        AppConstants.alertHistoryMaxItems,
+        normalized.length,
+      );
+    }
+
+    return normalized;
   }
 
   void dispose() {

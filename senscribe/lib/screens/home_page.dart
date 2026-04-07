@@ -7,8 +7,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/sound_caption.dart';
+import '../models/trigger_alert.dart';
+import '../utils/time_utils.dart';
 import '../widgets/sound_caption_card.dart';
 import '../services/audio_classification_service.dart';
+import '../services/trigger_word_service.dart';
 
 class HomePage extends StatefulWidget {
   final bool isMonitoring;
@@ -30,6 +33,7 @@ class _HomePageState extends State<HomePage> {
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
   final AudioClassificationService _audioService = AudioClassificationService();
+  final TriggerWordService _triggerWordService = TriggerWordService();
   List<SoundCaption> _captions = [];
   StreamSubscription<List<SoundCaption>>? _classificationSubscription;
   late bool _isMonitoring;
@@ -128,6 +132,93 @@ class _HomePageState extends State<HomePage> {
       message: 'Sound removed from the feed',
       type: AdaptiveSnackBarType.info,
     );
+  }
+
+  Future<void> _saveCaptionToAlerts(SoundCaption caption) async {
+    final alert = TriggerAlert(
+      triggerWord: caption.displaySound,
+      detectedText: _buildCaptionSummary(caption),
+      timestamp: caption.timestamp,
+      source: caption.source == SoundCaptionSource.custom
+          ? TriggerAlert.sourceCustomSound
+          : TriggerAlert.sourceSoundRecognition,
+      metadata: _buildCaptionMetadata(caption),
+    );
+
+    final inserted = await _triggerWordService.addAlert(alert);
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: inserted
+          ? '${caption.displaySound} saved to Recent Alerts'
+          : 'This detected ${caption.displaySound} sound is already saved in Recent Alerts',
+      type: inserted
+          ? AdaptiveSnackBarType.success
+          : AdaptiveSnackBarType.warning,
+    );
+  }
+
+  Future<void> _showCaptionDetails(SoundCaption caption) async {
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: caption.displaySound,
+      message: _buildCaptionDetailsMessage(caption),
+      icon: _detailIconForCaption(caption),
+      iconSize: 36,
+      iconColor: Theme.of(context).colorScheme.primary,
+      actions: [
+        AlertAction(
+          title: 'Close',
+          style: AlertActionStyle.primary,
+          onPressed: () {},
+        ),
+      ],
+    );
+  }
+
+  Map<String, dynamic> _buildCaptionMetadata(SoundCaption caption) {
+    return {
+      'detectorLabel': _captionDetectorLabel(caption),
+      'confidencePercent': (caption.confidence * 100).round(),
+      'priorityLabel': caption.isCritical ? 'Critical' : 'Standard',
+      'isCritical': caption.isCritical,
+    };
+  }
+
+  String _captionDetectorLabel(SoundCaption caption) {
+    return caption.source == SoundCaptionSource.custom
+        ? 'Custom sound'
+        : 'Built-in sound';
+  }
+
+  String _buildCaptionSummary(SoundCaption caption) {
+    final confidence = (caption.confidence * 100).round();
+    final priority = caption.isCritical ? 'Critical' : 'Standard';
+    return '${_captionDetectorLabel(caption)} • '
+        '$confidence% confidence • '
+        '$priority priority';
+  }
+
+  String _buildCaptionDetailsMessage(SoundCaption caption) {
+    final sourceLabel = _captionDetectorLabel(caption);
+    final confidence = (caption.confidence * 100).round();
+    final priority = caption.isCritical ? 'Critical' : 'Standard';
+    final detectedAt = TimeUtils.formatExactDateTime(caption.timestamp);
+    return 'Detector: $sourceLabel\n'
+        'Confidence: $confidence%\n'
+        'Priority: $priority\n'
+        'Detected: $detectedAt';
+  }
+
+  dynamic _detailIconForCaption(SoundCaption caption) {
+    if (PlatformInfo.isIOS26OrHigher()) {
+      return caption.source == SoundCaptionSource.custom
+          ? 'tuningfork'
+          : 'waveform';
+    }
+    return caption.source == SoundCaptionSource.custom
+        ? Icons.tune_rounded
+        : Icons.graphic_eq_rounded;
   }
 
   void _clearCaptions() {
@@ -503,6 +594,12 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 child: SoundCaptionCard(
                                   caption: filteredCaptions[index],
+                                  onViewDetails: () => _showCaptionDetails(
+                                    filteredCaptions[index],
+                                  ),
+                                  onSaveToAlerts: () => _saveCaptionToAlerts(
+                                    filteredCaptions[index],
+                                  ),
                                   onDelete: () =>
                                       _deleteCaption(filteredCaptions[index]),
                                 ),

@@ -71,7 +71,7 @@ class AboutSupportPage extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'On-device sound recognition, speech tools, trigger words, and custom sound alerts.',
+                'On-device sound recognition, speech tools, alert triggers, and custom sound alerts.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   color: Theme.of(context).textTheme.bodySmall?.color,
@@ -98,9 +98,9 @@ class AboutSupportPage extends StatelessWidget {
                 '• Real-time sound classification using AI/ML\n'
                     '• Speech-to-Text for voice input\n'
                     '• Text-to-Speech for audio output\n'
-                    '• Trigger words for speech alerts\n'
+                    '• Alert triggers for speech and sound monitoring\n'
                     '• Custom sound training and detection\n'
-                    '• Local history tracking\n'
+                    '• Saved texts stored locally on-device\n'
                     '• Privacy-first design (on-device processing)',
               ),
               const SizedBox(height: 16),
@@ -130,7 +130,7 @@ class AboutSupportPage extends StatelessWidget {
                     '4. Results return with confidence scores\n'
                     '5. Top classifications displayed in real-time\n'
                     '6. Duplicate labels throttled (700 ms minimum)\n'
-                    '7. History saved locally on your device\n\n'
+                    '7. Recent detections stay local on your device\n\n'
                     'All processing is 100% on-device. No audio is sent anywhere.',
               ),
               const SizedBox(height: 16),
@@ -202,7 +202,7 @@ class AboutSupportPage extends StatelessWidget {
                     'A: Yes! The app works completely offline.\n\n'
                     'Q: Why is accuracy sometimes low?\n'
                     'A: Accuracy depends on sound clarity and background noise.\n\n'
-                    'Q: Can I export my history?\n'
+                    'Q: Can I export my saved texts?\n'
                     'A: Not currently. Saved app data stays local on this device unless you delete it.',
               ),
               const SizedBox(height: 24),

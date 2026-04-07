@@ -47,16 +47,16 @@ class _StartPageState extends State<StartPage> {
           'Detect alarms, glass breaking, and other important sounds instantly.',
     ),
     _OnboardingStep(
-      icon: Icons.history,
-      title: 'History',
+      icon: Icons.description_rounded,
+      title: 'Saved Texts',
       description:
-          'Review your past events and recognized sounds in the History section.',
+          'Review the text you saved from speech-to-text and text-to-speech in Saved Texts.',
     ),
     _OnboardingStep(
       icon: Icons.description,
       title: 'Summarization',
       description:
-          'Generate summaries from history entries to quickly catch up on what matters.',
+          'Generate summaries from saved text entries to quickly catch up on what matters.',
     ),
     _OnboardingStep(
       icon: Icons.notifications,

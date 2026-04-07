@@ -321,7 +321,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           TriggerAlert(
             triggerWord: trigger,
             detectedText: text,
-            source: 'speech_to_text',
+            source: TriggerAlert.sourceSpeechToText,
           ),
         );
       }
@@ -417,7 +417,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     await service.add(item);
     if (!mounted) return;
     AdaptiveSnackBar.show(context,
-        message: "Saved to history", type: AdaptiveSnackBarType.success);
+        message: "Text saved", type: AdaptiveSnackBarType.success);
   }
 
   void _clearSTT() {

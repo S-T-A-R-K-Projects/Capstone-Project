@@ -75,7 +75,7 @@ class PrivacyDataPage extends StatelessWidget {
                 'The app can store feature data inside local app storage on this device.\n\n'
                     '• Trigger words and recent trigger alerts\n'
                     '• Custom sound profiles and recorded training samples\n'
-                    '• Saved text history and generated summaries\n'
+                    '• Saved texts and generated summaries\n'
                     '• App preferences such as theme and onboarding state\n'
                     '• Model and feature settings required by the app',
               ),
@@ -89,7 +89,7 @@ class PrivacyDataPage extends StatelessWidget {
                 'Microphone input is processed live on-device while features are active.\n\n'
                     '• Live sound detections are shown locally in the app\n'
                     '• Trigger words are checked against recognized speech on-device\n'
-                    '• Saved text history is only kept when you choose to save text inside the app\n'
+                    '• Saved texts are only kept when you choose to save text inside the app\n'
                     '• Custom sound recordings remain in the app’s local storage\n'
                     '• Nothing is sent to SenScribe servers because there are none for processing',
               ),
@@ -114,7 +114,7 @@ class PrivacyDataPage extends StatelessWidget {
                 'Your Control',
                 Icons.tune_rounded,
                 'You control the data that stays on your device.\n\n'
-                    '• Delete saved history entries from History\n'
+                    '• Delete saved text entries from Saved Texts\n'
                     '• Remove trigger words or trigger alerts from Alerts\n'
                     '• Delete custom sounds and their samples from Alerts\n'
                     '• Turn live updates on or off from Settings\n'

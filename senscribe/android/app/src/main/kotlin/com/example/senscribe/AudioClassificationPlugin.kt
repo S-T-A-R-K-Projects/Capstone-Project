@@ -184,7 +184,7 @@ class AudioClassificationPlugin private constructor(
     private const val BUILT_IN_MIN_SIGNAL_PEAK = 0.018f
     private const val BUILT_IN_MIN_WIN_MARGIN = 0.06
     private const val BUILT_IN_REQUIRED_CONSECUTIVE_MATCHES = 2
-    private const val BUILT_IN_THROTTLE_MS = 10_000L
+    private const val BUILT_IN_THROTTLE_MS = 5_000L
 
     private const val CUSTOM_MIN_SIGNAL_RMS = 0.008f
     private const val CUSTOM_MIN_SIGNAL_PEAK = 0.024f

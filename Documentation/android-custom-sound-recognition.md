@@ -1,10 +1,10 @@
 # Android Custom Sound Recognition Implementation
 
-This document describes the current Android custom sound recognition pipeline in `senscribe`. It reflects the rewritten Kotlin implementation and replaces the older MediaPipe-embedder description.
+This document describes the current Android custom sound recognition pipeline in `senscribe`.
 
 ## Summary
 
-Android custom sounds are now implemented as an on-device feature-bank matcher, not as a retrained neural network.
+Android custom sounds are implemented as an on-device feature-bank matcher.
 
 The current flow is:
 
@@ -266,23 +266,6 @@ Returned event payload:
 - `source = "custom"`
 - `timestampMs`
 - `customSoundId = <profile id>`
-
-## Important Differences From The Older Docs
-
-The older Android custom-sound documentation is no longer accurate in several places. The current code:
-
-- requires `10/3` samples, not `5/1`
-- uses WAV at `16 kHz`, not a MediaPipe sample pipeline
-- does not use MediaPipe `AudioEmbedder`
-- does not build a prototype from a single averaged embedding
-- does not retrain a model file for Android
-
-It now uses:
-
-- hand-crafted feature extraction
-- calibrated similarity banks
-- per-profile thresholds and background margins
-- multi-profile winner selection at runtime
 
 ## Tests
 

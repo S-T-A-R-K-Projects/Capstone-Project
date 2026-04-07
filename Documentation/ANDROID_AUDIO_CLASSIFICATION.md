@@ -1,6 +1,6 @@
 # Android Audio Classification Implementation Overview
 
-This document describes the current Android sound recognition implementation in `senscribe`. It reflects the rewritten code in `senscribe/android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt` and related files.
+This document describes the current Android sound recognition implementation in `senscribe`.
 
 ## Current Stack
 
@@ -11,7 +11,7 @@ This document describes the current Android sound recognition implementation in 
 - Custom matcher calibration: `android/app/src/main/kotlin/com/example/senscribe/CustomSoundMatching.kt`
 - Foreground notification service: `android/app/src/main/kotlin/com/example/senscribe/LiveUpdateForegroundService.kt`
 
-The old MediaPipe Tasks `AudioClassifier` pipeline is no longer what the app uses. Android now runs:
+Android runs:
 
 1. A direct TensorFlow Lite LiteRT-backed YAMNet runner for built-in classes.
 2. A separate on-device custom matcher built from saved feature banks.
@@ -102,9 +102,7 @@ The plugin does not emit every top category immediately. It applies the followin
 - minimum signal peak: `0.018`
 - minimum margin over the runner-up class: `0.06`
 - required consecutive matches: `2`
-- throttle per built-in label: `10_000 ms`
-
-This makes the Android built-in path much less chatty than the previous implementation.
+- throttle per built-in label: `5_000 ms`
 
 ## Android Live Updates
 
@@ -166,22 +164,6 @@ The app minimum is Android API 31 and above. That matches the project configurat
 
 - `LiveUpdateForegroundService` with `foregroundServiceType="microphone"`
 - `ModelDownloadForegroundService` with `foregroundServiceType="dataSync"`
-
-## What Changed Compared To The Older Design
-
-The existing documentation that mentioned MediaPipe Tasks is outdated. The current Android implementation:
-
-- does not use MediaPipe `AudioClassifier`
-- does not use `AudioData`
-- does not use MediaPipe `AudioEmbedder`
-- does not retrain a TFLite model for custom sounds
-
-Instead it now uses:
-
-- LiteRT/TensorFlow Lite directly for YAMNet built-in classification
-- a rolling PCM window owned by the plugin
-- a custom feature extractor for custom sounds
-- calibrated per-profile similarity banks for custom detection
 
 ## Key Files To Read
 

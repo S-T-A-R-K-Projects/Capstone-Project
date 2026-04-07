@@ -147,8 +147,6 @@ On failure:
 - the profile is marked `failed`
 - `lastError` is updated
 
-Unlike Android, iOS custom profiles do not persist per-profile feature banks because the trained artifact is a shared Core ML sound classifier.
-
 ## Training Pipeline
 
 Training is handled by `trainOrRebuildCustomModel(...)`.
@@ -216,7 +214,7 @@ The custom path is intentionally stricter than the built-in path.
 Current custom guard values:
 
 - confidence threshold: `0.94`
-- custom throttle interval: `10.0` seconds
+- custom throttle interval: `5.0` seconds
 - minimum signal RMS: `0.008`
 - required consecutive matches: `2`
 
@@ -248,16 +246,6 @@ That method:
 - emits a `status = "reloaded"` event
 
 This is how the app swaps in or removes the trained custom classifier while monitoring is already active.
-
-## Important Differences From Older Docs
-
-The older iOS custom-sound docs are stale in several places. The current code:
-
-- requires `10/3` samples, not `5/1`
-- records at `16 kHz`, not `44.1 kHz`
-- targets iOS 17 in the project Podfile
-- supports Android custom sounds too, so this is no longer an iOS-only product feature
-- trains one aggregate shared custom model, not one model file per sound
 
 ## Key Files To Read
 

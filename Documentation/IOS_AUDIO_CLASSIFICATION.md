@@ -8,7 +8,7 @@ The iOS project currently declares:
 
 - `platform :ios, '17.0'` in `senscribe/ios/Podfile`
 
-Although Apple built-in sound classification is available earlier than iOS 17, the app itself now targets iOS 17 and newer. That matches the project configuration the app is currently built with.
+The app targets iOS 17 and newer.
 
 ## Current Stack
 
@@ -114,9 +114,9 @@ The plugin currently requires iOS 15 or newer for this request, but because the 
 The built-in path uses:
 
 - confidence threshold: `0.25`
-- throttle per built-in label: `10.0` seconds
+- throttle per built-in label: `5.0` seconds
 
-Unlike Android, the built-in iOS path does not require consecutive built-in matches. The top classification is emitted once it passes threshold and throttle checks.
+The built-in iOS path emits the top classification once it passes threshold and throttle checks.
 
 ## Input Signal Tracking
 
@@ -168,15 +168,6 @@ For sound classification specifically, the native plugin only needs microphone p
 - exposes `senscribe/ios_permissions`
 - exposes `senscribe/ios_live_activities`
 - exposes `senscribe/ios_runtime`
-
-## What Changed Compared To Older Docs
-
-The older iOS classification documentation is stale in a few important ways:
-
-- the app no longer targets iOS 13; it currently targets iOS 17
-- the docs should not describe `home_page.dart` as the only entry point because the app also uses `unified_home_page.dart`
-- live activity support now exists and is wired through `AppDelegate.swift`
-- the custom model path is integrated into the same monitoring engine when a trained model is available
 
 ## Key Files To Read
 

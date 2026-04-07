@@ -52,8 +52,8 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   private let recordingDuration: TimeInterval = 5.0
   private let builtInConfidenceThreshold: Double = 0.25
   private let customConfidenceThreshold: Double = 0.94
-  private let builtInThrottleInterval: TimeInterval = 10.0
-  private let customThrottleInterval: TimeInterval = 10.0
+  private let builtInThrottleInterval: TimeInterval = 5.0
+  private let customThrottleInterval: TimeInterval = 5.0
   private let customMinimumSignalRMS: Float = 0.008
   private let requiredCustomConsecutiveMatches = 2
 

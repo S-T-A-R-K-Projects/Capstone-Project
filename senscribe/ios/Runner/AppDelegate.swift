@@ -135,6 +135,7 @@ private struct SenscribeLiveActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         let status: String
         let startedAtMs: Int
+        let lastDetectedIdentifier: String
         let lastDetectedLabel: String
         let lastDetectedConfidencePercent: Int
         let lastDetectedAtMs: Int
@@ -156,6 +157,7 @@ private enum SenscribeLiveActivityManager {
         let state = SenscribeLiveActivityAttributes.ContentState(
             status: payload["status"] as? String ?? "listening",
             startedAtMs: payload["startedAtMs"] as? Int ?? Int(Date().timeIntervalSince1970 * 1000),
+            lastDetectedIdentifier: payload["lastDetectedIdentifier"] as? String ?? "",
             lastDetectedLabel: payload["lastDetectedLabel"] as? String ?? "",
             lastDetectedConfidencePercent: payload["lastDetectedConfidencePercent"] as? Int ?? -1,
             lastDetectedAtMs: payload["lastDetectedAtMs"] as? Int ?? -1

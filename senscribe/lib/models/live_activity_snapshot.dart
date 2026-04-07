@@ -5,6 +5,7 @@ class LiveActivitySnapshot {
   const LiveActivitySnapshot({
     required this.status,
     required this.startedAtMs,
+    this.lastDetectedIdentifier,
     this.lastDetectedLabel,
     this.lastDetectedConfidencePercent,
     this.lastDetectedAtMs,
@@ -12,6 +13,7 @@ class LiveActivitySnapshot {
 
   final LiveActivityStatus status;
   final int startedAtMs;
+  final String? lastDetectedIdentifier;
   final String? lastDetectedLabel;
   final int? lastDetectedConfidencePercent;
   final int? lastDetectedAtMs;
@@ -19,9 +21,11 @@ class LiveActivitySnapshot {
   LiveActivitySnapshot copyWith({
     LiveActivityStatus? status,
     int? startedAtMs,
+    String? lastDetectedIdentifier,
     String? lastDetectedLabel,
     int? lastDetectedConfidencePercent,
     int? lastDetectedAtMs,
+    bool clearLastDetectedIdentifier = false,
     bool clearLastDetectedLabel = false,
     bool clearLastDetectedConfidencePercent = false,
     bool clearLastDetectedAtMs = false,
@@ -29,6 +33,9 @@ class LiveActivitySnapshot {
     return LiveActivitySnapshot(
       status: status ?? this.status,
       startedAtMs: startedAtMs ?? this.startedAtMs,
+      lastDetectedIdentifier: clearLastDetectedIdentifier
+          ? null
+          : lastDetectedIdentifier ?? this.lastDetectedIdentifier,
       lastDetectedLabel: clearLastDetectedLabel
           ? null
           : lastDetectedLabel ?? this.lastDetectedLabel,
@@ -45,6 +52,7 @@ class LiveActivitySnapshot {
     return <String, dynamic>{
       'status': status.value,
       'startedAtMs': startedAtMs,
+      'lastDetectedIdentifier': lastDetectedIdentifier ?? unsetStringValue,
       'lastDetectedLabel': lastDetectedLabel ?? unsetStringValue,
       'lastDetectedConfidencePercent':
           lastDetectedConfidencePercent ?? unsetIntValue,

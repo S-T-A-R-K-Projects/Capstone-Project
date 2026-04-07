@@ -80,7 +80,8 @@ class LiveUpdateService {
     await _syncMonitoringStateInternal(isMonitoring: isMonitoring);
   }
 
-  Future<void> _syncMonitoringStateInternal({required bool isMonitoring}) async {
+  Future<void> _syncMonitoringStateInternal(
+      {required bool isMonitoring}) async {
     final liveUpdatesEnabled = await _settingsService.loadLiveUpdatesEnabled();
 
     if (!liveUpdatesEnabled || !isMonitoring) {
@@ -210,6 +211,7 @@ class LiveUpdateService {
             ))
         .copyWith(
       status: LiveActivityStatus.detected,
+      lastDetectedIdentifier: latestEvent.sound,
       lastDetectedLabel: latestEvent.displaySound,
       lastDetectedConfidencePercent: (latestEvent.confidence * 100).round(),
       lastDetectedAtMs: latestEvent.timestamp.millisecondsSinceEpoch,

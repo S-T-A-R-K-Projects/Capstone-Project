@@ -23,15 +23,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifier
-import com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifier.AudioClassifierOptions
-import com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifierResult
-import com.google.mediapipe.tasks.audio.audioembedder.AudioEmbedder
-import com.google.mediapipe.tasks.audio.audioembedder.AudioEmbedder.AudioEmbedderOptions
-import com.google.mediapipe.tasks.audio.audioembedder.AudioEmbedderResult
-import com.google.mediapipe.tasks.audio.core.RunningMode
-import com.google.mediapipe.tasks.components.containers.AudioData
-import com.google.mediapipe.tasks.core.BaseOptions
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -158,6 +149,11 @@ private data class MatchCandidate(
   val backgroundSimilarity: Double,
 )
 
+private data class TrainingFeatureWindow(
+  val feature: FloatArray,
+  val signalLevels: SignalLevels,
+)
+
 class AudioClassificationPlugin private constructor(
   private val context: Context,
   private var activity: Activity,
@@ -173,6 +169,7 @@ class AudioClassificationPlugin private constructor(
     private const val SAMPLE_RATE = 16000
     private const val CHANNEL_COUNT = 1
     private const val CLASSIFICATION_SAMPLE_COUNT = 15600
+    private const val INFERENCE_HOP_SAMPLE_COUNT = 3200
     private const val EMBEDDING_STEP_SAMPLE_COUNT = CLASSIFICATION_SAMPLE_COUNT / 2
     private const val CAPTURE_DURATION_SECONDS = 5
     private const val CAPTURE_SAMPLE_COUNT = SAMPLE_RATE * CAPTURE_DURATION_SECONDS
@@ -183,13 +180,20 @@ class AudioClassificationPlugin private constructor(
     private const val MODEL_ASSET_PATH = "yamnet/yamnet.tflite"
 
     private const val BUILT_IN_SCORE_THRESHOLD = 0.4f
+    private const val BUILT_IN_MIN_SIGNAL_RMS = 0.006f
+    private const val BUILT_IN_MIN_SIGNAL_PEAK = 0.018f
+    private const val BUILT_IN_MIN_WIN_MARGIN = 0.06
+    private const val BUILT_IN_REQUIRED_CONSECUTIVE_MATCHES = 2
     private const val BUILT_IN_THROTTLE_MS = 10_000L
 
     private const val CUSTOM_MIN_SIGNAL_RMS = 0.008f
     private const val CUSTOM_MIN_SIGNAL_PEAK = 0.024f
     private const val CUSTOM_MIN_WIN_MARGIN = 0.03
-    private const val CUSTOM_THROTTLE_MS = 10_000L
+    private const val CUSTOM_MIN_BACKGROUND_SEPARATION = 0.045
+    private const val CUSTOM_THROTTLE_MS = 5_000L
     private const val CUSTOM_REQUIRED_CONSECUTIVE_MATCHES = 2
+    private const val TARGET_WINDOWS_PER_SAMPLE = 3
+    private const val BACKGROUND_WINDOWS_PER_SAMPLE = 4
 
     // Notification constants
     const val NOTIFICATION_CHANNEL_ID = "senscribe_live_updates"
@@ -304,8 +308,7 @@ class AudioClassificationPlugin private constructor(
   private var pendingPermissionResult: MethodChannel.Result? = null
   private var pendingPermissionContinuation: (() -> Unit)? = null
 
-  private var audioClassifier: AudioClassifier? = null
-  private var audioEmbedder: AudioEmbedder? = null
+  private var yamnetRunner: YamnetLiteRtRunner? = null
   private var audioRecord: AudioRecord? = null
   private var handlerThread: HandlerThread? = null
   private var workHandler: Handler? = null
@@ -315,12 +318,14 @@ class AudioClassificationPlugin private constructor(
   private val isCapturingSample = AtomicBoolean(false)
   private var resumeMonitoringAfterCapture = false
 
-  private val audioDataFormat = AudioData.AudioDataFormat.builder()
-    .setNumOfChannels(CHANNEL_COUNT)
-    .setSampleRate(SAMPLE_RATE.toFloat())
-    .build()
+  private val classifierReadBuffer = ShortArray(INFERENCE_HOP_SAMPLE_COUNT)
+  private val classifierReadFloatBuffer = FloatArray(INFERENCE_HOP_SAMPLE_COUNT)
+  private val classifierRollingWindow = FloatArray(CLASSIFICATION_SAMPLE_COUNT)
+  private var classifierWindowFillCount = 0
 
   private val lastEmittedAtByKey = mutableMapOf<String, Long>()
+  private var lastBuiltInCandidateLabel: String? = null
+  private var lastBuiltInCandidateCount = 0
   private var lastCustomCandidateId: String? = null
   private var lastCustomCandidateCount = 0
   private var activeCustomMatchers: List<CustomSoundMatcher> = emptyList()
@@ -503,19 +508,13 @@ class AudioClassificationPlugin private constructor(
     if (isRunning.get()) return
 
     activeCustomMatchers = loadActiveCustomMatchers()
-
-    val classifierOptions = AudioClassifierOptions.builder()
-      .setBaseOptions(BaseOptions.builder().setModelAssetPath(MODEL_ASSET_PATH).build())
-      .setRunningMode(RunningMode.AUDIO_CLIPS)
-      .setMaxResults(3)
-      .build()
-
-    val classifier = AudioClassifier.createFromOptions(context, classifierOptions)
-    val embedder = try {
-      createLiveAudioEmbedderIfNeeded(activeCustomMatchers.isNotEmpty())
-    } catch (_: Exception) {
-      activeCustomMatchers = emptyList()
-      null
+    val runner = try {
+      createYamnetRunner()
+    } catch (error: Exception) {
+      throw IllegalStateException(
+        error.message ?: "Unable to initialize the YAMNet sound runner.",
+        error,
+      )
     }
 
     val minBufferSize =
@@ -531,19 +530,19 @@ class AudioClassificationPlugin private constructor(
     )
 
     if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-      classifier.close()
-      embedder?.close()
+      runner.close()
       recorder.release()
       throw IllegalStateException("Unable to initialize microphone for audio classification.")
     }
 
-    audioClassifier = classifier
-    audioEmbedder = embedder
+    yamnetRunner = runner
     audioRecord = recorder
 
+    classifierWindowFillCount = 0
+    classifierRollingWindow.fill(0f)
     lastEmittedAtByKey.clear()
-    lastCustomCandidateId = null
-    lastCustomCandidateCount = 0
+    resetBuiltInCandidate()
+    resetCustomCandidate()
     isRunning.set(true)
 
     acquireWakeLock()
@@ -558,27 +557,23 @@ class AudioClassificationPlugin private constructor(
   }
 
   private val classificationRunnable = object : Runnable {
-    private val shortBuffer = ShortArray(CLASSIFICATION_SAMPLE_COUNT)
-    private val floatBuffer = FloatArray(CLASSIFICATION_SAMPLE_COUNT)
-
     override fun run() {
       if (!isRunning.get()) return
 
-      val classifier = audioClassifier
-      val embedder = audioEmbedder
+      val runner = yamnetRunner
       val recorder = audioRecord
 
-      if (classifier == null || recorder == null) {
+      if (runner == null || recorder == null) {
         stopClassification()
         return
       }
 
       var totalRead = 0
-      while (totalRead < CLASSIFICATION_SAMPLE_COUNT && isRunning.get()) {
+      while (totalRead < INFERENCE_HOP_SAMPLE_COUNT && isRunning.get()) {
         val read = recorder.read(
-          shortBuffer,
+          classifierReadBuffer,
           totalRead,
-          CLASSIFICATION_SAMPLE_COUNT - totalRead,
+          INFERENCE_HOP_SAMPLE_COUNT - totalRead,
           AudioRecord.READ_BLOCKING,
         )
         if (read < 0) {
@@ -591,36 +586,41 @@ class AudioClassificationPlugin private constructor(
 
       if (!isRunning.get()) return
 
-      for (i in 0 until CLASSIFICATION_SAMPLE_COUNT) {
-        floatBuffer[i] = shortBuffer[i] / 32768f
+      for (i in 0 until totalRead) {
+        classifierReadFloatBuffer[i] = classifierReadBuffer[i] / 32768f
       }
 
-      val audioData = AudioData.create(audioDataFormat, CLASSIFICATION_SAMPLE_COUNT)
-      audioData.load(floatBuffer)
+      classifierWindowFillCount = appendToRollingWindow(
+        destination = classifierRollingWindow,
+        currentFillCount = classifierWindowFillCount,
+        source = classifierReadFloatBuffer,
+        count = totalRead,
+      )
 
-      val classificationResult = try {
-        classifier.classify(audioData)
+      if (classifierWindowFillCount < CLASSIFICATION_SAMPLE_COUNT) {
+        if (isRunning.get()) {
+          workHandler?.post(this)
+        }
+        return
+      }
+
+      val recentSignalLevels = calculateSignalLevels(classifierReadFloatBuffer, totalRead)
+      val inferenceResult = try {
+        runner.analyze(classifierRollingWindow)
       } catch (error: Exception) {
         postError("analysis_failed", error.message ?: "Audio classification failed.")
         stopClassification()
         return
       }
-      val builtInPayload = processBuiltInResult(classificationResult)
+      val builtInPayload = processBuiltInResult(inferenceResult, recentSignalLevels)
 
       var customPayload: Map<String, Any>? = null
-      if (embedder != null && activeCustomMatchers.isNotEmpty()) {
-        val embedding = try {
-          extractEmbedding(embedder.embed(audioData))
-        } catch (error: Exception) {
-          postError("custom_analysis_failed", error.message ?: "Custom sound matching failed.")
-          stopClassification()
-          return
-        }
-
-        if (embedding != null) {
+      if (activeCustomMatchers.isNotEmpty()) {
+        val featureVector = CustomAudioFeatureExtractor.extract(classifierRollingWindow)
+        if (featureVector != null) {
           customPayload = processCustomEmbedding(
-            embedding,
-            calculateSignalLevels(floatBuffer),
+            featureVector,
+            recentSignalLevels,
           )
         } else {
           resetCustomCandidate()
@@ -636,32 +636,118 @@ class AudioClassificationPlugin private constructor(
     }
   }
 
-  private fun processBuiltInResult(result: AudioClassifierResult): Map<String, Any>? {
-    val audioResult = result.classificationResults()
-      .firstOrNull()
-      ?.classifications()
-      ?.firstOrNull()
-      ?.categories()
-      ?.maxByOrNull { it.score() }
-      ?: return null
-
-    if (audioResult.score() < BUILT_IN_SCORE_THRESHOLD) {
+  private fun processBuiltInResult(
+    result: YamnetInferenceResult,
+    signalLevels: SignalLevels,
+  ): Map<String, Any>? {
+    if (signalLevels.rms < BUILT_IN_MIN_SIGNAL_RMS && signalLevels.peak < BUILT_IN_MIN_SIGNAL_PEAK) {
+      resetBuiltInCandidate()
       return null
     }
 
-    val label = audioResult.displayName().takeIf { it.isNotBlank() } ?: audioResult.categoryName()
+    val audioResult = result.categories.firstOrNull() ?: return null
+    val categories = result.categories
+    val runnerUp = categories.getOrNull(1)
+
+    if (audioResult.score < BUILT_IN_SCORE_THRESHOLD) {
+      resetBuiltInCandidate()
+      return null
+    }
+    if (runnerUp != null && audioResult.score < runnerUp.score + BUILT_IN_MIN_WIN_MARGIN) {
+      resetBuiltInCandidate()
+      return null
+    }
+
+    val label = audioResult.label
+    val normalizedLabel = label.trim().lowercase()
+    if (lastBuiltInCandidateLabel == normalizedLabel) {
+      lastBuiltInCandidateCount += 1
+    } else {
+      lastBuiltInCandidateLabel = normalizedLabel
+      lastBuiltInCandidateCount = 1
+    }
+
+    if (lastBuiltInCandidateCount < BUILT_IN_REQUIRED_CONSECUTIVE_MATCHES) {
+      return null
+    }
+
     val now = System.currentTimeMillis()
-    if (!shouldEmit("builtIn:${label.trim().lowercase()}", now, BUILT_IN_THROTTLE_MS)) {
+    if (!shouldEmit("builtIn:$normalizedLabel", now, BUILT_IN_THROTTLE_MS)) {
       return null
     }
 
     return mapOf(
       "type" to "result",
       "label" to label,
-      "confidence" to audioResult.score().toDouble(),
+      "confidence" to audioResult.score,
       "source" to "builtIn",
       "timestampMs" to now,
     )
+  }
+
+  private fun appendToRollingWindow(
+    destination: FloatArray,
+    currentFillCount: Int,
+    source: FloatArray,
+    count: Int,
+  ): Int {
+    if (count <= 0) {
+      return currentFillCount
+    }
+
+    if (count >= destination.size) {
+      source.copyInto(
+        destination,
+        destinationOffset = 0,
+        startIndex = count - destination.size,
+        endIndex = count,
+      )
+      return destination.size
+    }
+
+    var fillCount = currentFillCount
+    if (fillCount < destination.size) {
+      val copyCount = min(count, destination.size - fillCount)
+      source.copyInto(
+        destination,
+        destinationOffset = fillCount,
+        startIndex = 0,
+        endIndex = copyCount,
+      )
+      fillCount += copyCount
+      if (copyCount == count) {
+        return fillCount
+      }
+
+      val remaining = count - copyCount
+      destination.copyInto(
+        destination,
+        destinationOffset = 0,
+        startIndex = remaining,
+        endIndex = destination.size,
+      )
+      source.copyInto(
+        destination,
+        destinationOffset = destination.size - remaining,
+        startIndex = copyCount,
+        endIndex = count,
+      )
+      return destination.size
+    }
+
+    destination.copyInto(
+      destination,
+      destinationOffset = 0,
+      startIndex = count,
+      endIndex = destination.size,
+    )
+    source.copyInto(
+      destination,
+      destinationOffset = destination.size - count,
+      startIndex = 0,
+      endIndex = count,
+    )
+    return destination.size
   }
 
   private fun processCustomEmbedding(
@@ -680,11 +766,12 @@ class AudioClassificationPlugin private constructor(
         normalizedEmbedding,
         matcher.backgroundBank,
       )
+      val requiredBackgroundGap = max(matcher.backgroundMargin, CUSTOM_MIN_BACKGROUND_SEPARATION)
 
       if (similarity < matcher.detectionThreshold) {
         return@mapNotNull null
       }
-      if (similarity < backgroundSimilarity + matcher.backgroundMargin) {
+      if (similarity < backgroundSimilarity + requiredBackgroundGap) {
         return@mapNotNull null
       }
 
@@ -759,14 +846,14 @@ class AudioClassificationPlugin private constructor(
     }
     audioRecord = null
 
-    audioClassifier?.close()
-    audioClassifier = null
-
-    audioEmbedder?.close()
-    audioEmbedder = null
+    yamnetRunner?.close()
+    yamnetRunner = null
     releaseWakeLock()
 
+    classifierWindowFillCount = 0
+    classifierRollingWindow.fill(0f)
     lastEmittedAtByKey.clear()
+    resetBuiltInCandidate()
     resetCustomCandidate()
 
     if (shouldSendStatus) {
@@ -953,55 +1040,32 @@ class AudioClassificationPlugin private constructor(
           return@Thread
         }
 
-        val embedder = try {
-          createTrainingAudioEmbedder()
-        } catch (error: Exception) {
-          val failedProfiles = trainingProfiles.map { profile ->
-            if (!eligibleIds.contains(profile.id)) {
-              return@map profile
-            }
+        val rebuiltProfiles = trainingProfiles.map { profile ->
+          if (!eligibleIds.contains(profile.id)) {
+            return@map profile
+          }
+
+          try {
+            trainProfile(profile)
+          } catch (error: Exception) {
             profile.copy(
               status = "failed",
               updatedAt = isoTimestamp(),
-              lastError = error.message ?: "Unable to load the custom sound embedder.",
+              lastError = error.message ?: "Unable to train custom sound.",
+              targetEmbeddingBank = null,
+              backgroundEmbeddingBank = null,
+              detectionThreshold = null,
+              backgroundMargin = null,
             )
-          }.toMutableList()
-          saveProfiles(failedProfiles)
-          mainHandler.post {
-            result.success(failedProfiles.map { it.toMap() })
           }
-          return@Thread
-        }
-        try {
-          val rebuiltProfiles = trainingProfiles.map { profile ->
-            if (!eligibleIds.contains(profile.id)) {
-              return@map profile
-            }
+        }.toMutableList()
 
-            try {
-              trainProfile(profile, embedder)
-            } catch (error: Exception) {
-              profile.copy(
-                status = "failed",
-                updatedAt = isoTimestamp(),
-                lastError = error.message ?: "Unable to train custom sound.",
-                targetEmbeddingBank = null,
-                backgroundEmbeddingBank = null,
-                detectionThreshold = null,
-                backgroundMargin = null,
-              )
-            }
-          }.toMutableList()
+        saveProfiles(rebuiltProfiles)
+        activeCustomMatchers = loadActiveCustomMatchers()
+        restartMonitoringIfNeeded()
 
-          saveProfiles(rebuiltProfiles)
-          activeCustomMatchers = loadActiveCustomMatchers()
-          restartMonitoringIfNeeded()
-
-          mainHandler.post {
-            result.success(rebuiltProfiles.map { it.toMap() })
-          }
-        } finally {
-          embedder.close()
+        mainHandler.post {
+          result.success(rebuiltProfiles.map { it.toMap() })
         }
       } catch (error: Exception) {
         mainHandler.post {
@@ -1013,25 +1077,24 @@ class AudioClassificationPlugin private constructor(
 
   private fun trainProfile(
     profile: CustomSoundProfileRecord,
-    embedder: AudioEmbedder,
   ): CustomSoundProfileRecord {
-    val targetEmbeddings = profile.targetSamplePaths.flatMap { path ->
-      embeddingsForFile(File(path), embedder)
+    val targetFeatures = profile.targetSamplePaths.flatMap { path ->
+      trainingFeaturesForFile(File(path), preferLoudWindows = true)
     }
-    val backgroundEmbeddings = profile.backgroundSamplePaths.flatMap { path ->
-      embeddingsForFile(File(path), embedder)
+    val backgroundFeatures = profile.backgroundSamplePaths.flatMap { path ->
+      trainingFeaturesForFile(File(path), preferLoudWindows = false)
     }
 
-    if (targetEmbeddings.isEmpty()) {
-      throw IllegalStateException("No valid target embeddings were generated for ${profile.name}.")
+    if (targetFeatures.isEmpty()) {
+      throw IllegalStateException("No valid target features were generated for ${profile.name}.")
     }
-    if (backgroundEmbeddings.isEmpty()) {
-      throw IllegalStateException("No valid background embeddings were generated for ${profile.name}.")
+    if (backgroundFeatures.isEmpty()) {
+      throw IllegalStateException("No valid background features were generated for ${profile.name}.")
     }
 
     val calibratedBank = CustomSoundMatching.calibrate(
-      targetEmbeddings = targetEmbeddings,
-      backgroundEmbeddings = backgroundEmbeddings,
+      targetEmbeddings = targetFeatures,
+      backgroundEmbeddings = backgroundFeatures,
     )
 
     Log.d(
@@ -1230,9 +1293,9 @@ class AudioClassificationPlugin private constructor(
   }
 
   @Throws(Exception::class)
-  private fun embeddingsForFile(
+  private fun trainingFeaturesForFile(
     file: File,
-    embedder: AudioEmbedder,
+    preferLoudWindows: Boolean,
   ): List<FloatArray> {
     val samples = readWavFile(file)
     if (samples.isEmpty()) {
@@ -1258,11 +1321,56 @@ class AudioClassificationPlugin private constructor(
       }
     }
 
-    return windows.mapNotNull { window ->
-      val audioData = AudioData.create(audioDataFormat, CLASSIFICATION_SAMPLE_COUNT)
-      audioData.load(window)
-      extractEmbedding(embedder.embed(audioData))
+    val candidates = windows.mapNotNull { window ->
+      val feature = CustomAudioFeatureExtractor.extract(window) ?: return@mapNotNull null
+      TrainingFeatureWindow(
+        feature = feature,
+        signalLevels = calculateSignalLevels(window),
+      )
     }
+
+    if (candidates.isEmpty()) {
+      return emptyList()
+    }
+
+    val selected =
+      if (preferLoudWindows) {
+        selectTargetTrainingWindows(candidates)
+      } else {
+        selectBackgroundTrainingWindows(candidates)
+      }
+
+    return selected.map { it.feature }
+  }
+
+  private fun selectTargetTrainingWindows(
+    windows: List<TrainingFeatureWindow>,
+  ): List<TrainingFeatureWindow> {
+    val strongestRms = windows.maxOf { it.signalLevels.rms }
+    val strongestPeak = windows.maxOf { it.signalLevels.peak }
+    val minRms = max(CUSTOM_MIN_SIGNAL_RMS, strongestRms * 0.55f)
+    val minPeak = max(CUSTOM_MIN_SIGNAL_PEAK, strongestPeak * 0.6f)
+
+    val ranked = windows
+      .filter { candidate ->
+        candidate.signalLevels.rms >= minRms || candidate.signalLevels.peak >= minPeak
+      }
+      .ifEmpty { windows }
+      .sortedByDescending { candidate ->
+        (candidate.signalLevels.rms * 0.7f) + (candidate.signalLevels.peak * 0.3f)
+      }
+
+    return ranked.take(TARGET_WINDOWS_PER_SAMPLE)
+  }
+
+  private fun selectBackgroundTrainingWindows(
+    windows: List<TrainingFeatureWindow>,
+  ): List<TrainingFeatureWindow> {
+    return windows
+      .sortedByDescending { candidate ->
+        (candidate.signalLevels.rms * 0.6f) + (candidate.signalLevels.peak * 0.4f)
+      }
+      .take(BACKGROUND_WINDOWS_PER_SAMPLE)
   }
 
   @Throws(Exception::class)
@@ -1290,23 +1398,11 @@ class AudioClassificationPlugin private constructor(
   }
 
   @Throws(Exception::class)
-  private fun createLiveAudioEmbedderIfNeeded(enabled: Boolean): AudioEmbedder? {
-    if (!enabled) {
-      return null
-    }
-    return createTrainingAudioEmbedder()
-  }
-
-  @Throws(Exception::class)
-  private fun createTrainingAudioEmbedder(): AudioEmbedder {
-    val options = AudioEmbedderOptions.builder()
-      .setBaseOptions(BaseOptions.builder().setModelAssetPath(MODEL_ASSET_PATH).build())
-      .setRunningMode(RunningMode.AUDIO_CLIPS)
-      .setL2Normalize(true)
-      .setQuantize(false)
-      .build()
-
-    return AudioEmbedder.createFromOptions(context, options)
+  private fun createYamnetRunner(): YamnetLiteRtRunner {
+    return YamnetLiteRtRunner.create(
+      context = context,
+      modelAssetPath = MODEL_ASSET_PATH,
+    )
   }
 
   private fun loadActiveCustomMatchers(): List<CustomSoundMatcher> {
@@ -1402,31 +1498,38 @@ class AudioClassificationPlugin private constructor(
     }
   }
 
+  private fun resetBuiltInCandidate() {
+    lastBuiltInCandidateLabel = null
+    lastBuiltInCandidateCount = 0
+  }
+
   private fun resetCustomCandidate() {
     lastCustomCandidateId = null
     lastCustomCandidateCount = 0
   }
 
-  private fun extractEmbedding(result: AudioEmbedderResult): FloatArray? {
-    return result.embeddingResults()
-      .firstOrNull()
-      ?.embeddings()
-      ?.firstOrNull()
-      ?.floatEmbedding()
-      ?.copyOf()
+  private fun calculateSignalLevels(buffer: FloatArray): SignalLevels {
+    return calculateSignalLevels(buffer, buffer.size)
   }
 
-  private fun calculateSignalLevels(buffer: FloatArray): SignalLevels {
+  private fun calculateSignalLevels(
+    buffer: FloatArray,
+    sampleCount: Int,
+  ): SignalLevels {
+    if (sampleCount <= 0) {
+      return SignalLevels(rms = 0f, peak = 0f)
+    }
+
     var sumSquares = 0.0
     var peak = 0f
-    buffer.forEach { sample ->
-      val magnitude = abs(sample)
+    for (index in 0 until sampleCount) {
+      val magnitude = abs(buffer[index])
       sumSquares += magnitude * magnitude
       if (magnitude > peak) {
         peak = magnitude
       }
     }
-    val rms = sqrt(sumSquares / buffer.size).toFloat()
+    val rms = sqrt(sumSquares / sampleCount).toFloat()
     return SignalLevels(rms = rms, peak = peak)
   }
 

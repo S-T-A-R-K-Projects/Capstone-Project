@@ -1,127 +1,88 @@
 # iOS Custom Sound Recognition Implementation
 
-This document describes how custom sound recognition is currently implemented on iOS in `senscribe`.
+This document describes the current iOS custom sound recognition pipeline in `senscribe`. It reflects the implementation in `senscribe/ios/Runner/AudioClassificationPlugin.swift` and the shared Flutter UI and service layers.
 
-## Scope
+## Summary
 
-- Platform: iOS only for custom sound enrollment, training, and custom-model inference
-- Flutter UI: shared Flutter screens using `adaptive_platform_ui`
-- Android: custom sound training is not implemented in the current codebase
+iOS custom sound recognition is a local CreateML/Core ML workflow layered on top of the same live monitoring engine used for built-in Apple sound classification.
 
-## High-Level Flow
+The current flow is:
 
-The iOS custom sound feature is split into four parts:
+1. Flutter creates a custom sound profile.
+2. iOS records `10` target clips and `3` background clips.
+3. The app trains one aggregate `MLSoundClassifier` containing all enabled custom sounds plus one shared background label.
+4. The trained model is compiled and stored locally.
+5. During live monitoring, the plugin attaches both the built-in Apple classifier and the custom model to the same `SNAudioStreamAnalyzer`.
+6. Custom detections are filtered with stricter confidence, signal, and consecutive-match rules before being emitted to Flutter.
 
-1. Flutter UI on the Alerts page lets the user create and manage custom sounds.
-2. Flutter service code persists profile metadata and forwards capture/train requests to iOS.
-3. Native iOS code records audio samples, stores them on disk, and trains a local Core ML sound classifier.
-4. During live sound recognition, iOS runs Apple’s built-in classifier and the trained custom classifier at the same time on the same microphone stream.
+## Shared Flutter Layer
 
-## Flutter UI
+### UI
 
-Current UI entry point:
+Primary UI files:
 
 - `lib/screens/alerts_page.dart`
+- `lib/screens/custom_sound_enrollment_page.dart`
 
-Current user flow:
+Current user-visible requirements:
 
-1. The user opens `Alerts` -> `Trigger Words`.
-2. The user taps `Add Custom Sound`.
-3. A draft profile is created with a name.
-4. A bottom sheet opens for that profile.
-5. The user records 5 target samples.
-6. The user records 1 background calibration sample.
-7. The user taps `Train Custom Model`.
+- `10` target samples
+- `3` background samples
+- each recording lasts about `5` seconds
 
-The sheet tracks progress with:
+The enrollment page is already aligned with this:
 
-- `Samples x/5`
-- `Background Ready` / `Background Needed`
-- status labels such as `Needs samples`, `Needs background`, `Ready to train`, `Training`, and `Ready`
+- target clips are recorded first
+- background recording stays disabled until target recording is complete
+- training stays disabled until `hasEnoughSamples` is true
+- the page explicitly tells the user to start detection from the unified home screen after training
 
-Important behavior in the current implementation:
-
-- Each target sample is recorded separately.
-- The background sample is recorded separately and stored independently from the 5 target samples.
-- Reopening a saved custom sound lets the user re-record only the background calibration and retrain without replacing the 5 target samples.
-- Training is only enabled after all 5 target samples and 1 background sample are present.
-
-## Flutter Data Model
+### Shared model
 
 Primary model:
 
 - `lib/models/custom_sound_profile.dart`
 
-`CustomSoundProfile` stores:
+Current constants:
 
-- `id`
-- `name`
-- `enabled`
-- `status`
-- `targetSamplePaths`
-- `backgroundSamplePaths`
-- `createdAt`
-- `updatedAt`
-- `lastError`
+- `kRequiredCustomSoundSamples = 10`
+- `kRequiredBackgroundSamples = 3`
 
-Current sample requirements are defined in the model:
-
-- `kRequiredCustomSoundSamples = 5`
-- `kRequiredBackgroundSamples = 1`
-
-`hasEnoughSamples` is true only when:
-
-- there are at least 5 target samples
-- there is at least 1 background sample
-
-## Flutter Service Layer
+### Shared service
 
 Primary service:
 
 - `lib/services/custom_sound_service.dart`
 
-Responsibilities:
+Important responsibilities:
 
-- create draft custom sound profiles
+- create draft profiles
 - persist profile metadata in `SharedPreferences`
-- merge Flutter-side metadata with native iOS profile state
-- trigger native sample capture through a method channel
-- trigger native model training/rebuild
-- enable, disable, delete, refresh, and discard draft profiles
+- merge Flutter state with native iOS state
+- request sample capture
+- trigger training and rebuild
+- enable, disable, delete, refresh, and discard profiles
 
 Method channel used:
 
 - `senscribe/audio_classifier`
 
-Important service methods:
+## iOS Native File
 
-- `createDraftProfile`
-- `captureTargetSample`
-- `captureBackgroundSample`
-- `trainOrRebuildModel`
-- `setEnabled`
-- `deleteProfile`
-- `loadProfiles`
-
-## Native iOS Implementation
-
-Primary native file:
+Primary implementation file:
 
 - `ios/Runner/AudioClassificationPlugin.swift`
 
-The plugin handles both:
+This plugin handles:
 
-- built-in Apple sound recognition for live monitoring
-- custom sound enrollment and training for user-created sounds
+- built-in Apple sound classification
+- custom sample capture
+- custom model training
+- live inference with the trained model
 
-Frameworks used:
+## Local Training Availability
 
-- `AVFoundation` for microphone access and recording
-- `SoundAnalysis` for live classification
-- `CoreML` for loading the trained model
-- `CreateML` for local sound classifier training when available
-
-`CreateML` is conditionally imported:
+CreateML is imported conditionally:
 
 ```swift
 #if canImport(CreateML)
@@ -129,169 +90,180 @@ import CreateML
 #endif
 ```
 
-This matters because Apple does not provide `CreateML` in the iOS simulator SDK. As a result:
+This matters because Apple does not ship CreateML in the iOS simulator SDK.
 
-- the app can compile for simulator
-- actual custom model training must run on a physical iPhone
+Current behavior:
 
-## Sample Recording
+- the app can still build for simulator
+- custom sound training is unavailable in that environment
+- when training is attempted without CreateML support, eligible profiles are marked `failed`
+- the user-facing error explains that training must run on a physical iPhone running iOS 17 or newer
 
-Native recording is handled by `captureSample(...)`.
+## Profile Persistence
 
-Current recording details:
+Profiles are stored at:
+
+- `Application Support/custom_sounds/profiles.json`
+
+The same root directory also stores:
+
+- per-profile sample folders
+- `custom_sound_model.mlmodel`
+- `custom_sound_model.mlmodelc`
+
+The Flutter layer separately stores profile metadata in `SharedPreferences`, and `CustomSoundService.loadProfiles()` merges the native and Flutter views.
+
+## Sample Capture
+
+Sample recording is handled by `captureSample(...)`.
+
+### Recording format
 
 - format: linear PCM
-- sample rate: `44_100`
+- sample rate: `16_000`
 - channels: `1`
 - bit depth: `16`
-- file type: `.caf`
-- fixed duration: `5.0` seconds
+- duration: `5.0` seconds
+- file extension: `.caf`
 
-Files are stored per profile under app support storage. The plugin creates separate folders for:
-
-- target samples
-- background samples
-
-Naming pattern:
+Output file names:
 
 - target: `target_1.caf`, `target_2.caf`, ...
-- background: `background_1.caf`
+- background: `background_1.caf`, `background_2.caf`, ...
 
-After recording finishes, the plugin reloads sample file paths from disk and updates the saved profile.
+### Capture behavior
 
-## Profile Persistence on iOS
+- only one recording can run at a time
+- the profile is moved to `recording` before capture starts
+- if monitoring is active, monitoring is stopped first
+- the plugin switches the session to `.record` / `.measurement`
+- the sample is recorded with `AVAudioRecorder`
+- after capture, sample paths are reloaded from disk
+- the profile returns to `draft`
+- monitoring resumes automatically if it had been running before capture
 
-The native plugin stores profile metadata in:
+On failure:
 
-- `custom_sounds/profiles.json`
+- the profile is marked `failed`
+- `lastError` is updated
 
-This lives inside the app support directory.
-
-The plugin also stores:
-
-- recorded sample files
-- generated `.mlmodel`
-- compiled `.mlmodelc`
-
-The Flutter layer also stores profile metadata in `SharedPreferences`. On iOS, `CustomSoundService.loadProfiles()` merges Flutter-persisted data with native profile data so the UI stays in sync with the files that actually exist on disk.
+Unlike Android, iOS custom profiles do not persist per-profile feature banks because the trained artifact is a shared Core ML sound classifier.
 
 ## Training Pipeline
 
-Training is triggered from Flutter by calling:
+Training is handled by `trainOrRebuildCustomModel(...)`.
 
-- `trainOrRebuildCustomModel`
+### Eligibility
 
-On iOS, the plugin:
+A profile is eligible when:
 
-1. Loads all saved profiles.
-2. Filters to profiles that are enabled and have enough samples.
-3. Marks eligible profiles as `training`.
-4. Builds a training dataset from the profile audio files.
-5. Trains one aggregate `MLSoundClassifier`.
-6. Writes the `.mlmodel`.
-7. Compiles it to `.mlmodelc`.
-8. Marks eligible profiles as `ready` on success or `failed` on error.
+- it is enabled
+- it has at least `10` target sample paths
+- it has at least `3` background sample paths
 
-Training data is built as:
+Eligible profiles are marked `training` before CreateML work begins.
 
-- one label per custom sound, using that profile’s 5 target samples
-- one shared background label, using all background calibration samples from eligible profiles
+### Dataset construction
 
-Internal background label:
+`buildTrainingData(from:)` creates one dataset map for the aggregate classifier:
 
-- `__background__`
+- each enabled custom sound contributes its target files under the label equal to `profile.name`
+- all eligible background files from all profiles are combined under the internal label `__background__`
 
-This means the current custom model is a single shared model for all enabled custom sounds, not one model per sound.
+This means iOS trains one shared custom classifier for all enabled sounds, not one model per custom sound.
 
-## Live Detection
+### Training and persistence
 
-Live monitoring is also managed by `AudioClassificationPlugin`.
+When CreateML is available, the plugin:
 
-When sound recognition starts:
+1. builds `filesByLabel` training data
+2. requires at least two labels in the dataset
+3. trains `MLSoundClassifier(trainingData: .filesByLabel(...))`
+4. writes `custom_sound_model.mlmodel`
+5. compiles the model
+6. copies the compiled model to `custom_sound_model.mlmodelc`
+7. marks eligible profiles as `ready`
+8. restarts monitoring if monitoring was already active
 
-1. The plugin configures the audio session.
-2. It creates an `SNAudioStreamAnalyzer`.
-3. It attaches Apple’s built-in classifier request.
-4. If a trained custom model exists, it also attaches a custom classifier request built from the compiled model.
-5. Both classifiers receive the same microphone input stream.
+If there are no eligible profiles:
 
-Built-in classifier:
+- persisted custom model files are deleted
+- stale `training` states are reset
+- monitoring is reloaded if necessary
 
-- Apple `SNClassifySoundRequest(classifierIdentifier: .version1)`
+If training fails:
 
-Custom classifier:
+- eligible profiles are marked `failed`
+- `lastError` is updated with the native error description
+
+## Live Custom Detection
+
+The custom live path is active only when:
+
+- at least one enabled profile has enough samples
+- the compiled model exists on disk
+
+When that is true, `makeCustomAnalysisRequestIfAvailable()` loads the compiled model and creates:
 
 - `SNClassifySoundRequest(mlModel: model)`
 
-The plugin emits result events back to Flutter with:
+That request is attached to the same `SNAudioStreamAnalyzer` as the built-in Apple classifier.
 
-- `label`
-- `confidence`
-- `source`
-- `timestampMs`
-- optional `customSoundId`
+### Custom runtime guards
 
-`source` is:
+The custom path is intentionally stricter than the built-in path.
 
-- `builtIn`
-- `custom`
-
-## Custom Detection Guards
-
-To reduce false positives, the custom detection path applies stricter gating than the built-in path.
-
-Current custom guard values in native code:
+Current custom guard values:
 
 - confidence threshold: `0.94`
-- throttle interval: `1.0` second
-- minimum input RMS: `0.008`
+- custom throttle interval: `10.0` seconds
+- minimum signal RMS: `0.008`
 - required consecutive matches: `2`
 
-Behavior:
+Additional behavior:
 
-- background-label hits are ignored
-- low-signal input is ignored for custom events
-- repeated identical custom classifications must occur consecutively before an event is emitted
+- `__background__` predictions are ignored
+- weak input is rejected using current RMS and peak values from the live buffer
+- the same custom label must appear in consecutive results before emission
+- `customSoundId` is resolved by matching the emitted label back to a profile name
 
-These guards are separate from Flutter’s own event filtering.
+Result payload for a custom detection:
 
-## Flutter Recognition History
+- `type = "result"`
+- `label = <profile name>`
+- `confidence`
+- `source = "custom"`
+- `timestampMs`
+- `customSoundId`
 
-Primary file:
+## Monitoring Reload Behavior
 
-- `lib/services/audio_classification_service.dart`
+When sample capture, training, deletion, or profile changes affect model availability, the plugin can reload monitoring through `restartMonitoringIfNeeded()`.
 
-The Flutter audio classification service:
+That method:
 
-- starts and stops monitoring through the method channel
-- listens to `senscribe/audio_classifier_events`
-- converts native events into `SoundCaption` objects
-- stores recent history in memory for the UI
+- reconfigures the audio session
+- stops the current monitoring stack without emitting a full stop event
+- rebuilds the analyzer requests
+- emits a `status = "reloaded"` event
 
-The custom event payload is converted into:
+This is how the app swaps in or removes the trained custom classifier while monitoring is already active.
 
-- `SoundCaptionSource.custom` for custom sounds
-- `SoundCaptionSource.builtIn` for Apple’s built-in detector
+## Important Differences From Older Docs
 
-## Current Limitations
+The older iOS custom-sound docs are stale in several places. The current code:
 
-- Custom sound training is iOS-only.
-- Training requires a physical iPhone because `CreateML` is unavailable in the simulator SDK.
-- Recording duration is currently fixed to 5 seconds per capture.
-- The custom model uses a shared background label rather than environment-specific adaptive logic.
-- The system Accessibility custom sound feature in iOS Settings is not used by this app. This implementation is app-local and based on `CreateML` + `SoundAnalysis`.
+- requires `10/3` samples, not `5/1`
+- records at `16 kHz`, not `44.1 kHz`
+- targets iOS 17 in the project Podfile
+- supports Android custom sounds too, so this is no longer an iOS-only product feature
+- trains one aggregate shared custom model, not one model file per sound
 
-## Files Involved
+## Key Files To Read
 
-Main files for this feature:
-
-- `lib/screens/alerts_page.dart`
-- `lib/models/custom_sound_profile.dart`
-- `lib/services/custom_sound_service.dart`
-- `lib/services/audio_classification_service.dart`
-- `lib/models/sound_caption.dart`
-- `ios/Runner/AudioClassificationPlugin.swift`
-
-## Summary
-
-The current iOS implementation uses 5 target recordings plus 1 background calibration recording to train a local custom sound classifier on-device. The resulting custom classifier runs in parallel with Apple’s built-in sound classifier during live monitoring. The five target samples remain reusable after training, and the background sample can be re-recorded later so the model can be retrained without recreating the target samples.
+- `senscribe/ios/Runner/AudioClassificationPlugin.swift`
+- `senscribe/ios/Runner/AppDelegate.swift`
+- `senscribe/ios/Podfile`
+- `senscribe/lib/models/custom_sound_profile.dart`
+- `senscribe/lib/services/custom_sound_service.dart`
+- `senscribe/lib/screens/custom_sound_enrollment_page.dart`

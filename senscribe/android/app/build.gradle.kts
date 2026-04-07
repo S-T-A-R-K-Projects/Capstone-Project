@@ -49,7 +49,7 @@ flutter {
 
 dependencies {
     // Audio classification
-    implementation("com.google.mediapipe:tasks-audio:0.10.14")
+    implementation("com.google.ai.edge.litert:litert:2.1.3")
     implementation("ai.liquid.leap:leap-sdk:0.9.6")
 
     // Coroutines for async operations

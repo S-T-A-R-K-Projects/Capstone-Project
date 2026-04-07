@@ -710,16 +710,13 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       children: [
         // Sound Events List
         if (_soundEvents.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                "No sounds detected",
-                style: GoogleFonts.inter(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                ),
-              ),
-            ),
+          _buildSectionEmptyState(
+            icon: Icons.graphic_eq_rounded,
+            title: 'No sounds detected yet',
+            subtitle: _isSoundMonitoring
+                ? 'Listening for nearby audio.'
+                : 'Start monitoring to classify nearby audio.',
+            iconColor: scheme.onSurface.withValues(alpha: 0.32),
           )
         else
           ListView.builder(
@@ -781,10 +778,18 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     final scheme = Theme.of(context).colorScheme;
 
     if (_speechTranscript.isEmpty && _currentSpeechBuffer.isEmpty) {
-      return Center(
-          child: Text("Tap play to listen...",
-              style: GoogleFonts.inter(
-                  color: scheme.onSurface.withValues(alpha: 0.72))));
+      return _buildSectionEmptyState(
+        icon: _isSpeechMonitoring ? Icons.mic_rounded : Icons.mic_none_rounded,
+        title: _isSpeechMonitoring
+            ? 'Listening for speech...'
+            : 'Tap play to transcribe speech',
+        subtitle: _isSpeechMonitoring
+            ? 'Speak near the microphone to see live transcription.'
+            : null,
+        iconColor: _isSpeechMonitoring
+            ? scheme.primary.withValues(alpha: 0.72)
+            : scheme.onSurface.withValues(alpha: 0.32),
+      );
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -838,6 +843,47 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildSectionEmptyState({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required Color iconColor,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 50, color: iconColor),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              color: scheme.onSurface.withValues(alpha: 0.84),
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                height: 1.35,
+                color: scheme.onSurface.withValues(alpha: 0.58),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

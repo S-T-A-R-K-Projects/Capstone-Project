@@ -24,7 +24,6 @@ class AudioClassificationService {
 
   StreamSubscription? _nativeSubscription;
   bool _isMonitoring = false;
-  String? _lastEmittedSoundKey;
   bool get isMonitoring => _isMonitoring;
 
   void _log(String message) {
@@ -59,7 +58,6 @@ class AudioClassificationService {
     try {
       await _methodChannel.invokeMethod('stop');
       _isMonitoring = false;
-      _lastEmittedSoundKey = null;
       await _nativeSubscription?.cancel();
       _nativeSubscription = null;
     } catch (e) {
@@ -89,40 +87,19 @@ class AudioClassificationService {
       customSoundId: customSoundId,
     );
 
-    final soundKey = _buildSoundKey(caption);
-    if (soundKey == _lastEmittedSoundKey) {
-      return;
-    }
-
-    _lastEmittedSoundKey = soundKey;
     _history.insert(0, caption);
     _broadcastHistory();
   }
 
-  String _buildSoundKey(SoundCaption caption) {
-    final normalizedLabel = caption.sound.trim().toLowerCase();
-    if (caption.source == SoundCaptionSource.custom) {
-      final customId = caption.customSoundId?.trim();
-      if (customId != null && customId.isNotEmpty) {
-        return 'custom:$customId';
-      }
-      return 'custom:$normalizedLabel';
-    }
-    return 'builtIn:$normalizedLabel';
-  }
-
   void clearHistory() {
-    if (_history.isEmpty && _lastEmittedSoundKey == null) return;
+    if (_history.isEmpty) return;
     _history.clear();
-    _lastEmittedSoundKey = null;
     _broadcastHistory();
   }
 
   bool deleteCaption(SoundCaption caption) {
     final removed = _history.remove(caption);
     if (!removed) return false;
-    _lastEmittedSoundKey =
-        _history.isEmpty ? null : _buildSoundKey(_history.first);
     _broadcastHistory();
     return true;
   }

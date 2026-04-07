@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/model_download_snapshot.dart';
 import 'leap_service.dart';
 import '../models/llm_model.dart';
+import 'model_download_service.dart';
 
 /// High-level service for text summarization using Liquid AI Leap.
 /// Uses liquid_ai managed models.
@@ -17,8 +19,12 @@ class SummarizationService {
   SummarizationService._internal();
 
   final LeapService _leapService = LeapService();
+  final ModelDownloadService _modelDownloadService = ModelDownloadService();
 
   bool get isSummarizationInProgress => _leapService.isSummarizationInProgress;
+  Stream<ModelDownloadSnapshot> get downloadStateStream =>
+      _modelDownloadService.stream;
+  ModelDownloadSnapshot get currentDownload => _modelDownloadService.current;
 
   void cancelSummarization() {
     _leapService.cancelSummarization();
@@ -64,32 +70,72 @@ class SummarizationService {
     return await _leapService.isModelCached(m.name);
   }
 
+  Future<ModelDownloadSnapshot> refreshDownloadState([LLMModel? model]) async {
+    final activeModel = model ?? await getActiveModel();
+    return _modelDownloadService.refreshSnapshot(activeModel);
+  }
+
+  Future<void> startModelDownload(LLMModel model) async {
+    await _modelDownloadService.startDownload(model);
+  }
+
+  Future<void> clearDownloadState([LLMModel? model]) async {
+    final activeModel = model ?? await getActiveModel();
+    await _modelDownloadService.clearSnapshot(modelId: activeModel.name);
+  }
+
+  Future<void> cancelModelDownloadIfSupported() async {
+    await _modelDownloadService.cancelIfSupported();
+  }
+
   /// Download Model using Leap SDK Native Download
   Future<void> downloadModelFiles(
     LLMModel model, {
     required Function(double) onProgress,
     required Function(String) onStatus,
   }) async {
-    onStatus('Initializing model download...');
+    final completer = Completer<void>();
+    late final StreamSubscription<ModelDownloadSnapshot> subscription;
+    subscription = downloadStateStream.listen((snapshot) {
+      if (snapshot.modelId != model.name) return;
+      onProgress(snapshot.progress);
+      if (snapshot.statusMessage.isNotEmpty) {
+        onStatus(snapshot.statusMessage);
+      }
+
+      if (!snapshot.isRunning) {
+        if (snapshot.hasError) {
+          if (!completer.isCompleted) {
+            completer.completeError(
+              SummarizationException(
+                snapshot.lastError ?? 'Failed to download model.',
+              ),
+            );
+          }
+        } else if (snapshot.isComplete && !completer.isCompleted) {
+          completer.complete();
+        }
+      }
+    });
 
     try {
-      onStatus('Downloading ${model.displayName}...');
-      await _leapService.downloadModel(
-        model.name,
-        onProgress: onProgress,
-        onStatus: onStatus,
-      );
-
-      onStatus('Model Downloaded.');
+      await startModelDownload(model);
+      await completer.future;
     } catch (e) {
       debugPrint('SummarizationService: Download failed: $e');
+      if (e is SummarizationException) {
+        rethrow;
+      }
       throw SummarizationException('Failed to download model: $e');
+    } finally {
+      await subscription.cancel();
     }
   }
 
   Future<void> deleteModelFiles(LLMModel model) async {
     try {
       await _leapService.deleteModel(model.name);
+      await clearDownloadState(model);
     } catch (e) {
       throw SummarizationException('Failed to delete model: $e');
     }

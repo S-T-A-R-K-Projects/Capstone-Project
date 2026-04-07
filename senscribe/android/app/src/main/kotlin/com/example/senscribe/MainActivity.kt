@@ -14,6 +14,7 @@ class MainActivity : FlutterActivity() {
 
     // Audio classification plugin
     private var audioClassificationPlugin: AudioClassificationPlugin? = null
+    private var modelDownloadBridge: ModelDownloadBridge? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +42,10 @@ class MainActivity : FlutterActivity() {
             applicationContext,
             this,
         )
+        modelDownloadBridge = ModelDownloadBridge.register(
+            flutterEngine.dartExecutor.binaryMessenger,
+            applicationContext,
+        )
     }
 
     override fun onRequestPermissionsResult(
@@ -52,9 +57,4 @@ class MainActivity : FlutterActivity() {
         audioClassificationPlugin?.onRequestPermissionsResult(requestCode, grantResults)
     }
 
-    override fun onDestroy() {
-        audioClassificationPlugin?.dispose()
-        audioClassificationPlugin = null
-        super.onDestroy()
-    }
 }

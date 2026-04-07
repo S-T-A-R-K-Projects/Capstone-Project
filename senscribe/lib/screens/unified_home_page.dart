@@ -181,7 +181,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     _speechRestartTimer?.cancel();
 
     _speech.stop();
-    _ttsService.stop();
     _soundPulseController.dispose();
     _speechPulseController.dispose();
     _ttsController.dispose();
@@ -483,66 +482,81 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
                 // 1. Sound Recognition Section (Top)
                 Animate(
-                  effects: [FadeEffect(duration: 400.ms), SlideEffect(begin: Offset(0, 0.1), duration: 400.ms, curve: Curves.easeOutQuad)],
-                  child:
-                _buildSectionContainer(
-                  title: "Sound Recognition",
-                  icon: Icons.hearing_rounded,
-                  height: 250,
-                  isExpanded: _isSoundExpanded,
-                  isMonitoring: _isSoundMonitoring,
-                  onToggle: _toggleSoundMonitoring,
-                  onCollapseToggle: () =>
-                      setState(() => _isSoundExpanded = !_isSoundExpanded),
-                  onExpand: () {
-                    // Navigate to detailed Sound page (HomePage)
-                    _navigateToExpanded(HomePage(
-                      isMonitoring: _isSoundMonitoring,
-                      pulseController: _soundPulseController,
-                      onToggleMonitoring: _toggleSoundMonitoring,
-                    ));
-                  },
-                  child: _buildSoundContent(),
-                ),
-
+                  effects: [
+                    FadeEffect(duration: 400.ms),
+                    SlideEffect(
+                        begin: Offset(0, 0.1),
+                        duration: 400.ms,
+                        curve: Curves.easeOutQuad)
+                  ],
+                  child: _buildSectionContainer(
+                    title: "Sound Recognition",
+                    icon: Icons.hearing_rounded,
+                    height: 250,
+                    isExpanded: _isSoundExpanded,
+                    isMonitoring: _isSoundMonitoring,
+                    onToggle: _toggleSoundMonitoring,
+                    onCollapseToggle: () =>
+                        setState(() => _isSoundExpanded = !_isSoundExpanded),
+                    onExpand: () {
+                      // Navigate to detailed Sound page (HomePage)
+                      _navigateToExpanded(HomePage(
+                        isMonitoring: _isSoundMonitoring,
+                        pulseController: _soundPulseController,
+                        onToggleMonitoring: _toggleSoundMonitoring,
+                      ));
+                    },
+                    child: _buildSoundContent(),
+                  ),
                 ),
                 // 2. STT Section (Middle)
                 Animate(
-                  effects: [FadeEffect(duration: 400.ms, delay: 100.ms), SlideEffect(begin: Offset(0, 0.1), duration: 400.ms, curve: Curves.easeOutQuad, delay: 100.ms)],
-                  child:
-                _buildSectionContainer(
-                  title: "Speech to Text",
-                  icon: Icons.mic_rounded,
-                  height: 280, // Reduced from 400 as requested
-                  isExpanded: _isSTTExpanded,
-                  isMonitoring: _isSpeechMonitoring,
-                  onToggle: _toggleSpeechMonitoring,
-                  onCollapseToggle: () =>
-                      setState(() => _isSTTExpanded = !_isSTTExpanded),
-                  onExpand: _openExpandedSpeechPage,
-                  child: _buildSTTContent(),
-                ),
-
+                  effects: [
+                    FadeEffect(duration: 400.ms, delay: 100.ms),
+                    SlideEffect(
+                        begin: Offset(0, 0.1),
+                        duration: 400.ms,
+                        curve: Curves.easeOutQuad,
+                        delay: 100.ms)
+                  ],
+                  child: _buildSectionContainer(
+                    title: "Speech to Text",
+                    icon: Icons.mic_rounded,
+                    height: 280, // Reduced from 400 as requested
+                    isExpanded: _isSTTExpanded,
+                    isMonitoring: _isSpeechMonitoring,
+                    onToggle: _toggleSpeechMonitoring,
+                    onCollapseToggle: () =>
+                        setState(() => _isSTTExpanded = !_isSTTExpanded),
+                    onExpand: _openExpandedSpeechPage,
+                    child: _buildSTTContent(),
+                  ),
                 ),
                 // 3. TTS Section (Bottom)
                 Animate(
-                  effects: [FadeEffect(duration: 400.ms, delay: 200.ms), SlideEffect(begin: Offset(0, 0.1), duration: 400.ms, curve: Curves.easeOutQuad, delay: 200.ms)],
-                  child:
-                _buildSectionContainer(
-                  title: "Text to Speech",
-                  icon: Icons.record_voice_over_rounded,
-                  height: 150, // Increased to fix overflow
-                  isExpanded: _isTTSExpanded,
-                  isMonitoring: false, // TTS doesn't monitor
-                  showToggle: false,
-                  onCollapseToggle: () =>
-                      setState(() => _isTTSExpanded = !_isTTSExpanded),
-                  onExpand: () => _navigateToExpanded(TextToSpeechPage(
-                      isMonitoring: false,
-                      pulseController: _speechPulseController,
-                      onToggleMonitoring: () {})),
-                  child: _buildTTSContent(),
-                ),
+                  effects: [
+                    FadeEffect(duration: 400.ms, delay: 200.ms),
+                    SlideEffect(
+                        begin: Offset(0, 0.1),
+                        duration: 400.ms,
+                        curve: Curves.easeOutQuad,
+                        delay: 200.ms)
+                  ],
+                  child: _buildSectionContainer(
+                    title: "Text to Speech",
+                    icon: Icons.record_voice_over_rounded,
+                    isExpanded: _isTTSExpanded,
+                    isMonitoring: false, // TTS doesn't monitor
+                    showToggle: false,
+                    scrollableBody: false,
+                    onCollapseToggle: () =>
+                        setState(() => _isTTSExpanded = !_isTTSExpanded),
+                    onExpand: () => _navigateToExpanded(TextToSpeechPage(
+                        isMonitoring: false,
+                        pulseController: _speechPulseController,
+                        onToggleMonitoring: () {})),
+                    child: _buildTTSContent(),
+                  ),
                 ),
               ],
             ),
@@ -561,6 +575,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     required VoidCallback onCollapseToggle,
     bool isMonitoring = false,
     bool showToggle = true,
+    bool scrollableBody = true,
     required VoidCallback onExpand,
     VoidCallback? onToggle,
   }) {
@@ -570,7 +585,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            color:
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -586,100 +602,106 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
-                  // Circular Expand/Collapse Button
-                  SizedBox(
-                    height: 36,
-                    width: 36,
-                    child: AdaptiveButton.child(
-                      onPressed: onCollapseToggle,
-                      style: PlatformInfo.isIOS26OrHigher()
-                          ? AdaptiveButtonStyle.glass
-                          : AdaptiveButtonStyle.plain,
-                      child: Center(
-                        child: Transform.translate(
-                          offset: const Offset(-0.5, 0),
-                          child: Icon(
-                            isExpanded
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                            size: 20,
+              // Header
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    // Circular Expand/Collapse Button
+                    SizedBox(
+                      height: 36,
+                      width: 36,
+                      child: AdaptiveButton.child(
+                        onPressed: onCollapseToggle,
+                        style: PlatformInfo.isIOS26OrHigher()
+                            ? AdaptiveButtonStyle.glass
+                            : AdaptiveButtonStyle.plain,
+                        child: Center(
+                          child: Transform.translate(
+                            offset: const Offset(-0.5, 0),
+                            child: Icon(
+                              isExpanded
+                                  ? Icons.expand_less_rounded
+                                  : Icons.expand_more_rounded,
+                              size: 20,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(icon,
-                      size: 24, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(title,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600, fontSize: 16)),
-                  ),
-                  if (showToggle && onToggle != null)
-                    IconButton(
-                      icon: Icon(isMonitoring
-                          ? Icons.stop_circle_rounded
-                          : Icons.play_circle_fill_rounded),
-                      color: isMonitoring ? Colors.red : Colors.green,
-                      iconSize: 32,
-                      onPressed: onToggle,
+                    const SizedBox(width: 8),
+                    Icon(icon,
+                        size: 24, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(title,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600, fontSize: 16)),
                     ),
-                  const SizedBox(width: 8),
-                  // Circular Forward Button
-                  SizedBox(
-                    height: 36,
-                    width: 36,
-                    child: AdaptiveButton.child(
-                      onPressed: onExpand,
-                      style: PlatformInfo.isIOS26OrHigher()
-                          ? AdaptiveButtonStyle.glass
-                          : AdaptiveButtonStyle.plain,
-                      child: Center(
-                        child: Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 16,
+                    if (showToggle && onToggle != null)
+                      IconButton(
+                        icon: Icon(isMonitoring
+                            ? Icons.stop_circle_rounded
+                            : Icons.play_circle_fill_rounded),
+                        color: isMonitoring ? Colors.red : Colors.green,
+                        iconSize: 32,
+                        onPressed: onToggle,
+                      ),
+                    const SizedBox(width: 8),
+                    // Circular Forward Button
+                    SizedBox(
+                      height: 36,
+                      width: 36,
+                      child: AdaptiveButton.child(
+                        onPressed: onExpand,
+                        style: PlatformInfo.isIOS26OrHigher()
+                            ? AdaptiveButtonStyle.glass
+                            : AdaptiveButtonStyle.plain,
+                        child: Center(
+                          child: Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
-                        if (isExpanded) ...[
-              const Divider(height: 1, thickness: 0.5),
-              // Content
-              if (height != null)
-                SizedBox(
-                  height: height - 80, // Approximate height remaining
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: child,
-                    ),
-                  ),
-                )
-              else
-                 Padding(
+              if (isExpanded) ...[
+                const Divider(height: 1, thickness: 0.5),
+                // Content
+                if (height != null)
+                  SizedBox(
+                    height: height - 80, // Approximate height remaining
+                    child: scrollableBody
+                        ? SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: child,
+                            ),
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: child,
+                          ),
+                  )
+                else
+                  Padding(
                     padding: const EdgeInsets.all(12.0),
                     child: child,
                   ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildSoundContent() {
     final scheme = Theme.of(context).colorScheme;
@@ -820,42 +842,50 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   Widget _buildTTSContent() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center, // Changed from end to center
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Stack(
-                alignment: Alignment.centerRight,
-                children: [
-                  AdaptiveTextField(
-                    // Reverted to AdaptiveTextField for onSubmitted support
-                    controller: _ttsController,
-                    placeholder: "Type to speak...",
-                    onSubmitted: (_) => _handleTTSSubmit(),
-                  ),
-                  if (_ttsController.text.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: IconButton(
-                        icon: const Icon(Icons.clear, size: 16),
-                        onPressed: _clearTTS,
-                      ),
+        Expanded(
+          child: AdaptiveTextField(
+            controller: _ttsController,
+            placeholder: "Type to speak...",
+            onSubmitted: (_) => _handleTTSSubmit(),
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              height: 1.25,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            suffixIcon: _ttsController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    onPressed: _clearTTS,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 32,
                     ),
-                ],
-              ),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: IconButton(
+            icon: const Icon(Icons.volume_up_rounded),
+            onPressed: _handleTTSSubmit,
+            constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            style: IconButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.volume_up_rounded),
-              onPressed: _handleTTSSubmit,
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );

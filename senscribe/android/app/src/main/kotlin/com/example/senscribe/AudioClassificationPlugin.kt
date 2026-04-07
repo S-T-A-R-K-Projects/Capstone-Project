@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
@@ -154,7 +155,7 @@ private data class MatchCandidate(
 
 class AudioClassificationPlugin private constructor(
   private val context: Context,
-  private val activity: Activity,
+  private var activity: Activity,
   messenger: BinaryMessenger,
 ) : MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
 
@@ -177,7 +178,7 @@ class AudioClassificationPlugin private constructor(
     private const val MODEL_ASSET_PATH = "yamnet/yamnet.tflite"
 
     private const val BUILT_IN_SCORE_THRESHOLD = 0.4f
-    private const val BUILT_IN_THROTTLE_MS = 700L
+    private const val BUILT_IN_THROTTLE_MS = 10_000L
 
     private const val CUSTOM_MIN_SIGNAL_RMS = 0.008f
     private const val CUSTOM_MIN_SIGNAL_PEAK = 0.024f
@@ -185,7 +186,7 @@ class AudioClassificationPlugin private constructor(
     private const val CUSTOM_MAX_DETECTION_THRESHOLD = 0.94
     private const val CUSTOM_MIN_BACKGROUND_MARGIN = 0.005
     private const val CUSTOM_MIN_WIN_MARGIN = 0.03
-    private const val CUSTOM_THROTTLE_MS = 1000L
+    private const val CUSTOM_THROTTLE_MS = 10_000L
     private const val CUSTOM_REQUIRED_CONSECUTIVE_MATCHES = 2
 
     // Notification constants
@@ -197,15 +198,25 @@ class AudioClassificationPlugin private constructor(
     @Volatile
     var isLiveUpdateMuted = false
 
+    @Volatile
+    private var sharedInstance: AudioClassificationPlugin? = null
+
     fun register(
       messenger: BinaryMessenger,
       context: Context,
       activity: Activity,
     ): AudioClassificationPlugin {
-      val plugin = AudioClassificationPlugin(context, activity, messenger)
+      sharedInstance?.let { plugin ->
+        plugin.updateActivity(activity)
+        return plugin
+      }
+      val plugin = AudioClassificationPlugin(context.applicationContext, activity, messenger)
       plugin.setup()
+      sharedInstance = plugin
       return plugin
     }
+
+    fun sharedInstance(): AudioClassificationPlugin? = sharedInstance
 
     fun buildNotification(context: Context, title: String, content: String): Notification {
       val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -296,6 +307,7 @@ class AudioClassificationPlugin private constructor(
   private var audioRecord: AudioRecord? = null
   private var handlerThread: HandlerThread? = null
   private var workHandler: Handler? = null
+  private var wakeLock: PowerManager.WakeLock? = null
 
   private val isRunning = AtomicBoolean(false)
   private val isCapturingSample = AtomicBoolean(false)
@@ -306,7 +318,8 @@ class AudioClassificationPlugin private constructor(
     .setSampleRate(SAMPLE_RATE.toFloat())
     .build()
 
-  private val lastEventTimestampsMs = mutableMapOf<String, Long>()
+  private var lastEmittedSoundKey: String? = null
+  private var lastEmittedAtMs: Long = 0L
   private var lastCustomCandidateId: String? = null
   private var lastCustomCandidateCount = 0
   private var activeCustomMatchers: List<CustomSoundMatcher> = emptyList()
@@ -340,6 +353,15 @@ class AudioClassificationPlugin private constructor(
     eventChannel.setStreamHandler(null)
   }
 
+  fun updateActivity(activity: Activity) {
+    this.activity = activity
+  }
+
+  fun stopMonitoringFromService() {
+    internalStopClassification(shouldSendStatus = true)
+    hideLiveUpdateNotification()
+  }
+
   fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray) {
     if (requestCode != PERMISSION_REQUEST_CODE) return
 
@@ -368,6 +390,7 @@ class AudioClassificationPlugin private constructor(
       "start" -> handleStart(result)
       "stop" -> {
         stopClassification()
+        stopForegroundMonitoringService()
         result.success(null)
       }
       "startLiveUpdates" -> handleStartLiveUpdates(result)
@@ -387,18 +410,30 @@ class AudioClassificationPlugin private constructor(
 
   override fun onCancel(arguments: Any?) {
     eventSink = null
-    stopClassification()
   }
 
   private fun handleStart(result: MethodChannel.Result) {
     if (isRunning.get()) {
+      ensureForegroundMonitoringService()
       result.success(null)
       return
     }
 
     runWithMicrophonePermission(result) {
-      startClassification()
-      result.success(null)
+      try {
+        ensureForegroundMonitoringService()
+        startClassification()
+        currentNotificationContent = "Listening for sounds..."
+        showLiveUpdateNotification()
+        result.success(null)
+      } catch (error: Exception) {
+        stopForegroundMonitoringService()
+        result.error(
+          "start_failed",
+          error.message ?: "Unable to start sound recognition.",
+          null,
+        )
+      }
     }
   }
 
@@ -414,23 +449,12 @@ class AudioClassificationPlugin private constructor(
       return
     }
 
-    try {
-      val serviceIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
-        action = LiveUpdateForegroundService.ACTION_START
-      }
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.startForegroundService(serviceIntent)
-      } else {
-        context.startService(serviceIntent)
-      }
-    } catch (e: Exception) {
-      result.error("service_start_failed", "Unable to start live update foreground service: ${e.message}", null)
-      return
-    }
-
     isLiveUpdateEnabled = true
     currentNotificationContent = "Listening for sounds..."
-    showLiveUpdateNotification()
+    if (isRunning.get()) {
+      ensureForegroundMonitoringService()
+      showLiveUpdateNotification()
+    }
     result.success(null)
   }
 
@@ -440,13 +464,13 @@ class AudioClassificationPlugin private constructor(
       return
     }
 
-    val stopIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
-      action = LiveUpdateForegroundService.ACTION_STOP
-    }
-    context.startService(stopIntent)
-
     isLiveUpdateEnabled = false
-    hideLiveUpdateNotification()
+    currentNotificationContent = "Listening for sounds..."
+    if (isRunning.get()) {
+      showLiveUpdateNotification()
+    } else {
+      hideLiveUpdateNotification()
+    }
     result.success(null)
   }
 
@@ -466,8 +490,15 @@ class AudioClassificationPlugin private constructor(
 
     pendingPermissionResult = result
     pendingPermissionContinuation = onGranted
+    val currentActivity = activity
+    if (currentActivity == null) {
+      pendingPermissionResult = null
+      pendingPermissionContinuation = null
+      result.error("activity_unavailable", "Unable to request microphone permission.", null)
+      return
+    }
     ActivityCompat.requestPermissions(
-      activity,
+      currentActivity,
       arrayOf(Manifest.permission.RECORD_AUDIO),
       PERMISSION_REQUEST_CODE,
     )
@@ -516,11 +547,13 @@ class AudioClassificationPlugin private constructor(
     audioEmbedder = embedder
     audioRecord = recorder
 
-    lastEventTimestampsMs.clear()
+    lastEmittedSoundKey = null
+    lastEmittedAtMs = 0L
     lastCustomCandidateId = null
     lastCustomCandidateCount = 0
     isRunning.set(true)
 
+    acquireWakeLock()
     recorder.startRecording()
 
     handlerThread = HandlerThread("senscribe-audio-classifier").also { it.start() }
@@ -619,7 +652,7 @@ class AudioClassificationPlugin private constructor(
 
     val label = audioResult.displayName().takeIf { it.isNotBlank() } ?: audioResult.categoryName()
     val now = System.currentTimeMillis()
-    if (!shouldEmit("builtIn:$label", now, BUILT_IN_THROTTLE_MS)) {
+    if (!shouldEmit("builtIn:${label.trim().lowercase()}", now, BUILT_IN_THROTTLE_MS)) {
       return
     }
 
@@ -717,6 +750,7 @@ class AudioClassificationPlugin private constructor(
 
   private fun stopClassification() {
     internalStopClassification(shouldSendStatus = true)
+    stopForegroundMonitoringService()
   }
 
   private fun internalStopClassification(shouldSendStatus: Boolean) {
@@ -745,8 +779,10 @@ class AudioClassificationPlugin private constructor(
 
     audioEmbedder?.close()
     audioEmbedder = null
+    releaseWakeLock()
 
-    lastEventTimestampsMs.clear()
+    lastEmittedSoundKey = null
+    lastEmittedAtMs = 0L
     resetCustomCandidate()
 
     if (shouldSendStatus) {
@@ -1394,11 +1430,11 @@ class AudioClassificationPlugin private constructor(
     nowMs: Long,
     throttleMs: Long,
   ): Boolean {
-    val previous = lastEventTimestampsMs[key]
-    if (previous != null && nowMs - previous < throttleMs) {
+    if (lastEmittedSoundKey == key && nowMs - lastEmittedAtMs < throttleMs) {
       return false
     }
-    lastEventTimestampsMs[key] = nowMs
+    lastEmittedSoundKey = key
+    lastEmittedAtMs = nowMs
     return true
   }
 
@@ -1556,6 +1592,9 @@ class AudioClassificationPlugin private constructor(
   }
 
   private fun showLiveUpdateNotification() {
+    if (currentNotificationContent.isBlank()) {
+      currentNotificationContent = "Listening for sounds..."
+    }
     val notification = createLiveUpdateNotification()
     notificationManager?.notify(NOTIFICATION_ID, notification)
   }
@@ -1574,6 +1613,44 @@ class AudioClassificationPlugin private constructor(
   private fun hideLiveUpdateNotification() {
     notificationManager?.cancel(NOTIFICATION_ID)
     currentNotificationContent = ""
+  }
+
+  private fun ensureForegroundMonitoringService() {
+    val serviceIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
+      action = LiveUpdateForegroundService.ACTION_START
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      context.startForegroundService(serviceIntent)
+    } else {
+      context.startService(serviceIntent)
+    }
+  }
+
+  private fun stopForegroundMonitoringService() {
+    val stopIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
+      action = LiveUpdateForegroundService.ACTION_STOP
+    }
+    context.startService(stopIntent)
+  }
+
+  private fun acquireWakeLock() {
+    if (wakeLock?.isHeld == true) return
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+    wakeLock = powerManager.newWakeLock(
+      PowerManager.PARTIAL_WAKE_LOCK,
+      "$TAG:MonitoringWakeLock",
+    ).apply {
+      setReferenceCounted(false)
+      acquire()
+    }
+  }
+
+  private fun releaseWakeLock() {
+    val heldWakeLock = wakeLock
+    wakeLock = null
+    if (heldWakeLock?.isHeld == true) {
+      heldWakeLock.release()
+    }
   }
 
   private fun createLiveUpdateNotification(): Notification {

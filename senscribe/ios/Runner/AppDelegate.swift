@@ -7,6 +7,8 @@ import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+    private var backgroundTasks: [Int: UIBackgroundTaskIdentifier] = [:]
+    private var nextBackgroundTaskToken: Int = 1
     
     override func application(
         _ application: UIApplication,
@@ -73,6 +75,39 @@ import UserNotifications
                 }
             }
         }
+
+        if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SenScribeIosRuntimeBridge") {
+            let channel = FlutterMethodChannel(
+                name: "senscribe/ios_runtime",
+                binaryMessenger: registrar.messenger()
+            )
+
+            channel.setMethodCallHandler { [weak self] call, result in
+                guard let self else {
+                    result(FlutterError(code: "unavailable", message: "AppDelegate unavailable", details: nil))
+                    return
+                }
+
+                switch call.method {
+                case "beginBackgroundTask":
+                    let args = call.arguments as? [String: Any]
+                    let name = args?["name"] as? String ?? "senscribe_background_task"
+                    result(self.beginBackgroundTask(named: name))
+                case "endBackgroundTask":
+                    guard
+                        let args = call.arguments as? [String: Any],
+                        let taskId = args["taskId"] as? Int
+                    else {
+                        result(FlutterError(code: "invalid_args", message: "Missing task id.", details: nil))
+                        return
+                    }
+                    self.endBackgroundTask(taskId: taskId)
+                    result(nil)
+                default:
+                    result(FlutterMethodNotImplemented)
+                }
+            }
+        }
     }
 
     private func handleGetPermissionStatuses(result: @escaping FlutterResult) {
@@ -127,6 +162,26 @@ import UserNotifications
         @unknown default:
             return "denied"
         }
+    }
+
+    private func beginBackgroundTask(named name: String) -> Int {
+        let token = nextBackgroundTaskToken
+        nextBackgroundTaskToken += 1
+
+        var identifier: UIBackgroundTaskIdentifier = .invalid
+        identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            self?.endBackgroundTask(taskId: token)
+        }
+
+        backgroundTasks[token] = identifier
+        return token
+    }
+
+    private func endBackgroundTask(taskId: Int) {
+        guard let identifier = backgroundTasks.removeValue(forKey: taskId) else {
+            return
+        }
+        UIApplication.shared.endBackgroundTask(identifier)
     }
 }
 

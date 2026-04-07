@@ -20,6 +20,7 @@ class LiveUpdateForegroundService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_STOP -> {
+        AudioClassificationPlugin.sharedInstance()?.stopMonitoringFromService()
         stopForeground(true)
         stopSelf()
         return START_NOT_STICKY

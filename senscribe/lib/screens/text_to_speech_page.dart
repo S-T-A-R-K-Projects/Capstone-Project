@@ -28,27 +28,30 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
   @override
   void initState() {
     super.initState();
+    _isSpeaking = _ttsService.isSpeaking;
+    _ttsService.speakingNotifier.addListener(_handleSpeakingChanged);
     _initTTS();
   }
 
   Future<void> _initTTS() async {
     await _ttsService.init();
+    if (!mounted) return;
+    setState(() {
+      _isSpeaking = _ttsService.isSpeaking;
+    });
   }
 
   @override
   void dispose() {
+    _ttsService.speakingNotifier.removeListener(_handleSpeakingChanged);
     _textController.dispose();
-    _ttsService.stop();
     super.dispose();
   }
 
   void _speak() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
-
-    setState(() => _isSpeaking = true);
     await _ttsService.speak(text);
-    setState(() => _isSpeaking = false);
   }
 
   void _stop() async {
@@ -58,6 +61,13 @@ class _TextToSpeechPageState extends State<TextToSpeechPage> {
 
   void _clearText() {
     _textController.clear();
+  }
+
+  void _handleSpeakingChanged() {
+    if (!mounted) return;
+    setState(() {
+      _isSpeaking = _ttsService.isSpeaking;
+    });
   }
 
   @override

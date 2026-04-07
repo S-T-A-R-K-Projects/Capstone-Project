@@ -46,8 +46,8 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   private let recordingDuration: TimeInterval = 5.0
   private let builtInConfidenceThreshold: Double = 0.25
   private let customConfidenceThreshold: Double = 0.94
-  private let builtInThrottleInterval: TimeInterval = 0.5
-  private let customThrottleInterval: TimeInterval = 1.0
+  private let builtInThrottleInterval: TimeInterval = 10.0
+  private let customThrottleInterval: TimeInterval = 10.0
   private let customMinimumSignalRMS: Float = 0.008
   private let requiredCustomConsecutiveMatches = 2
 
@@ -60,7 +60,8 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   private var isMonitoring = false
   private var isCapturingSample = false
   private var resumeMonitoringAfterCapture = false
-  private var lastEventDates: [String: Date] = [:]
+  private var lastEmittedEventKey: String?
+  private var lastEmittedEventDate: Date?
   private var latestInputRMS: Float = 0
   private var latestInputPeak: Float = 0
   private var lastCustomCandidateIdentifier: String?
@@ -129,7 +130,6 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
 
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
     eventSink = nil
-    stopClassification()
     return nil
   }
 
@@ -155,7 +155,8 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
           try self.configureAudioSession()
           try self.startMonitoringSession()
           self.isMonitoring = true
-          self.lastEventDates.removeAll()
+          self.lastEmittedEventKey = nil
+          self.lastEmittedEventDate = nil
           self.sendStatus("started")
           result(nil)
         } catch {
@@ -180,7 +181,8 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     customRequest = nil
     audioEngine = nil
     isMonitoring = false
-    lastEventDates.removeAll()
+    lastEmittedEventKey = nil
+    lastEmittedEventDate = nil
     lastCustomCandidateIdentifier = nil
     lastCustomCandidateCount = 0
 
@@ -195,7 +197,12 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
 
   private func configureAudioSession() throws {
     let session = AVAudioSession.sharedInstance()
-    try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
+    try session.setCategory(
+      .playAndRecord,
+      mode: .measurement,
+      options: [.mixWithOthers, .allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker]
+    )
+    try session.setPreferredIOBufferDuration(0.02)
     try session.setActive(true, options: .notifyOthersOnDeactivation)
   }
 
@@ -594,11 +601,13 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
     let throttleInterval = isCustomRequest ? customThrottleInterval : builtInThrottleInterval
     let throttleKey = "\(source):\(identifier)"
     let now = Date()
-    if let lastEventDate = lastEventDates[throttleKey],
+    if let lastEventDate = lastEmittedEventDate,
+       lastEmittedEventKey == throttleKey,
        now.timeIntervalSince(lastEventDate) < throttleInterval {
       return
     }
-    lastEventDates[throttleKey] = now
+    lastEmittedEventKey = throttleKey
+    lastEmittedEventDate = now
 
     var payload: [String: Any] = [
       "type": "result",
@@ -623,7 +632,8 @@ class AudioClassificationPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, 
   }
 
   func requestDidComplete(_ request: SNRequest) {
-    lastEventDates.removeAll()
+    lastEmittedEventKey = nil
+    lastEmittedEventDate = nil
     lastCustomCandidateIdentifier = nil
     lastCustomCandidateCount = 0
   }

@@ -92,6 +92,20 @@ class _SenScribeAppState extends State<SenScribeApp> {
       cupertinoLightTheme: AppTheme.cupertinoLightTheme,
       cupertinoDarkTheme: AppTheme.cupertinoDarkTheme,
       themeMode: _themeProvider.themeMode,
+      builder: (context, child) {
+        if (child == null) {
+          return const SizedBox.shrink();
+        }
+
+        if (!PlatformInfo.isAndroid) {
+          return child;
+        }
+
+        return SafeArea(
+          top: false,
+          child: child,
+        );
+      },
       home: const MainNavigationPage(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

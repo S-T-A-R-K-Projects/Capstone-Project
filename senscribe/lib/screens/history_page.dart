@@ -546,72 +546,76 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
                       ),
                     ),
                   )
-                : Column(
-                    children: [
-                      if (topInset > 0) SizedBox(height: topInset),
-                      Container(
-                        margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.schedule,
-                              size: 16,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.72),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Recorded ${TimeUtils.formatTimeAgoShort(item.timestamp)}',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.72),
+                : SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      children: [
+                        if (topInset > 0) SizedBox(height: topInset),
+                        Container(
+                          margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.schedule,
+                                size: 16,
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.72),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Recorded ${TimeUtils.formatTimeAgoShort(item.timestamp)}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.72),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: SizedBox(
-                          height: 44,
-                          child: AdaptiveSegmentedControl(
-                            labels: const ['Transcript', 'Summary'],
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            selectedIndex: _selectedViewIndex,
-                            onValueChanged: (index) {
-                              setState(() {
-                                _selectedViewIndex = index;
-                              });
-                            },
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: IndexedStack(
-                          index: _selectedViewIndex,
-                          children: [
-                            _buildTranscriptTab(theme, item),
-                            _buildSummaryTab(theme, item),
-                          ],
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: SizedBox(
+                            height: 44,
+                            child: AdaptiveSegmentedControl(
+                              labels: const ['Transcript', 'Summary'],
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              selectedIndex: _selectedViewIndex,
+                              onValueChanged: (index) {
+                                setState(() {
+                                  _selectedViewIndex = index;
+                                });
+                              },
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: IndexedStack(
+                            index: _selectedViewIndex,
+                            children: [
+                              _buildTranscriptTab(theme, item),
+                              _buildSummaryTab(theme, item),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
       ),
     );

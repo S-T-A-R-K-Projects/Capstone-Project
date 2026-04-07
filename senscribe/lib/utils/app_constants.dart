@@ -7,6 +7,7 @@ class AppConstants {
   static const int alertHistoryMaxItems = 100;
   static const double audioConfidenceThreshold = 0.6;
   static const int historyPreviewMaxLength = 64;
+  static const Duration repeatingSoundRefreshWindow = Duration(seconds: 10);
 
   static const double defaultSectionHeight = 250.0;
   static const double sttSectionHeight = 280.0;

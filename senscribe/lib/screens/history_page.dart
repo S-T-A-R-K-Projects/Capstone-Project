@@ -11,6 +11,35 @@ import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
 import 'model_settings_page.dart';
 
+Future<String?> _showRenameTranscriptionDialog(
+  BuildContext context, {
+  required String initialTitle,
+}) async {
+  final updatedTitle = await AdaptiveAlertDialog.inputShow(
+    context: context,
+    title: 'Rename transcription',
+    actions: [
+      AlertAction(
+        title: 'Cancel',
+        style: AlertActionStyle.cancel,
+        onPressed: () {},
+      ),
+      AlertAction(
+        title: 'Save',
+        style: AlertActionStyle.primary,
+        onPressed: () {},
+      ),
+    ],
+    input: AdaptiveAlertDialogInput(
+      placeholder: 'Name',
+      initialValue: initialTitle,
+      maxLength: 40,
+    ),
+  );
+
+  return updatedTitle?.trim();
+}
+
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
 
@@ -63,33 +92,11 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Future<void> _rename(HistoryItem item) async {
-    final controller = TextEditingController(text: item.title);
-    final updatedTitle = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename transcription'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Name',
-            border: OutlineInputBorder(),
-          ),
-          maxLength: 40,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final updatedTitle = await _showRenameTranscriptionDialog(
+      context,
+      initialTitle: item.title,
     );
 
-    controller.dispose();
     if (updatedTitle == null) return;
     final title = updatedTitle.trim();
     if (title.isEmpty) return;
@@ -312,33 +319,11 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     final item = _item;
     if (item == null) return;
 
-    final controller = TextEditingController(text: item.title);
-    final updatedTitle = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename transcription'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Name',
-            border: OutlineInputBorder(),
-          ),
-          maxLength: 40,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final updatedTitle = await _showRenameTranscriptionDialog(
+      context,
+      initialTitle: item.title,
     );
 
-    controller.dispose();
     if (updatedTitle == null) return;
     final title = updatedTitle.trim();
     if (title.isEmpty) return;
@@ -584,23 +569,28 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
                             ],
                           ),
                         ),
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: SizedBox(
+                            width: double.infinity,
                             height: 44,
-                            child: AdaptiveSegmentedControl(
-                              labels: const ['Transcript', 'Summary'],
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              selectedIndex: _selectedViewIndex,
-                              onValueChanged: (index) {
-                                setState(() {
-                                  _selectedViewIndex = index;
-                                });
-                              },
+                            child: MediaQuery(
+                              data: MediaQuery.of(context).copyWith(
+                                platformBrightness: theme.brightness,
+                              ),
+                              child: AdaptiveSegmentedControl(
+                                key: ValueKey(
+                                  'history-detail-tabs-${theme.brightness.name}',
+                                ),
+                                labels: const ['Transcript', 'Summary'],
+                                color: theme.colorScheme.surface,
+                                selectedIndex: _selectedViewIndex,
+                                onValueChanged: (index) {
+                                  setState(() {
+                                    _selectedViewIndex = index;
+                                  });
+                                },
+                              ),
                             ),
                           ),
                         ),

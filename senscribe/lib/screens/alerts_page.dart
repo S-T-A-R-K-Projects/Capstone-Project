@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -25,7 +26,6 @@ class AlertsPage extends StatefulWidget {
 class _AlertsPageState extends State<AlertsPage> {
   final TriggerWordService _triggerWordService = TriggerWordService();
   final CustomSoundService _customSoundService = CustomSoundService();
-  final TextEditingController _newWordController = TextEditingController();
   int _selectedTabIndex = 0; // 0 = Alerts, 1 = Alert Triggers
   bool _isAlertSelectionMode = false;
   final Set<String> _selectedAlertIds = <String>{};
@@ -40,12 +40,6 @@ class _AlertsPageState extends State<AlertsPage> {
     } else {
       _selectedTabIndex = widget.initialTabIndex;
     }
-  }
-
-  @override
-  void dispose() {
-    _newWordController.dispose();
-    super.dispose();
   }
 
   bool _isSoundAlert(TriggerAlert alert) {
@@ -189,225 +183,82 @@ class _AlertsPageState extends State<AlertsPage> {
     return Icons.warning_rounded;
   }
 
-  void _showAddTriggerWordDialog() {
-    _newWordController.clear();
-    bool caseSensitive = false;
-    bool exactMatch = true;
+  void _showTriggerWordEmptyWarning() {
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Please enter a trigger word',
+      type: AdaptiveSnackBarType.warning,
+    );
+  }
 
-    showDialog(
+  Future<_TriggerWordDialogResult?> _showTriggerWordDialog({
+    required String title,
+    required String primaryActionLabel,
+    String initialWord = '',
+    bool initialCaseSensitive = false,
+    bool initialExactMatch = true,
+  }) async {
+    return showDialog<_TriggerWordDialogResult>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(
-            'Add Trigger Word',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _newWordController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter word to monitor',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: caseSensitive,
-                        onChanged: (value) {
-                          setState(() => caseSensitive = value ?? false);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Case Sensitive',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: exactMatch,
-                        onChanged: (value) {
-                          setState(() => exactMatch = value ?? true);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Exact Word Match (whole word only)',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final wordToAdd = _newWordController.text.trim();
-                if (wordToAdd.isEmpty) {
-                  AdaptiveSnackBar.show(
-                    context,
-                    message: 'Please enter a trigger word',
-                    type: AdaptiveSnackBarType.warning,
-                  );
-                  return;
-                }
-                final navigator = Navigator.of(context);
-
-                await _triggerWordService.addTriggerWord(
-                  TriggerWord(
-                    word: wordToAdd,
-                    caseSensitive: caseSensitive,
-                    exactMatch: exactMatch,
-                  ),
-                );
-
-                if (mounted) {
-                  navigator.pop();
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: 'Added trigger word: $wordToAdd',
-                    type: AdaptiveSnackBarType.success,
-                  );
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        ),
+      barrierDismissible: true,
+      builder: (dialogContext) => _TriggerWordDialog(
+        title: title,
+        primaryActionLabel: primaryActionLabel,
+        initialWord: initialWord,
+        initialCaseSensitive: initialCaseSensitive,
+        initialExactMatch: initialExactMatch,
+        onEmptyWord: _showTriggerWordEmptyWarning,
       ),
     );
   }
 
-  void _showEditTriggerWordDialog(TriggerWord existingWord) {
-    _newWordController.text = existingWord.word;
-    bool caseSensitive = existingWord.caseSensitive;
-    bool exactMatch = existingWord.exactMatch;
+  Future<void> _showAddTriggerWordDialog() async {
+    final result = await _showTriggerWordDialog(
+      title: 'Add Trigger Word',
+      primaryActionLabel: 'Add',
+    );
+    if (result == null) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(
-            'Edit Trigger Word',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _newWordController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter word to monitor',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: caseSensitive,
-                        onChanged: (value) {
-                          setState(() => caseSensitive = value ?? false);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Case Sensitive',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: exactMatch,
-                        onChanged: (value) {
-                          setState(() => exactMatch = value ?? true);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Exact Word Match (whole word only)',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final updatedWord = _newWordController.text.trim();
-                if (updatedWord.isEmpty) {
-                  AdaptiveSnackBar.show(
-                    context,
-                    message: 'Please enter a trigger word',
-                    type: AdaptiveSnackBarType.warning,
-                  );
-                  return;
-                }
-
-                final navigator = Navigator.of(context);
-
-                await _triggerWordService.updateTriggerWord(
-                  existingWord.word,
-                  existingWord.copyWith(
-                    word: updatedWord,
-                    caseSensitive: caseSensitive,
-                    exactMatch: exactMatch,
-                  ),
-                );
-
-                if (mounted) {
-                  navigator.pop();
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: 'Updated trigger word: $updatedWord',
-                    type: AdaptiveSnackBarType.success,
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+    await _triggerWordService.addTriggerWord(
+      TriggerWord(
+        word: result.word,
+        caseSensitive: result.caseSensitive,
+        exactMatch: result.exactMatch,
       ),
+    );
+
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Added trigger word: ${result.word}',
+      type: AdaptiveSnackBarType.success,
+    );
+  }
+
+  Future<void> _showEditTriggerWordDialog(TriggerWord existingWord) async {
+    final result = await _showTriggerWordDialog(
+      title: 'Edit Trigger Word',
+      primaryActionLabel: 'Save',
+      initialWord: existingWord.word,
+      initialCaseSensitive: existingWord.caseSensitive,
+      initialExactMatch: existingWord.exactMatch,
+    );
+    if (result == null) return;
+
+    await _triggerWordService.updateTriggerWord(
+      existingWord.word,
+      existingWord.copyWith(
+        word: result.word,
+        caseSensitive: result.caseSensitive,
+        exactMatch: result.exactMatch,
+      ),
+    );
+
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Updated trigger word: ${result.word}',
+      type: AdaptiveSnackBarType.success,
     );
   }
 
@@ -491,54 +342,29 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _showAddCustomSoundDialog() async {
-    final controller = TextEditingController();
-
-    await showDialog<void>(
+    final soundName = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          'Add Custom Sound',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-        ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: TextField(
-            controller: controller,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              hintText: 'Name this sound',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              try {
-                final profile = await _customSoundService.createDraftProfile(
-                  controller.text,
-                );
-                if (!dialogContext.mounted) return;
-                Navigator.of(dialogContext).pop();
-                await _openCustomSoundEnrollmentPage(profile);
-              } catch (error) {
-                if (!mounted) return;
-                AdaptiveSnackBar.show(
-                  context,
-                  message: '$error',
-                  type: AdaptiveSnackBarType.warning,
-                );
-              }
-            },
-            child: const Text('Continue'),
-          ),
-        ],
+      barrierDismissible: true,
+      builder: (dialogContext) => const _NameEntryDialog(
+        title: 'Add Custom Sound',
+        placeholder: 'Name this sound',
+        primaryActionLabel: 'Continue',
       ),
     );
+    if (soundName == null) return;
+
+    try {
+      final profile = await _customSoundService.createDraftProfile(soundName);
+      if (!mounted) return;
+      await _openCustomSoundEnrollmentPage(profile);
+    } catch (error) {
+      if (!mounted) return;
+      AdaptiveSnackBar.show(
+        context,
+        message: '$error',
+        type: AdaptiveSnackBarType.warning,
+      );
+    }
   }
 
   Future<void> _openCustomSoundEnrollmentPage(
@@ -1217,6 +1043,436 @@ class _AlertsPageState extends State<AlertsPage> {
           },
         );
       },
+    );
+  }
+}
+
+class _TriggerWordDialogResult {
+  const _TriggerWordDialogResult({
+    required this.word,
+    required this.caseSensitive,
+    required this.exactMatch,
+  });
+
+  final String word;
+  final bool caseSensitive;
+  final bool exactMatch;
+}
+
+class _TriggerWordDialog extends StatefulWidget {
+  const _TriggerWordDialog({
+    required this.title,
+    required this.primaryActionLabel,
+    required this.initialWord,
+    required this.initialCaseSensitive,
+    required this.initialExactMatch,
+    required this.onEmptyWord,
+  });
+
+  final String title;
+  final String primaryActionLabel;
+  final String initialWord;
+  final bool initialCaseSensitive;
+  final bool initialExactMatch;
+  final VoidCallback onEmptyWord;
+
+  @override
+  State<_TriggerWordDialog> createState() => _TriggerWordDialogState();
+}
+
+class _TriggerWordDialogState extends State<_TriggerWordDialog> {
+  late final TextEditingController _controller;
+  late bool _caseSensitive;
+  late bool _exactMatch;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialWord);
+    _caseSensitive = widget.initialCaseSensitive;
+    _exactMatch = widget.initialExactMatch;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final word = _controller.text.trim();
+    if (word.isEmpty) {
+      widget.onEmptyWord();
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _TriggerWordDialogResult(
+        word: word,
+        caseSensitive: _caseSensitive,
+        exactMatch: _exactMatch,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dialogBody = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: PlatformInfo.isIOS ? 19 : 22,
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 20),
+            AdaptiveTextField(
+              controller: _controller,
+              placeholder: 'Enter word to monitor',
+              autofocus: true,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: scheme.onSurface,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            _TriggerWordDialogOptionRow(
+              label: 'Case Sensitive',
+              value: _caseSensitive,
+              onChanged: (value) {
+                setState(() {
+                  _caseSensitive = value;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            _TriggerWordDialogOptionRow(
+              label: 'Exact Word Match (whole word only)',
+              value: _exactMatch,
+              onChanged: (value) {
+                setState(() {
+                  _exactMatch = value;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            if (PlatformInfo.isIOS)
+              Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      label: 'Cancel',
+                      style: AdaptiveButtonStyle.plain,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _submit,
+                      label: widget.primaryActionLabel,
+                      style: PlatformInfo.isIOS26OrHigher()
+                          ? AdaptiveButtonStyle.glass
+                          : AdaptiveButtonStyle.filled,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  const Spacer(),
+                  AdaptiveButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    label: 'Cancel',
+                    style: AdaptiveButtonStyle.plain,
+                  ),
+                  const SizedBox(width: 8),
+                  AdaptiveButton(
+                    onPressed: _submit,
+                    label: widget.primaryActionLabel,
+                    style: AdaptiveButtonStyle.filled,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (PlatformInfo.isIOS) {
+      return _IOSDialogScaffold(child: dialogBody);
+    }
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: scheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: dialogBody,
+      ),
+    );
+  }
+}
+
+class _NameEntryDialog extends StatefulWidget {
+  const _NameEntryDialog({
+    required this.title,
+    required this.placeholder,
+    required this.primaryActionLabel,
+  });
+
+  final String title;
+  final String placeholder;
+  final String primaryActionLabel;
+
+  @override
+  State<_NameEntryDialog> createState() => _NameEntryDialogState();
+}
+
+class _NameEntryDialogState extends State<_NameEntryDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    Navigator.of(context).pop(value.isEmpty ? null : value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dialogBody = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: PlatformInfo.isIOS ? 19 : 22,
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 20),
+            AdaptiveTextField(
+              controller: _controller,
+              placeholder: widget.placeholder,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: scheme.onSurface,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 24),
+            if (PlatformInfo.isIOS)
+              Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      label: 'Cancel',
+                      style: AdaptiveButtonStyle.plain,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _submit,
+                      label: widget.primaryActionLabel,
+                      style: PlatformInfo.isIOS26OrHigher()
+                          ? AdaptiveButtonStyle.glass
+                          : AdaptiveButtonStyle.filled,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  const Spacer(),
+                  AdaptiveButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    label: 'Cancel',
+                    style: AdaptiveButtonStyle.plain,
+                  ),
+                  const SizedBox(width: 8),
+                  AdaptiveButton(
+                    onPressed: _submit,
+                    label: widget.primaryActionLabel,
+                    style: AdaptiveButtonStyle.filled,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (PlatformInfo.isIOS) {
+      return _IOSDialogScaffold(child: dialogBody);
+    }
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: scheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: dialogBody,
+      ),
+    );
+  }
+}
+
+class _IOSDialogScaffold extends StatelessWidget {
+  const _IOSDialogScaffold({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final availableHeight = mediaQuery.size.height -
+        mediaQuery.padding.top -
+        mediaQuery.padding.bottom -
+        mediaQuery.viewInsets.bottom -
+        32;
+
+    return MediaQuery(
+      data: mediaQuery.copyWith(platformBrightness: theme.brightness),
+      child: CupertinoTheme(
+        data: CupertinoTheme.of(context).copyWith(
+          brightness: theme.brightness,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.fromLTRB(
+              24,
+              16,
+              24,
+              mediaQuery.viewInsets.bottom + 16,
+            ),
+            child: SafeArea(
+              child: Align(
+                alignment: Alignment.center,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 420,
+                    maxHeight: availableHeight
+                        .clamp(220.0, double.infinity)
+                        .toDouble(),
+                  ),
+                  child: AdaptiveCard(
+                    padding: const EdgeInsets.all(22),
+                    borderRadius: BorderRadius.circular(28),
+                    clipBehavior: Clip.antiAlias,
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TriggerWordDialogOptionRow extends StatelessWidget {
+  const _TriggerWordDialogOptionRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rowColor = PlatformInfo.isIOS
+        ? scheme.surfaceContainerHighest.withValues(alpha: 0.55)
+        : scheme.surfaceContainerHighest.withValues(alpha: 0.8);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: rowColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: AdaptiveCheckbox(
+                value: value,
+                onChanged: (nextValue) => onChanged(nextValue ?? false),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

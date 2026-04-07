@@ -579,10 +579,12 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     required VoidCallback onExpand,
     VoidCallback? onToggle,
   }) {
+    final sectionBorderRadius = BorderRadius.circular(24);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: sectionBorderRadius,
         boxShadow: [
           BoxShadow(
             color:
@@ -594,7 +596,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       ),
       child: AdaptiveCard(
         padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: sectionBorderRadius,
+        clipBehavior: PlatformInfo.isIOS ? Clip.antiAlias : Clip.none,
         child: AnimatedSize(
           duration: const Duration(milliseconds: 350),
           curve: Curves.easeOutCubic,

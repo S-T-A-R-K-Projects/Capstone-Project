@@ -16,6 +16,7 @@ class AboutSupportPage extends StatelessWidget {
     'flutter_staggered_animations',
     'flutter_tts',
     'google_fonts',
+    'live_activities',
     'liquid_ai',
     'path',
     'path_provider',

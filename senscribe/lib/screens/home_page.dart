@@ -376,7 +376,7 @@ class _HomePageState extends State<HomePage> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: AdaptiveCard(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 child: Row(
                   children: [
                     AnimatedBuilder(
@@ -408,7 +408,7 @@ class _HomePageState extends State<HomePage> {
                         );
                       },
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,8 +435,9 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 12),
                     SizedBox(
-                      width: 96,
+                      width: 92,
                       child: AdaptiveButton(
                         onPressed: _toggleMonitoring,
                         label: _isMonitoring ? 'Stop' : 'Start',
@@ -581,30 +582,21 @@ class _HomePageState extends State<HomePage> {
                       padding: const EdgeInsets.only(top: 0, bottom: 8),
                       itemCount: filteredCaptions.length,
                       itemBuilder: (context, index) {
-                        return AnimationConfiguration.staggeredList(
-                          position: index,
-                          duration: const Duration(milliseconds: 375),
-                          child: SlideAnimation(
-                            verticalOffset: 50.0,
-                            child: FadeInAnimation(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 4,
-                                ),
-                                child: SoundCaptionCard(
-                                  caption: filteredCaptions[index],
-                                  onViewDetails: () => _showCaptionDetails(
-                                    filteredCaptions[index],
-                                  ),
-                                  onSaveToAlerts: () => _saveCaptionToAlerts(
-                                    filteredCaptions[index],
-                                  ),
-                                  onDelete: () =>
-                                      _deleteCaption(filteredCaptions[index]),
-                                ),
-                              ),
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          child: SoundCaptionCard(
+                            caption: filteredCaptions[index],
+                            onViewDetails: () => _showCaptionDetails(
+                              filteredCaptions[index],
                             ),
+                            onSaveToAlerts: () => _saveCaptionToAlerts(
+                              filteredCaptions[index],
+                            ),
+                            onDelete: () =>
+                                _deleteCaption(filteredCaptions[index]),
                           ),
                         );
                       },

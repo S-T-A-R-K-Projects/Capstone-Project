@@ -602,17 +602,29 @@ class _AlertsPageState extends State<AlertsPage> {
           trailing: AdaptivePopupMenuButton.icon<String>(
             icon: 'ellipsis.circle',
             items: [
-              const AdaptivePopupMenuItem(label: 'Open', value: 'open'),
+              AdaptivePopupMenuItem(
+                label: 'Open',
+                value: 'open',
+                icon: PlatformInfo.isIOS26OrHigher() ? 'folder' : Icons.folder_open_rounded,
+              ),
               if (profile.hasEnoughSamples)
-                const AdaptivePopupMenuItem(
+                AdaptivePopupMenuItem(
                   label: 'Retrain',
                   value: 'retrain',
+                  icon: PlatformInfo.isIOS26OrHigher() ? 'arrow.triangle.2.circlepath' : Icons.autorenew_rounded,
                 ),
               AdaptivePopupMenuItem(
                 label: profile.enabled ? 'Disable' : 'Enable',
                 value: 'toggle',
+                icon: profile.enabled
+                    ? (PlatformInfo.isIOS26OrHigher() ? 'speaker.slash' : Icons.volume_off_rounded)
+                    : (PlatformInfo.isIOS26OrHigher() ? 'speaker.wave.2' : Icons.volume_up_rounded),
               ),
-              const AdaptivePopupMenuItem(label: 'Delete', value: 'delete'),
+              AdaptivePopupMenuItem(
+                label: 'Delete',
+                value: 'delete',
+                icon: PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
+              ),
             ],
             onSelected: (index, item) async {
               switch (item.value) {
@@ -981,19 +993,24 @@ class _AlertsPageState extends State<AlertsPage> {
                                         AdaptivePopupMenuButton.icon<String>(
                                       icon: 'ellipsis.circle',
                                       items: [
-                                        const AdaptivePopupMenuItem(
+                                        AdaptivePopupMenuItem(
                                           label: 'Edit',
                                           value: 'edit',
+                                          icon: PlatformInfo.isIOS26OrHigher() ? 'pencil' : Icons.edit_rounded,
                                         ),
                                         AdaptivePopupMenuItem(
                                           label: word.enabled
                                               ? 'Disable'
                                               : 'Enable',
                                           value: 'toggle',
+                                          icon: word.enabled
+                                              ? (PlatformInfo.isIOS26OrHigher() ? 'speaker.slash' : Icons.volume_off_rounded)
+                                              : (PlatformInfo.isIOS26OrHigher() ? 'speaker.wave.2' : Icons.volume_up_rounded),
                                         ),
-                                        const AdaptivePopupMenuItem(
+                                        AdaptivePopupMenuItem(
                                           label: 'Delete',
                                           value: 'delete',
+                                          icon: PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
                                         ),
                                       ],
                                       onSelected: (index, item) async {

@@ -10,6 +10,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../services/audio_classification_service.dart';
 import '../services/text_to_speech_service.dart';
 import '../models/sound_caption.dart';
+import 'package:flutter/services.dart';
 
 import 'speech_to_text_page.dart';
 import 'text_to_speech_page.dart';
@@ -449,8 +450,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   @override
   Widget build(BuildContext context) {
-    return AdaptiveScaffold(
-      body: Material(
+    final Brightness brightness = Theme.of(context).brightness;
+    final SystemUiOverlayStyle overlayStyle = brightness == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: AdaptiveScaffold(
+        body: Material(
         color: Colors.transparent,
         child: SafeArea(
           child: SingleChildScrollView(
@@ -563,7 +571,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildSectionContainer({
@@ -733,9 +741,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
               return AdaptiveListTile(
                 leading: Icon(
-                  event.isCritical
-                      ? Icons.warning_amber_rounded
-                      : Icons.music_note_rounded,
+                  event.icon,
                   color: event.isCritical ? scheme.error : scheme.primary,
                 ),
                 title: Text(

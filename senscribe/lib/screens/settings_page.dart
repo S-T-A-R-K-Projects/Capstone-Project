@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -29,11 +30,17 @@ class _SettingsPageState extends State<SettingsPage> {
         ? MediaQuery.of(context).padding.top + kToolbarHeight + 16
         : 16.0;
 
-    return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(
-        title: 'Settings',
-      ),
-      body: Material(
+    final SystemUiOverlayStyle overlayStyle = theme.brightness == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: AdaptiveScaffold(
+        appBar: AdaptiveAppBar(
+          title: 'Settings',
+        ),
+        body: Material(
         color: Colors.transparent,
         child: ListView(
           padding: EdgeInsets.only(
@@ -484,6 +491,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
-    );
+    ));
   }
 }

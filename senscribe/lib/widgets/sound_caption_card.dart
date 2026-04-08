@@ -23,11 +23,7 @@ class SoundCaptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final leadingIcon = caption.isCritical
-        ? Icons.warning_rounded
-        : caption.source == SoundCaptionSource.custom
-            ? Icons.tune_rounded
-            : Icons.music_note_rounded;
+    final leadingIcon = caption.icon;
     final leadingColor = caption.isCritical ? Colors.red : scheme.primary;
 
     return AdaptiveCard(

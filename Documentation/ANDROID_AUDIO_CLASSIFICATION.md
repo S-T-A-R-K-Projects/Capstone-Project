@@ -1,70 +1,173 @@
 # Android Audio Classification Implementation Overview
 
-This document explains how SenScribe performs live audio classification on Android using MediaPipe Tasks and the YAMNet TensorFlow Lite model. It is intended for newcomers who have not seen the code before.
+This document describes the current Android sound recognition implementation in `senscribe`.
+
+## Current Stack
+
+- Flutter entry point: `lib/services/audio_classification_service.dart`
+- Android plugin: `android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt`
+- YAMNet runtime wrapper: `android/app/src/main/kotlin/com/example/senscribe/YamnetLiteRtRunner.kt`
+- Custom feature extractor: `android/app/src/main/kotlin/com/example/senscribe/CustomAudioFeatureExtractor.kt`
+- Custom matcher calibration: `android/app/src/main/kotlin/com/example/senscribe/CustomSoundMatching.kt`
+- Foreground notification service: `android/app/src/main/kotlin/com/example/senscribe/LiveUpdateForegroundService.kt`
+
+Android runs:
+
+1. A direct TensorFlow Lite LiteRT-backed YAMNet runner for built-in classes.
+2. A separate on-device custom matcher built from saved feature banks.
 
 ## High-Level Flow
 
-1. Flutter’s `AudioClassificationService` (shared with iOS) invokes a platform method channel named `senscribe/audio_classifier`.
-2. `android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt` receives the call, ensures microphone permission, and starts an internal audio pipeline.
-3. The plugin records PCM audio via `AudioRecord`, converts buffers to MediaPipe’s `AudioData`, and feeds them to `AudioClassifier`.
-4. Results stream back to Flutter through an event channel (`senscribe/audio_classifier_events`). Flutter converts them into `SoundCaption` objects and updates the UI.
+1. Flutter calls `senscribe/audio_classifier` with `start`.
+2. `AudioClassificationPlugin` checks `RECORD_AUDIO`, starts a foreground service, acquires a partial wake lock, and creates an `AudioRecord`.
+3. The plugin reads mono PCM16 audio at `16_000 Hz`.
+4. A rolling window of `15_600` samples is maintained for inference. New audio is appended in `3_200` sample hops.
+5. The current window is sent to `YamnetLiteRtRunner`, which executes the bundled `yamnet/yamnet.tflite` model and returns the top classes.
+6. If trained custom sounds exist, the same rolling window is also converted into a hand-crafted feature vector and scored against each saved custom matcher.
+7. Detection payloads are emitted to Flutter over `senscribe/audio_classifier_events`.
+8. `AudioClassificationService` converts those payloads into `SoundCaption` entries and updates the UI.
 
-All work runs locally on the device. The TensorFlow Lite runtime bundled in `com.google.mediapipe:tasks-audio` performs the inference.
+## Flutter Contract
 
-## Flutter-Side Components
+### Method channel
 
-- `lib/services/audio_classification_service.dart` exposes a uniform API for both platforms using shared channel names.
-- `lib/screens/home_page.dart` subscribes to the event stream, filters results, and refreshes the UI list. The code is identical to iOS; only the native plugin differs.
+Channel name:
 
-## Native Plugin Breakdown
+- `senscribe/audio_classifier`
 
-`android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt` handles the heavy lifting. The core responsibilities are:
+Methods currently handled on Android:
 
-### Permissions and Lifecycle
+- `start`
+- `stop`
+- `startLiveUpdates`
+- `stopLiveUpdates`
+- `loadCustomSounds`
+- `captureSample`
+- `trainOrRebuildCustomModel`
+- `deleteCustomSound`
+- `setCustomSoundEnabled`
 
-- Requests `RECORD_AUDIO` permission if needed (`ActivityCompat.requestPermissions`).
-- Keeps track of pending start calls so it can resume classification after the user grants access.
-- Cleans up the classifier, worker thread, and recorder when Flutter stops listening or when the activity is destroyed.
+### Event channel
 
-### MediaPipe Setup
+Channel name:
 
-- Declares constants for sample rate (`16000 Hz`), channel count (`mono`), and buffer size to match YAMNet’s expected input window (15 600 samples ≈ 0.975 s).
-- Builds `AudioClassifierOptions` with:
-  - `BaseOptions.setModelAssetPath("yamnet.tflite")` to load the bundled model.
-  - `RunningMode.AUDIO_CLIPS` because we push buffered chunks instead of streaming callbacks.
-  - `setMaxResults(3)` and a confidence threshold in code to avoid low-confidence noise.
-- Instantiates `AudioClassifier` and creates a plain `AudioRecord` configured with the same sample rate and format. Using `MediaRecorder.AudioSource.VOICE_RECOGNITION` reduces automatic gain control artifacts.
+- `senscribe/audio_classifier_events`
 
-### Audio Loop
+Result payload shape:
 
-- Runs on a dedicated `HandlerThread` to keep the UI responsive.
-- Repeatedly reads `CLASSIFICATION_SAMPLE_COUNT` PCM16 samples from `AudioRecord` into a short array, then normalizes to floats (`[-1, 1]`) for MediaPipe.
-- Wraps the float array into an `AudioData` container and calls `classifier.classify(audioData)`.
-- Interprets the returned `AudioClassifierResult`, pulls the top category, and throttles duplicate labels (same label within 700 ms) before sending them back to Flutter via the event channel.
+- `type`: `result`
+- `label`
+- `confidence`
+- `source`: `builtIn` or `custom`
+- `timestampMs`
+- `customSoundId` only for custom detections
 
-### Error Handling
+Status payload shape:
 
-- Emits descriptive error codes (`stream_failed`, `analysis_failed`, etc.) through the event sink so the Flutter layer can surface snack bars.
-- Stops classification cleanly whenever an exception occurs, permissions are revoked, or Flutter cancels the stream.
+- `type`: `status`
+- `status`: values such as `started` or `stopped`
 
-## Android Project Configuration
+`AudioClassificationService` currently only consumes `type == "result"` events. Native status events still exist for platform-side lifecycle signaling.
 
-- `android/app/src/main/assets/yamnet.tflite` – model file moved from the repository root.
-- `android/app/src/main/AndroidManifest.xml` – adds `<uses-permission android:name="android.permission.RECORD_AUDIO" />`.
-- `android/app/build.gradle.kts` – pins `minSdk` to at least 23 (required by the MediaPipe dependency) and adds `implementation("com.google.mediapipe:tasks-audio:0.10.14")`.
-- `android/app/src/main/kotlin/com/example/senscribe/MainActivity.kt` – registers the plugin in `configureFlutterEngine`, delegates permission results, and disposes the plugin on destroy.
+## Built-In Android Classification Path
 
-No Gradle scripts outside the Flutter module were modified.
+The built-in path is implemented in `processBuiltInResult(...)`.
 
-## Testing Notes
+### Audio capture and inference
 
-- Run `flutter run` on a physical Android device (MediaPipe audio stream mode requires real microphone input). Grant microphone access when prompted.
-- Tap Start on the home screen; the list should populate with live labels (speech, music, dog bark, etc.). Labels will appear more quickly if you provide distinct sounds near the microphone.
-- Use `adb logcat` or the Flutter console to inspect error messages emitted by the plugin when diagnosing issues.
+- Recorder source: `MediaRecorder.AudioSource.VOICE_RECOGNITION`
+- Sample rate: `16_000 Hz`
+- Channels: mono
+- Encoding: PCM 16-bit
+- Inference window: `15_600` samples, about `0.975 s`
+- Hop size: `3_200` samples, about `0.2 s`
 
-## Extending Further
+### Model loading
 
-- Replace `yamnet.tflite` with a custom MediaPipe-compatible classifier (update the asset, and the options builder if metadata differs).
-- Surface all categories per frame by forwarding the full classification list instead of just the top label.
-- Align the throttle duration or confidence threshold with UX needs. These values live near the top of `AudioClassificationPlugin.kt`.
-- To support background execution, move the recording logic into a foreground service and adapt the plugin to bind to it before streaming events back to Flutter.
+`YamnetLiteRtRunner`:
+
+- loads `android/app/src/main/assets/yamnet/yamnet.tflite`
+- loads labels from `android/app/src/main/assets/yamnet/yamnet_class_map.csv`
+- uses the LiteRT/TensorFlow Lite `Interpreter`
+- scans outputs to find the score tensor whose width matches the class map
+- aggregates frame scores by taking the maximum score per class across returned frames
+- returns the top 3 categories
+
+### Built-in runtime gating
+
+The plugin does not emit every top category immediately. It applies the following guards:
+
+- minimum score: `0.4`
+- minimum signal RMS: `0.006`
+- minimum signal peak: `0.018`
+- minimum margin over the runner-up class: `0.06`
+- required consecutive matches: `2`
+- throttle per built-in label: `5_000 ms`
+
+## Android Live Updates
+
+Android live updates are separate from classification itself.
+
+Relevant pieces:
+
+- Flutter service: `lib/services/live_update_service.dart`
+- Android methods: `startLiveUpdates`, `stopLiveUpdates`
+- Foreground service: `LiveUpdateForegroundService`
+
+Behavior:
+
+- When enabled, Flutter asks the plugin to show live updates.
+- The plugin starts or keeps a foreground service alive.
+- Detection payloads can update a custom notification.
+- Notification updates are throttled to `1_000 ms`.
+- The service exposes `Open app`, `Mute/Unmute`, and `Stop` actions.
+- `Stop` ends monitoring through `AudioClassificationPlugin.sharedInstance()?.stopMonitoringFromService()`.
+
+## Lifecycle and Permissions
+
+### Permissions
+
+Android manifest entries used by this feature include:
+
+- `RECORD_AUDIO`
+- `POST_NOTIFICATIONS`
+- `FOREGROUND_SERVICE`
+- `FOREGROUND_SERVICE_MICROPHONE`
+- `WAKE_LOCK`
+
+The plugin requests `RECORD_AUDIO` at runtime through `ActivityCompat.requestPermissions(...)`. `POST_NOTIFICATIONS` is requested separately by `LiveUpdateService` before Android live updates are enabled.
+
+### MainActivity integration
+
+`MainActivity.kt`:
+
+- registers `AudioClassificationPlugin` in `configureFlutterEngine`
+- registers `ModelDownloadBridge`
+- forwards `onRequestPermissionsResult(...)` to the audio plugin
+- keeps the activity visible on the lock screen when required by the app
+
+## Project Configuration Relevant to Android
+
+### Gradle
+
+`android/app/build.gradle.kts` currently declares:
+
+- `minSdk = 31`
+- Java 17 / Kotlin JVM 17
+- `implementation("com.google.ai.edge.litert:litert:2.1.3")`
+
+The app minimum is Android API 31 and above. That matches the project configuration and the user requirement for Android support.
+
+### Manifest
+
+`android/app/src/main/AndroidManifest.xml` also declares:
+
+- `LiveUpdateForegroundService` with `foregroundServiceType="microphone"`
+- `ModelDownloadForegroundService` with `foregroundServiceType="dataSync"`
+
+## Key Files To Read
+
+- `senscribe/android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt`
+- `senscribe/android/app/src/main/kotlin/com/example/senscribe/YamnetLiteRtRunner.kt`
+- `senscribe/lib/services/audio_classification_service.dart`
+- `senscribe/lib/services/live_update_service.dart`

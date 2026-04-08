@@ -1,14 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import '../main.dart';
+import 'alerts_page.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
 import 'home_tab.dart';
-import 'name_recognition_page.dart';
-import 'sound_direction_page.dart';
 import 'privacy_data_page.dart';
 import 'permissions_background_page.dart';
 import 'model_settings_page.dart';
@@ -24,15 +25,22 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = ThemeProvider.instance;
+    final theme = Theme.of(context);
     final topInset = PlatformInfo.isIOS26OrHigher()
         ? MediaQuery.of(context).padding.top + kToolbarHeight + 16
         : 16.0;
 
-    return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(
-        title: 'Settings',
-      ),
-      body: Material(
+    final SystemUiOverlayStyle overlayStyle = theme.brightness == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: AdaptiveScaffold(
+        appBar: AdaptiveAppBar(
+          title: 'Settings',
+        ),
+        body: Material(
         color: Colors.transparent,
         child: ListView(
           padding: EdgeInsets.only(
@@ -87,20 +95,28 @@ class _SettingsPageState extends State<SettingsPage> {
                   SizedBox(
                     width: double.infinity,
                     height: 44,
-                    child: AdaptiveSegmentedControl(
-                      labels: const ['System', 'Light', 'Dark'],
-                      color: Theme.of(context).colorScheme.surface,
-                      shrinkWrap: false,
-                      selectedIndex: themeProvider.themeMode.index,
-                      onValueChanged: (int index) {
-                        themeProvider.setTheme(ThemeMode.values[index]);
-                        if (mounted) setState(() {});
-                      },
+                    child: MediaQuery(
+                      data: MediaQuery.of(context).copyWith(
+                        platformBrightness: theme.brightness,
+                      ),
+                      child: AdaptiveSegmentedControl(
+                        key: ValueKey(
+                          'settings-theme-${theme.brightness.name}',
+                        ),
+                        labels: const ['System', 'Light', 'Dark'],
+                        color: theme.colorScheme.surface,
+                        shrinkWrap: false,
+                        selectedIndex: themeProvider.themeMode.index,
+                        onValueChanged: (int index) {
+                          themeProvider.setTheme(ThemeMode.values[index]);
+                          if (mounted) setState(() {});
+                        },
+                      ),
                     ),
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -151,7 +167,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -204,11 +220,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
-            // Name Recognition - styled card like About & Support
+            // Alert Triggers
             AdaptiveCard(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -217,24 +233,28 @@ class _SettingsPageState extends State<SettingsPage> {
                   Row(
                     children: [
                       Icon(
-                        Icons.person_rounded,
+                        Icons.notifications_active_rounded,
                         color: Theme.of(context).colorScheme.primary,
                         size: 24,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        'Name Recognition',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
+                      Expanded(
+                        child: Text(
+                          'Alert Triggers',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Enter name, enable recognition, and choose a haptic pattern.',
+                    'Manage trigger words for speech monitoring and custom sounds for local audio alerts. Everything stays on this device.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
@@ -246,67 +266,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: AdaptiveButton(
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const NameRecognitionPage(),
+                          builder: (_) => const AlertsPage(initialTabIndex: 1),
                         ),
                       ),
-                      label: 'Open',
+                      label: 'Open Alert Triggers',
                       style: AdaptiveButtonStyle.plain,
                     ),
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
-
-            const SizedBox(height: 8),
-
-            // Sound Direction - styled card like About & Support
-            AdaptiveCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.navigation_rounded,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Sound Direction',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Enable sound direction detection, run a calibration routine, and view tips.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: AdaptiveButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SoundDirectionPage(),
-                        ),
-                      ),
-                      label: 'Calibrate',
-                      style: AdaptiveButtonStyle.plain,
-                    ),
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -336,7 +305,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'On-device processing, export/delete history, and consent preferences.',
+                    'No data collection, no cloud upload, and local-only storage for the items you create in the app.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
@@ -357,7 +326,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -389,7 +358,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Microphone, Notifications, Haptics, and Background processing permissions.',
+                    Platform.isIOS
+                        ? 'Microphone, speech recognition, local alerts, Live Activities, and background audio behavior.'
+                        : 'Microphone, notifications, battery optimization, and background monitoring behavior.',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
@@ -410,7 +381,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -451,12 +422,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     alignment: Alignment.centerLeft,
                     child: AdaptiveButton(
                       onPressed: () async {
-                        await HomeTab.homeTabKey.currentState?.showOnboarding();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Onboarding restarted. Go back to Home to continue.'),
-                            duration: Duration(seconds: 2),
-                          ),
+                        await HomeTab.restartOnboarding();
+                        if (!context.mounted) return;
+                        AdaptiveSnackBar.show(
+                          context,
+                          message:
+                              'Onboarding restarted. Go back to Home to continue.',
+                          type: AdaptiveSnackBarType.success,
                         );
                         if (Navigator.of(context).canPop()) {
                           Navigator.of(context).pop();
@@ -468,7 +440,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
 
             const SizedBox(height: 8),
 
@@ -515,12 +487,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2),
+            ),
           ],
         ),
       ),
-    );
+    ));
   }
-
-  // no disposable controllers yet
 }

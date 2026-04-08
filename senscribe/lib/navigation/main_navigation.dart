@@ -4,8 +4,7 @@ import '../screens/home_tab.dart';
 import '../screens/history_page.dart';
 import '../screens/alerts_page.dart';
 import '../screens/settings_page.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:io';
+import '../services/app_permission_service.dart';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -15,9 +14,10 @@ class MainNavigationPage extends StatefulWidget {
 }
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
+  final AppPermissionService _permissionService = AppPermissionService();
   int _selectedIndex = 0;
   final List<Widget> _pages = [
-    HomeTab(key: HomeTab.homeTabKey),
+    HomeTab(key: HomeTab.navigationKey),
     const HistoryPage(),
     const AlertsPage(),
     const SettingsPage(),
@@ -26,18 +26,9 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   @override
   void initState() {
     super.initState();
-    _requestStoragePermission();
-  }
-
-  Future<void> _requestStoragePermission() async {
-    if (Platform.isAndroid) {
-      if (await Permission.manageExternalStorage.isDenied) {
-        await Permission.manageExternalStorage.request();
-      }
-      if (await Permission.storage.isDenied) {
-        await Permission.storage.request();
-      }
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _permissionService.requestInitialPermissionsIfNeeded();
+    });
   }
 
   void _onItemTapped(int index) {
@@ -72,9 +63,8 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
             label: 'Home',
           ),
           AdaptiveNavigationDestination(
-            icon:
-                useNativeBar ? 'clock.arrow.circlepath' : Icons.history_rounded,
-            label: 'History',
+            icon: useNativeBar ? 'doc.text.fill' : Icons.description_rounded,
+            label: 'Texts',
           ),
           AdaptiveNavigationDestination(
             icon: useNativeBar ? 'bell.fill' : Icons.notifications_rounded,

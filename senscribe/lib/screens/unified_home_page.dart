@@ -5,10 +5,12 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../services/audio_classification_service.dart';
 import '../services/text_to_speech_service.dart';
 import '../models/sound_caption.dart';
+import 'package:flutter/services.dart';
 
 import 'speech_to_text_page.dart';
 import 'text_to_speech_page.dart';
@@ -52,7 +54,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   bool _isSoundMonitoring = false;
   bool _isSpeechMonitoring = false;
   bool _isSpeechAvailable = false;
-  bool _isLiveUpdateEnabled = false;
 
   StreamSubscription? _audioSubscription;
   StreamSubscription<SttTranscriptSnapshot>? _transcriptSubscription;
@@ -84,15 +85,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       }
     });
 
-    // Subscribe to live update status
-    _liveUpdateService.statusStream.listen((enabled) {
-      if (mounted) {
-        setState(() {
-          _isLiveUpdateEnabled = enabled;
-        });
-      }
-    });
-
     _soundPulseController =
         AnimationController(vsync: this, duration: const Duration(seconds: 2));
     _speechPulseController =
@@ -100,6 +92,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
     if (_isSoundMonitoring) {
       _soundPulseController.repeat(reverse: true);
+      unawaited(_syncLiveUpdatesSafely(isMonitoring: true));
     }
 
     _ttsController.addListener(() {
@@ -189,7 +182,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     _speechRestartTimer?.cancel();
 
     _speech.stop();
-    _ttsService.stop();
     _soundPulseController.dispose();
     _speechPulseController.dispose();
     _ttsController.dispose();
@@ -211,30 +203,29 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   Future<void> _startSoundMonitoring() async {
     await _audioService.start();
+    if (!_audioService.isMonitoring) {
+      if (!mounted) return;
+      setState(() {
+        _isSoundMonitoring = false;
+      });
+      return;
+    }
     _soundPulseController.repeat(reverse: true);
+    await _syncLiveUpdatesSafely(isMonitoring: true);
   }
 
   Future<void> _stopSoundMonitoring() async {
     await _audioService.stop();
     _soundPulseController.stop();
     _soundPulseController.reset();
+    await _syncLiveUpdatesSafely(isMonitoring: false);
   }
 
-  void _toggleLiveUpdates() async {
+  Future<void> _syncLiveUpdatesSafely({required bool isMonitoring}) async {
     try {
-      if (_isLiveUpdateEnabled) {
-        await _liveUpdateService.stopLiveUpdates();
-      } else {
-        await _liveUpdateService.startLiveUpdates();
-      }
-    } catch (e) {
-      if (mounted) {
-        AdaptiveSnackBar.show(
-          context,
-          message: 'Failed to toggle live updates: $e',
-          type: AdaptiveSnackBarType.error,
-        );
-      }
+      await _liveUpdateService.syncMonitoringState(isMonitoring: isMonitoring);
+    } catch (error) {
+      debugPrint('Live update sync failed: $error');
     }
   }
 
@@ -331,7 +322,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           TriggerAlert(
             triggerWord: trigger,
             detectedText: text,
-            source: 'speech_to_text',
+            source: TriggerAlert.sourceSpeechToText,
           ),
         );
       }
@@ -427,7 +418,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     await service.add(item);
     if (!mounted) return;
     AdaptiveSnackBar.show(context,
-        message: "Saved to history", type: AdaptiveSnackBarType.success);
+        message: "Text saved", type: AdaptiveSnackBarType.success);
   }
 
   void _clearSTT() {
@@ -459,8 +450,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   @override
   Widget build(BuildContext context) {
-    return AdaptiveScaffold(
-      body: Material(
+    final Brightness brightness = Theme.of(context).brightness;
+    final SystemUiOverlayStyle overlayStyle = brightness == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: AdaptiveScaffold(
+        body: Material(
         color: Colors.transparent,
         child: SafeArea(
           child: SingleChildScrollView(
@@ -482,7 +480,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                       ),
                       const SizedBox(width: 12),
                       Text("SenScribe",
-                          style: GoogleFonts.outfit(
+                          style: GoogleFonts.inter(
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5)),
@@ -491,226 +489,245 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                 ),
 
                 // 1. Sound Recognition Section (Top)
-                _buildSectionContainer(
-                  title: "Sound Recognition",
-                  icon: Icons.hearing_rounded,
-                  height: 250,
-                  isExpanded: _isSoundExpanded,
-                  isMonitoring: _isSoundMonitoring,
-                  onToggle: _toggleSoundMonitoring,
-                  onCollapseToggle: () =>
-                      setState(() => _isSoundExpanded = !_isSoundExpanded),
-                  onExpand: () {
-                    // Navigate to detailed Sound page (HomePage)
-                    _navigateToExpanded(HomePage(
-                      isMonitoring: _isSoundMonitoring,
-                      pulseController: _soundPulseController,
-                      onToggleMonitoring: _toggleSoundMonitoring,
-                    ));
-                  },
-                  child: _buildSoundContent(),
+                Animate(
+                  effects: [
+                    FadeEffect(duration: 400.ms),
+                    SlideEffect(
+                        begin: Offset(0, 0.1),
+                        duration: 400.ms,
+                        curve: Curves.easeOutQuad)
+                  ],
+                  child: _buildSectionContainer(
+                    title: "Sound Recognition",
+                    icon: Icons.hearing_rounded,
+                    height: 250,
+                    isExpanded: _isSoundExpanded,
+                    isMonitoring: _isSoundMonitoring,
+                    onToggle: _toggleSoundMonitoring,
+                    onCollapseToggle: () =>
+                        setState(() => _isSoundExpanded = !_isSoundExpanded),
+                    onExpand: () {
+                      // Navigate to detailed Sound page (HomePage)
+                      _navigateToExpanded(HomePage(
+                        isMonitoring: _isSoundMonitoring,
+                        pulseController: _soundPulseController,
+                        onToggleMonitoring: _toggleSoundMonitoring,
+                      ));
+                    },
+                    child: _buildSoundContent(),
+                  ),
                 ),
-
                 // 2. STT Section (Middle)
-                _buildSectionContainer(
-                  title: "Speech to Text",
-                  icon: Icons.mic_rounded,
-                  height: 280, // Reduced from 400 as requested
-                  isExpanded: _isSTTExpanded,
-                  isMonitoring: _isSpeechMonitoring,
-                  onToggle: _toggleSpeechMonitoring,
-                  onCollapseToggle: () =>
-                      setState(() => _isSTTExpanded = !_isSTTExpanded),
-                  onExpand: _openExpandedSpeechPage,
-                  child: _buildSTTContent(),
+                Animate(
+                  effects: [
+                    FadeEffect(duration: 400.ms, delay: 100.ms),
+                    SlideEffect(
+                        begin: Offset(0, 0.1),
+                        duration: 400.ms,
+                        curve: Curves.easeOutQuad,
+                        delay: 100.ms)
+                  ],
+                  child: _buildSectionContainer(
+                    title: "Speech to Text",
+                    icon: Icons.mic_rounded,
+                    height: 280, // Reduced from 400 as requested
+                    isExpanded: _isSTTExpanded,
+                    isMonitoring: _isSpeechMonitoring,
+                    onToggle: _toggleSpeechMonitoring,
+                    onCollapseToggle: () =>
+                        setState(() => _isSTTExpanded = !_isSTTExpanded),
+                    onExpand: _openExpandedSpeechPage,
+                    child: _buildSTTContent(),
+                  ),
                 ),
-
                 // 3. TTS Section (Bottom)
-                _buildSectionContainer(
-                  title: "Text to Speech",
-                  icon: Icons.record_voice_over_rounded,
-                  height: 150, // Increased to fix overflow
-                  isExpanded: _isTTSExpanded,
-                  isMonitoring: false, // TTS doesn't monitor
-                  showToggle: false,
-                  onCollapseToggle: () =>
-                      setState(() => _isTTSExpanded = !_isTTSExpanded),
-                  onExpand: () => _navigateToExpanded(TextToSpeechPage(
-                      isMonitoring: false,
-                      pulseController: _speechPulseController,
-                      onToggleMonitoring: () {})),
-                  child: _buildTTSContent(),
+                Animate(
+                  effects: [
+                    FadeEffect(duration: 400.ms, delay: 200.ms),
+                    SlideEffect(
+                        begin: Offset(0, 0.1),
+                        duration: 400.ms,
+                        curve: Curves.easeOutQuad,
+                        delay: 200.ms)
+                  ],
+                  child: _buildSectionContainer(
+                    title: "Text to Speech",
+                    icon: Icons.record_voice_over_rounded,
+                    isExpanded: _isTTSExpanded,
+                    isMonitoring: false, // TTS doesn't monitor
+                    showToggle: false,
+                    scrollableBody: false,
+                    onCollapseToggle: () =>
+                        setState(() => _isTTSExpanded = !_isTTSExpanded),
+                    onExpand: () => _navigateToExpanded(TextToSpeechPage(
+                        isMonitoring: false,
+                        pulseController: _speechPulseController,
+                        onToggleMonitoring: () {})),
+                    child: _buildTTSContent(),
+                  ),
                 ),
               ],
             ),
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildSectionContainer({
     required String title,
     required IconData icon,
     required Widget child,
-    required double height,
+    double? height, // Made optional/unused
     required bool isExpanded,
     required VoidCallback onCollapseToggle,
     bool isMonitoring = false,
     bool showToggle = true,
+    bool scrollableBody = true,
     required VoidCallback onExpand,
     VoidCallback? onToggle,
   }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      height: isExpanded ? height : 80,
+    final sectionBorderRadius = BorderRadius.circular(24);
+
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.transparent,
+        borderRadius: sectionBorderRadius,
+        boxShadow: [
+          BoxShadow(
+            color:
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: AdaptiveCard(
         padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  // Circular Expand/Collapse Button
-                  SizedBox(
-                    height: 36,
-                    width: 36,
-                    child: AdaptiveButton.child(
-                      onPressed: onCollapseToggle,
-                      style: PlatformInfo.isIOS26OrHigher()
-                          ? AdaptiveButtonStyle.glass
-                          : AdaptiveButtonStyle.plain,
-                      child: Center(
-                        child: Transform.translate(
-                          offset: const Offset(-0.5, 0),
-                          child: Icon(
-                            isExpanded
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                            size: 20,
+        borderRadius: sectionBorderRadius,
+        clipBehavior: PlatformInfo.isIOS ? Clip.antiAlias : Clip.none,
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    // Circular Expand/Collapse Button
+                    SizedBox(
+                      height: 36,
+                      width: 36,
+                      child: AdaptiveButton.child(
+                        onPressed: onCollapseToggle,
+                        style: PlatformInfo.isIOS26OrHigher()
+                            ? AdaptiveButtonStyle.glass
+                            : AdaptiveButtonStyle.plain,
+                        child: Center(
+                          child: Transform.translate(
+                            offset: const Offset(-0.5, 0),
+                            child: Icon(
+                              isExpanded
+                                  ? Icons.expand_less_rounded
+                                  : Icons.expand_more_rounded,
+                              size: 20,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(icon,
-                      size: 24, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(title,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600, fontSize: 16)),
-                  ),
-                  if (showToggle && onToggle != null)
-                    IconButton(
-                      icon: Icon(isMonitoring
-                          ? Icons.stop_circle_rounded
-                          : Icons.play_circle_fill_rounded),
-                      color: isMonitoring ? Colors.red : Colors.green,
-                      iconSize: 32,
-                      onPressed: onToggle,
+                    const SizedBox(width: 8),
+                    Icon(icon,
+                        size: 24, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(title,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600, fontSize: 16)),
                     ),
-                  const SizedBox(width: 8),
-                  // Circular Forward Button
-                  SizedBox(
-                    height: 36,
-                    width: 36,
-                    child: AdaptiveButton.child(
-                      onPressed: onExpand,
-                      style: PlatformInfo.isIOS26OrHigher()
-                          ? AdaptiveButtonStyle.glass
-                          : AdaptiveButtonStyle.plain,
-                      child: Center(
-                        child: Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 16,
+                    if (showToggle && onToggle != null)
+                      IconButton(
+                        icon: Icon(isMonitoring
+                            ? Icons.stop_circle_rounded
+                            : Icons.play_circle_fill_rounded),
+                        color: isMonitoring ? Colors.red : Colors.green,
+                        iconSize: 32,
+                        onPressed: onToggle,
+                      ),
+                    const SizedBox(width: 8),
+                    // Circular Forward Button
+                    SizedBox(
+                      height: 36,
+                      width: 36,
+                      child: AdaptiveButton.child(
+                        onPressed: onExpand,
+                        style: PlatformInfo.isIOS26OrHigher()
+                            ? AdaptiveButtonStyle.glass
+                            : AdaptiveButtonStyle.plain,
+                        child: Center(
+                          child: Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            if (isExpanded) ...[
-              const Divider(height: 1, thickness: 0.5),
-              // Content
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: child,
-                  ),
+                  ],
                 ),
               ),
+
+              if (isExpanded) ...[
+                const Divider(height: 1, thickness: 0.5),
+                // Content
+                if (height != null)
+                  SizedBox(
+                    height: height - 80, // Approximate height remaining
+                    child: scrollableBody
+                        ? SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: child,
+                            ),
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: child,
+                          ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: child,
+                  ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSoundContent() {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final scheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
-        // Live Updates Toggle
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(
-                Icons.notifications_active_rounded,
-                size: 20,
-                color: scheme.primary,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Live Updates',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: scheme.onSurface,
-                  ),
-                ),
-              ),
-              Switch(
-                value: _isLiveUpdateEnabled,
-                onChanged: (value) => _toggleLiveUpdates(),
-                activeThumbColor: scheme.primary,
-              ),
-            ],
-          ),
-        ),
         // Sound Events List
         if (_soundEvents.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                "No sounds detected",
-                style: GoogleFonts.inter(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
-                ),
-              ),
-            ),
+          _buildSectionEmptyState(
+            icon: Icons.graphic_eq_rounded,
+            title: 'No sounds detected yet',
+            subtitle: _isSoundMonitoring
+                ? 'Listening for nearby audio.'
+                : 'Start monitoring to classify nearby audio.',
+            iconColor: scheme.onSurface.withValues(alpha: 0.32),
           )
         else
           ListView.builder(
@@ -718,22 +735,17 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
             shrinkWrap: true, // Needed inside SingleChildScrollView
             itemCount: _soundEvents.length,
             itemBuilder: (context, index) {
-              final screenWidth = MediaQuery.of(context).size.width;
-              final trailingWidth = screenWidth < 360 ? 116.0 : 136.0;
               final event = _soundEvents[index];
-              final directionLabel =
-                  event.direction.trim().isEmpty ? 'Unknown' : event.direction;
-              final matchLabel = '${(event.confidence * 100).toStringAsFixed(0)}%';
+              final matchLabel =
+                  '${(event.confidence * 100).toStringAsFixed(0)}%';
 
               return AdaptiveListTile(
                 leading: Icon(
-                  event.isCritical
-                      ? Icons.warning_amber_rounded
-                      : Icons.music_note_rounded,
+                  event.icon,
                   color: event.isCritical ? scheme.error : scheme.primary,
                 ),
                 title: Text(
-                  event.sound,
+                  event.displaySound,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
@@ -750,10 +762,10 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                     color: scheme.onSurface.withValues(alpha: 0.68),
                   ),
                 ),
-                trailing: SizedBox(
-                  width: trailingWidth,
+                trailing: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 48),
                   child: Text(
-                    '$matchLabel • $directionLabel',
+                    matchLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
@@ -775,10 +787,18 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     final scheme = Theme.of(context).colorScheme;
 
     if (_speechTranscript.isEmpty && _currentSpeechBuffer.isEmpty) {
-      return Center(
-          child: Text("Tap play to listen...",
-              style: GoogleFonts.inter(
-                  color: scheme.onSurface.withValues(alpha: 0.72))));
+      return _buildSectionEmptyState(
+        icon: _isSpeechMonitoring ? Icons.mic_rounded : Icons.mic_none_rounded,
+        title: _isSpeechMonitoring
+            ? 'Listening for speech...'
+            : 'Tap play to transcribe speech',
+        subtitle: _isSpeechMonitoring
+            ? 'Speak near the microphone to see live transcription.'
+            : null,
+        iconColor: _isSpeechMonitoring
+            ? scheme.primary.withValues(alpha: 0.72)
+            : scheme.onSurface.withValues(alpha: 0.32),
+      );
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -835,43 +855,92 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     );
   }
 
-  Widget _buildTTSContent() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center, // Changed from end to center
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Stack(
-                alignment: Alignment.centerRight,
-                children: [
-                  AdaptiveTextField(
-                    // Reverted to AdaptiveTextField for onSubmitted support
-                    controller: _ttsController,
-                    placeholder: "Type to speak...",
-                    onSubmitted: (_) => _handleTTSSubmit(),
-                  ),
-                  if (_ttsController.text.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: IconButton(
-                        icon: const Icon(Icons.clear, size: 16),
-                        onPressed: _clearTTS,
-                      ),
-                    ),
-                ],
-              ),
+  Widget _buildSectionEmptyState({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required Color iconColor,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 50, color: iconColor),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              color: scheme.onSurface.withValues(alpha: 0.84),
             ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.volume_up_rounded),
-              onPressed: _handleTTSSubmit,
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 13.5,
+                height: 1.35,
+                color: scheme.onSurface.withValues(alpha: 0.58),
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTTSContent() {
+    return Row(
+      children: [
+        Expanded(
+          child: AdaptiveTextField(
+            controller: _ttsController,
+            placeholder: "Type to speak...",
+            onSubmitted: (_) => _handleTTSSubmit(),
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              height: 1.25,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            suffixIcon: _ttsController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 16),
+                    onPressed: _clearTTS,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 32,
+                    ),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: IconButton(
+            icon: const Icon(Icons.volume_up_rounded),
+            onPressed: _handleTTSSubmit,
+            constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            style: IconButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
         ),
       ],
     );

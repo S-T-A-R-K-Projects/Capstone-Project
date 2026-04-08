@@ -49,10 +49,11 @@ flutter {
 
 dependencies {
     // Audio classification
-    implementation("com.google.mediapipe:tasks-audio:0.10.14")
+    implementation("com.google.ai.edge.litert:litert:2.1.3")
+    implementation("ai.liquid.leap:leap-sdk:0.9.6")
 
     // Coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
+    testImplementation("junit:junit:4.13.2")
 
 }

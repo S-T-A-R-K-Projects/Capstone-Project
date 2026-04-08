@@ -7,8 +7,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/sound_caption.dart';
+import '../models/trigger_alert.dart';
+import '../utils/time_utils.dart';
 import '../widgets/sound_caption_card.dart';
 import '../services/audio_classification_service.dart';
+import '../services/trigger_word_service.dart';
 
 class HomePage extends StatefulWidget {
   final bool isMonitoring;
@@ -30,9 +33,13 @@ class _HomePageState extends State<HomePage> {
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
   final AudioClassificationService _audioService = AudioClassificationService();
+  final TriggerWordService _triggerWordService = TriggerWordService();
   List<SoundCaption> _captions = [];
   StreamSubscription<List<SoundCaption>>? _classificationSubscription;
   late bool _isMonitoring;
+
+  // Cached filtered list — invalidated when _captions or _selectedFilter change.
+  List<SoundCaption>? _filteredCaptionsCache;
 
   @override
   void initState() {
@@ -46,6 +53,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _captions = events;
+          _filteredCaptionsCache = null; // invalidate
         });
       }
     });
@@ -116,16 +124,237 @@ class _HomePageState extends State<HomePage> {
     await _audioService.stop();
   }
 
-  List<SoundCaption> get _filteredCaptions {
-    if (_selectedFilter == 'Critical') {
-      return _captions.where((caption) => caption.isCritical).toList();
+  void _deleteCaption(SoundCaption caption) {
+    final removed = _audioService.deleteCaption(caption);
+    if (!removed || !mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Sound removed from the feed',
+      type: AdaptiveSnackBarType.info,
+    );
+  }
+
+  Future<void> _saveCaptionToAlerts(SoundCaption caption) async {
+    final alert = TriggerAlert(
+      triggerWord: caption.displaySound,
+      detectedText: _buildCaptionSummary(caption),
+      timestamp: caption.timestamp,
+      source: caption.source == SoundCaptionSource.custom
+          ? TriggerAlert.sourceCustomSound
+          : TriggerAlert.sourceSoundRecognition,
+      metadata: _buildCaptionMetadata(caption),
+    );
+
+    final inserted = await _triggerWordService.addAlert(alert);
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: inserted
+          ? '${caption.displaySound} saved to Recent Alerts'
+          : 'This detected ${caption.displaySound} sound is already saved in Recent Alerts',
+      type: inserted
+          ? AdaptiveSnackBarType.success
+          : AdaptiveSnackBarType.warning,
+    );
+  }
+
+  Future<void> _showCaptionDetails(SoundCaption caption) async {
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: caption.displaySound,
+      message: _buildCaptionDetailsMessage(caption),
+      icon: _detailIconForCaption(caption),
+      iconSize: 36,
+      iconColor: Theme.of(context).colorScheme.primary,
+      actions: [
+        AlertAction(
+          title: 'Close',
+          style: AlertActionStyle.primary,
+          onPressed: () {},
+        ),
+      ],
+    );
+  }
+
+  Map<String, dynamic> _buildCaptionMetadata(SoundCaption caption) {
+    return {
+      'detectorLabel': _captionDetectorLabel(caption),
+      'confidencePercent': (caption.confidence * 100).round(),
+      'priorityLabel': caption.isCritical ? 'Critical' : 'Standard',
+      'isCritical': caption.isCritical,
+    };
+  }
+
+  String _captionDetectorLabel(SoundCaption caption) {
+    return caption.source == SoundCaptionSource.custom
+        ? 'Custom sound'
+        : 'Built-in sound';
+  }
+
+  String _buildCaptionSummary(SoundCaption caption) {
+    final confidence = (caption.confidence * 100).round();
+    final priority = caption.isCritical ? 'Critical' : 'Standard';
+    return '${_captionDetectorLabel(caption)} • '
+        '$confidence% confidence • '
+        '$priority priority';
+  }
+
+  String _buildCaptionDetailsMessage(SoundCaption caption) {
+    final sourceLabel = _captionDetectorLabel(caption);
+    final confidence = (caption.confidence * 100).round();
+    final priority = caption.isCritical ? 'Critical' : 'Standard';
+    final detectedAt = TimeUtils.formatExactDateTime(caption.timestamp);
+    return 'Detector: $sourceLabel\n'
+        'Confidence: $confidence%\n'
+        'Priority: $priority\n'
+        'Detected: $detectedAt';
+  }
+
+  dynamic _detailIconForCaption(SoundCaption caption) {
+    if (PlatformInfo.isIOS26OrHigher()) {
+      return caption.source == SoundCaptionSource.custom
+          ? 'tuningfork'
+          : 'waveform';
     }
-    if (_selectedFilter == 'Custom') {
-      return _captions
+    return caption.source == SoundCaptionSource.custom
+        ? Icons.tune_rounded
+        : Icons.graphic_eq_rounded;
+  }
+
+  void _clearCaptions() {
+    if (_captions.isEmpty) {
+      AdaptiveSnackBar.show(
+        context,
+        message: 'The sound feed is already empty',
+        type: AdaptiveSnackBarType.info,
+      );
+      return;
+    }
+    _audioService.clearHistory();
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Sound feed cleared',
+      type: AdaptiveSnackBarType.success,
+    );
+  }
+
+  Future<void> _showHistoryLimitOptions() async {
+    String customValue = _audioService.historyLimit?.toString() ?? '';
+    final selection = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Latest sound items',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHistoryLimitOption(dialogContext, '15 latest', '15'),
+                  _buildHistoryLimitOption(dialogContext, '30 latest', '30'),
+                  _buildHistoryLimitOption(dialogContext, '50 latest', '50'),
+                  _buildHistoryLimitOption(dialogContext, '100 latest', '100'),
+                  _buildHistoryLimitOption(
+                    dialogContext,
+                    'Unlimited',
+                    'unlimited',
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Custom',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    initialValue: customValue,
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) => customValue = value,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter number of latest sound items',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop('custom:${customValue.trim()}'),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || selection == null) return;
+
+    if (selection.startsWith('custom:')) {
+      final rawValue = selection.substring('custom:'.length);
+      final value = int.tryParse(rawValue);
+      if (value == null || value <= 0) {
+        AdaptiveSnackBar.show(
+          context,
+          message: 'Enter a number greater than 0',
+          type: AdaptiveSnackBarType.warning,
+        );
+        return;
+      }
+      _audioService.setHistoryLimit(value);
+      setState(() {});
+      return;
+    }
+
+    final nextLimit = selection == 'unlimited' ? null : int.tryParse(selection);
+    _audioService.setHistoryLimit(nextLimit);
+    if (mounted) setState(() {});
+  }
+
+  Widget _buildHistoryLimitOption(
+    BuildContext context,
+    String label,
+    String value,
+  ) {
+    return TextButton(
+      onPressed: () => Navigator.of(context).pop(value),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(label, style: GoogleFonts.inter()),
+      ),
+    );
+  }
+
+  String get _historyLimitLabel {
+    final limit = _audioService.historyLimit;
+    return limit == null ? 'Unlimited' : limit.toString();
+  }
+
+  List<SoundCaption> get _filteredCaptions {
+    if (_filteredCaptionsCache != null) return _filteredCaptionsCache!;
+    final List<SoundCaption> result;
+    if (_selectedFilter == 'Critical') {
+      result = _captions.where((caption) => caption.isCritical).toList();
+    } else if (_selectedFilter == 'Custom') {
+      result = _captions
           .where((caption) => caption.source == SoundCaptionSource.custom)
           .toList();
+    } else {
+      result = List<SoundCaption>.from(_captions);
     }
-    return List<SoundCaption>.from(_captions);
+    _filteredCaptionsCache = result;
+    return result;
   }
 
   @override
@@ -147,7 +376,7 @@ class _HomePageState extends State<HomePage> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: AdaptiveCard(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 child: Row(
                   children: [
                     AnimatedBuilder(
@@ -179,7 +408,7 @@ class _HomePageState extends State<HomePage> {
                         );
                       },
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,8 +435,9 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 12),
                     SizedBox(
-                      width: 96,
+                      width: 92,
                       child: AdaptiveButton(
                         onPressed: _toggleMonitoring,
                         label: _isMonitoring ? 'Stop' : 'Start',
@@ -252,6 +482,7 @@ class _HomePageState extends State<HomePage> {
                               onSelected: (selected) {
                                 setState(() {
                                   _selectedFilter = filter;
+                                  _filteredCaptionsCache = null;
                                 });
                               },
                               selectedColor: scheme.primary,
@@ -268,22 +499,14 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // Real-time Feed Header
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.hearing_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 24,
-                    ),
+                  Icon(
+                    Icons.hearing_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 28,
                   ),
                   const SizedBox(width: 12),
                   Text(
@@ -294,7 +517,32 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ],
-              ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(32, 0, 32, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _clearCaptions,
+                      label: 'Clear',
+                      style: AdaptiveButtonStyle.plain,
+                      color: scheme.error,
+                      size: AdaptiveButtonSize.small,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _showHistoryLimitOptions,
+                      label: 'Latest: $_historyLimitLabel',
+                      style: AdaptiveButtonStyle.plain,
+                      size: AdaptiveButtonSize.small,
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             // Sound Captions List
@@ -331,24 +579,24 @@ class _HomePageState extends State<HomePage> {
                       ).animate().fadeIn(duration: 800.ms).slideY(begin: 0.2),
                     )
                   : ListView.builder(
+                      padding: const EdgeInsets.only(top: 0, bottom: 8),
                       itemCount: filteredCaptions.length,
                       itemBuilder: (context, index) {
-                        return AnimationConfiguration.staggeredList(
-                          position: index,
-                          duration: const Duration(milliseconds: 375),
-                          child: SlideAnimation(
-                            verticalOffset: 50.0,
-                            child: FadeInAnimation(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 4,
-                                ),
-                                child: SoundCaptionCard(
-                                  caption: filteredCaptions[index],
-                                ),
-                              ),
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          child: SoundCaptionCard(
+                            caption: filteredCaptions[index],
+                            onViewDetails: () => _showCaptionDetails(
+                              filteredCaptions[index],
                             ),
+                            onSaveToAlerts: () => _saveCaptionToAlerts(
+                              filteredCaptions[index],
+                            ),
+                            onDelete: () =>
+                                _deleteCaption(filteredCaptions[index]),
                           ),
                         );
                       },

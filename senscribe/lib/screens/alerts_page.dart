@@ -1,8 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import '../models/custom_sound_profile.dart';
+import 'custom_sound_enrollment_page.dart';
 import '../services/trigger_word_service.dart';
 import '../services/custom_sound_service.dart';
 import '../models/trigger_word.dart';
@@ -10,7 +12,12 @@ import '../models/trigger_alert.dart';
 import '../utils/time_utils.dart';
 
 class AlertsPage extends StatefulWidget {
-  const AlertsPage({super.key});
+  final int initialTabIndex;
+
+  const AlertsPage({
+    super.key,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<AlertsPage> createState() => _AlertsPageState();
@@ -19,236 +26,239 @@ class AlertsPage extends StatefulWidget {
 class _AlertsPageState extends State<AlertsPage> {
   final TriggerWordService _triggerWordService = TriggerWordService();
   final CustomSoundService _customSoundService = CustomSoundService();
-  final TextEditingController _newWordController = TextEditingController();
-  int _selectedTabIndex = 0; // 0 = Alerts, 1 = Trigger Words
+  int _selectedTabIndex = 0; // 0 = Alerts, 1 = Alert Triggers
   bool _isAlertSelectionMode = false;
   final Set<String> _selectedAlertIds = <String>{};
 
   @override
-  void dispose() {
-    _newWordController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.initialTabIndex < 0) {
+      _selectedTabIndex = 0;
+    } else if (widget.initialTabIndex > 1) {
+      _selectedTabIndex = 1;
+    } else {
+      _selectedTabIndex = widget.initialTabIndex;
+    }
   }
 
-  void _showAddTriggerWordDialog() {
-    _newWordController.clear();
-    bool caseSensitive = false;
-    bool exactMatch = true;
+  bool _isSoundAlert(TriggerAlert alert) {
+    return alert.source == TriggerAlert.sourceSoundRecognition ||
+        alert.source == TriggerAlert.sourceCustomSound;
+  }
 
-    showDialog(
+  IconData _alertIcon(TriggerAlert alert) {
+    if (alert.source == TriggerAlert.sourceCustomSound) {
+      return Icons.tune_rounded;
+    }
+    if (alert.source == TriggerAlert.sourceSoundRecognition) {
+      return Icons.hearing_rounded;
+    }
+    return Icons.warning_rounded;
+  }
+
+  Color _alertIconColor(TriggerAlert alert, ColorScheme scheme) {
+    if (_isSoundAlert(alert)) {
+      return scheme.primary;
+    }
+    return scheme.error;
+  }
+
+  String _alertTitle(TriggerAlert alert) {
+    if (_isSoundAlert(alert)) {
+      return 'Sound: "${alert.triggerWord}"';
+    }
+    return 'Trigger: "${alert.triggerWord}"';
+  }
+
+  Future<void> _showAlertDetails(TriggerAlert alert) async {
+    final isSoundAlert = _isSoundAlert(alert);
+    await AdaptiveAlertDialog.show(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(
-            'Add Trigger Word',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _newWordController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter word to monitor',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: caseSensitive,
-                        onChanged: (value) {
-                          setState(() => caseSensitive = value ?? false);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Case Sensitive',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: exactMatch,
-                        onChanged: (value) {
-                          setState(() => exactMatch = value ?? true);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Exact Word Match (whole word only)',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final wordToAdd = _newWordController.text.trim();
-                if (wordToAdd.isEmpty) {
-                  AdaptiveSnackBar.show(
-                    context,
-                    message: 'Please enter a trigger word',
-                    type: AdaptiveSnackBarType.warning,
-                  );
-                  return;
-                }
-                final navigator = Navigator.of(context);
-
-                await _triggerWordService.addTriggerWord(
-                  TriggerWord(
-                    word: wordToAdd,
-                    caseSensitive: caseSensitive,
-                    exactMatch: exactMatch,
-                  ),
-                );
-
-                if (mounted) {
-                  navigator.pop();
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: 'Added trigger word: $wordToAdd',
-                    type: AdaptiveSnackBarType.success,
-                  );
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
+      title: alert.triggerWord,
+      message: isSoundAlert
+          ? _buildSoundAlertDetails(alert)
+          : 'Detected text: ${alert.detectedText}\n'
+              'Source: Speech trigger\n'
+              'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}',
+      icon: _detailIconForAlert(alert),
+      iconSize: 36,
+      iconColor: Theme.of(context).colorScheme.primary,
+      actions: [
+        AlertAction(
+          title: 'Close',
+          style: AlertActionStyle.primary,
+          onPressed: () {},
         ),
+      ],
+    );
+  }
+
+  String _buildSoundAlertSummary(TriggerAlert alert) {
+    final confidence = alert.soundConfidencePercent;
+    final confidenceLabel = confidence == null ? 'Unknown' : '$confidence%';
+    return '$confidenceLabel confidence • ${alert.soundDetectorLabel}';
+  }
+
+  String _buildSoundAlertDetails(TriggerAlert alert) {
+    final confidence = alert.soundConfidencePercent;
+    final confidenceLabel = confidence == null ? 'Unknown' : '$confidence%';
+    return 'Detector: ${alert.soundDetectorLabel}\n'
+        'Confidence: $confidenceLabel\n'
+        'Priority: ${alert.soundPriorityLabel}\n'
+        'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}';
+  }
+
+  Widget _buildAlertSubtitle(TriggerAlert alert, ColorScheme scheme) {
+    if (_isSoundAlert(alert)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          Text(
+            TimeUtils.formatExactDateTime(alert.timestamp),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: scheme.onSurface.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _buildSoundAlertSummary(alert),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: scheme.onSurface.withValues(alpha: 0.68),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        Text(
+          alert.detectedText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: scheme.onSurface.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          TimeUtils.formatTimeAgoShort(alert.timestamp),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: scheme.onSurface.withValues(alpha: 0.68),
+          ),
+        ),
+      ],
+    );
+  }
+
+  dynamic _detailIconForAlert(TriggerAlert alert) {
+    if (PlatformInfo.isIOS26OrHigher()) {
+      if (alert.source == TriggerAlert.sourceCustomSound) {
+        return 'tuningfork';
+      }
+      if (_isSoundAlert(alert)) {
+        return 'waveform';
+      }
+      return 'exclamationmark.bubble';
+    }
+
+    if (alert.source == TriggerAlert.sourceCustomSound) {
+      return Icons.tune_rounded;
+    }
+    if (_isSoundAlert(alert)) {
+      return Icons.graphic_eq_rounded;
+    }
+    return Icons.warning_rounded;
+  }
+
+  void _showTriggerWordEmptyWarning() {
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Please enter a trigger word',
+      type: AdaptiveSnackBarType.warning,
+    );
+  }
+
+  Future<_TriggerWordDialogResult?> _showTriggerWordDialog({
+    required String title,
+    required String primaryActionLabel,
+    String initialWord = '',
+    bool initialCaseSensitive = false,
+    bool initialExactMatch = true,
+  }) async {
+    return showDialog<_TriggerWordDialogResult>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => _TriggerWordDialog(
+        title: title,
+        primaryActionLabel: primaryActionLabel,
+        initialWord: initialWord,
+        initialCaseSensitive: initialCaseSensitive,
+        initialExactMatch: initialExactMatch,
+        onEmptyWord: _showTriggerWordEmptyWarning,
       ),
     );
   }
 
-  void _showEditTriggerWordDialog(TriggerWord existingWord) {
-    _newWordController.text = existingWord.word;
-    bool caseSensitive = existingWord.caseSensitive;
-    bool exactMatch = existingWord.exactMatch;
+  Future<void> _showAddTriggerWordDialog() async {
+    final result = await _showTriggerWordDialog(
+      title: 'Add Trigger Word',
+      primaryActionLabel: 'Add',
+    );
+    if (result == null) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(
-            'Edit Trigger Word',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-          ),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _newWordController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter word to monitor',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: caseSensitive,
-                        onChanged: (value) {
-                          setState(() => caseSensitive = value ?? false);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Case Sensitive',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: exactMatch,
-                        onChanged: (value) {
-                          setState(() => exactMatch = value ?? true);
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Exact Word Match (whole word only)',
-                          style: GoogleFonts.inter(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final updatedWord = _newWordController.text.trim();
-                if (updatedWord.isEmpty) {
-                  AdaptiveSnackBar.show(
-                    context,
-                    message: 'Please enter a trigger word',
-                    type: AdaptiveSnackBarType.warning,
-                  );
-                  return;
-                }
-
-                final navigator = Navigator.of(context);
-
-                await _triggerWordService.updateTriggerWord(
-                  existingWord.word,
-                  existingWord.copyWith(
-                    word: updatedWord,
-                    caseSensitive: caseSensitive,
-                    exactMatch: exactMatch,
-                  ),
-                );
-
-                if (mounted) {
-                  navigator.pop();
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: 'Updated trigger word: $updatedWord',
-                    type: AdaptiveSnackBarType.success,
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+    await _triggerWordService.addTriggerWord(
+      TriggerWord(
+        word: result.word,
+        caseSensitive: result.caseSensitive,
+        exactMatch: result.exactMatch,
       ),
+    );
+
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Added trigger word: ${result.word}',
+      type: AdaptiveSnackBarType.success,
+    );
+  }
+
+  Future<void> _showEditTriggerWordDialog(TriggerWord existingWord) async {
+    final result = await _showTriggerWordDialog(
+      title: 'Edit Trigger Word',
+      primaryActionLabel: 'Save',
+      initialWord: existingWord.word,
+      initialCaseSensitive: existingWord.caseSensitive,
+      initialExactMatch: existingWord.exactMatch,
+    );
+    if (result == null) return;
+
+    await _triggerWordService.updateTriggerWord(
+      existingWord.word,
+      existingWord.copyWith(
+        word: result.word,
+        caseSensitive: result.caseSensitive,
+        exactMatch: result.exactMatch,
+      ),
+    );
+
+    if (!mounted) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Updated trigger word: ${result.word}',
+      type: AdaptiveSnackBarType.success,
     );
   }
 
@@ -332,459 +342,40 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _showAddCustomSoundDialog() async {
-    final controller = TextEditingController();
-
-    await showDialog<void>(
+    final soundName = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          'Add Custom Sound',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-        ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: TextField(
-            controller: controller,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              hintText: 'Name this sound',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              try {
-                final profile = await _customSoundService.createDraftProfile(
-                  controller.text,
-                );
-                if (!dialogContext.mounted) return;
-                Navigator.of(dialogContext).pop();
-                await _showCustomSoundSheet(profile);
-              } catch (error) {
-                if (!mounted) return;
-                AdaptiveSnackBar.show(
-                  context,
-                  message: '$error',
-                  type: AdaptiveSnackBarType.warning,
-                );
-              }
-            },
-            child: const Text('Continue'),
-          ),
-        ],
+      barrierDismissible: true,
+      builder: (dialogContext) => const _NameEntryDialog(
+        title: 'Add Custom Sound',
+        placeholder: 'Name this sound',
+        primaryActionLabel: 'Continue',
       ),
     );
+    if (soundName == null) return;
+
+    try {
+      final profile = await _customSoundService.createDraftProfile(soundName);
+      if (!mounted) return;
+      await _openCustomSoundEnrollmentPage(profile);
+    } catch (error) {
+      if (!mounted) return;
+      AdaptiveSnackBar.show(
+        context,
+        message: '$error',
+        type: AdaptiveSnackBarType.warning,
+      );
+    }
   }
 
-  Future<void> _showCustomSoundSheet(CustomSoundProfile initialProfile) async {
-    var currentProfile = initialProfile;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        var isBusy = false;
-        var busyLabel = '';
-        var activeSampleNumber = 0;
-        var isTraining = false;
-        var statusTitle = 'Record 5 samples';
-        var statusDetail =
-            'Each recording lasts about 5 seconds. Keep the phone near the target sound and avoid talking over it.';
-        var statusIcon = Icons.mic_none_rounded;
-        var statusColor = scheme.primary;
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            void setStatus({
-              required String title,
-              required String detail,
-              required IconData icon,
-              required Color color,
-            }) {
-              setModalState(() {
-                statusTitle = title;
-                statusDetail = detail;
-                statusIcon = icon;
-                statusColor = color;
-              });
-            }
-
-            Future<void> runCapture({
-              required int sampleNumber,
-              required String label,
-              required Future<CustomSoundProfile> Function() action,
-            }) async {
-              setModalState(() {
-                isBusy = true;
-                isTraining = false;
-                activeSampleNumber = sampleNumber;
-                busyLabel = 'Recording $label';
-                statusTitle = 'Recording $label';
-                statusDetail =
-                    'Recording started. Hold steady for about 5 seconds until it finishes.';
-                statusIcon = Icons.mic_rounded;
-                statusColor = scheme.primary;
-              });
-
-              if (mounted) {
-                AdaptiveSnackBar.show(
-                  this.context,
-                  message: '$label started. Hold steady for about 5 seconds.',
-                  type: AdaptiveSnackBarType.success,
-                );
-              }
-
-              try {
-                final updated = await action();
-                currentProfile = updated;
-
-                final refreshedProfiles =
-                    await _customSoundService.loadProfiles();
-                final refreshedProfile = _findCustomProfile(
-                  refreshedProfiles,
-                  currentProfile.id,
-                );
-
-                setModalState(() {
-                  currentProfile = refreshedProfile ?? updated;
-                  statusTitle = '$label saved';
-                  statusDetail =
-                      'Recording finished. You can continue or re-record this sample.';
-                  statusIcon = Icons.check_circle_rounded;
-                  statusColor = Colors.green;
-                });
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: '$label complete',
-                    type: AdaptiveSnackBarType.success,
-                  );
-                }
-              } catch (error) {
-                setStatus(
-                  title: '$label failed',
-                  detail: '$error',
-                  icon: Icons.error_outline_rounded,
-                  color: scheme.error,
-                );
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: '$error',
-                    type: AdaptiveSnackBarType.error,
-                  );
-                }
-              } finally {
-                if (sheetContext.mounted) {
-                  setModalState(() {
-                    isBusy = false;
-                    activeSampleNumber = 0;
-                    busyLabel = '';
-                  });
-                }
-              }
-            }
-
-            Future<void> runTraining() async {
-              setModalState(() {
-                isBusy = true;
-                isTraining = true;
-                activeSampleNumber = 0;
-                busyLabel = 'Preparing training';
-                statusTitle = 'Preparing training';
-                statusDetail =
-                    'The app will train using the 5 saved sound samples and the saved background calibration.';
-                statusIcon = Icons.tune_rounded;
-                statusColor = scheme.primary;
-              });
-
-              try {
-                setModalState(() {
-                  busyLabel = 'Training custom model';
-                  statusTitle = 'Training custom model';
-                  statusDetail =
-                      'Training is in progress. This may take a short moment.';
-                  statusIcon = Icons.model_training_rounded;
-                  statusColor = scheme.primary;
-                });
-
-                final profiles =
-                    await _customSoundService.trainOrRebuildModel();
-                final updated = _findCustomProfile(profiles, currentProfile.id);
-                if (updated != null) {
-                  setModalState(() {
-                    currentProfile = updated;
-                  });
-                }
-
-                setStatus(
-                  title: currentProfile.status == CustomSoundProfileStatus.ready
-                      ? 'Custom sound ready'
-                      : 'Training finished',
-                  detail: currentProfile.status ==
-                          CustomSoundProfileStatus.ready
-                      ? 'You can now start sound recognition from the unified home screen.'
-                      : _customStatusLabel(currentProfile),
-                  icon: currentProfile.status == CustomSoundProfileStatus.ready
-                      ? Icons.check_circle_rounded
-                      : Icons.info_outline_rounded,
-                  color: currentProfile.status == CustomSoundProfileStatus.ready
-                      ? Colors.green
-                      : scheme.primary,
-                );
-
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: currentProfile.status ==
-                            CustomSoundProfileStatus.ready
-                        ? 'Custom sound is ready to detect'
-                        : 'Training finished with status: ${_customStatusLabel(currentProfile)}',
-                    type:
-                        currentProfile.status == CustomSoundProfileStatus.failed
-                            ? AdaptiveSnackBarType.error
-                            : AdaptiveSnackBarType.success,
-                  );
-                }
-              } catch (error) {
-                setStatus(
-                  title: 'Training failed',
-                  detail: '$error',
-                  icon: Icons.error_outline_rounded,
-                  color: scheme.error,
-                );
-                if (mounted) {
-                  AdaptiveSnackBar.show(
-                    this.context,
-                    message: '$error',
-                    type: AdaptiveSnackBarType.error,
-                  );
-                }
-              } finally {
-                if (sheetContext.mounted) {
-                  setModalState(() {
-                    isBusy = false;
-                    isTraining = false;
-                    busyLabel = '';
-                  });
-                }
-              }
-            }
-
-            return SafeArea(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  8,
-                  20,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      currentProfile.name,
-                      style: GoogleFonts.inter(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Record 5 examples of the target sound. After that, record 1 background calibration sample, then train the custom model.',
-                      style: GoogleFonts.inter(
-                        color: scheme.onSurface.withValues(alpha: 0.72),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _buildProgressChip(
-                          'Samples ${currentProfile.targetSampleCount}/$kRequiredCustomSoundSamples',
-                          currentProfile.targetSampleCount >=
-                              kRequiredCustomSoundSamples,
-                        ),
-                        _buildProgressChip(
-                          currentProfile.hasBackgroundSample
-                              ? 'Background Ready'
-                              : 'Background Needed',
-                          currentProfile.hasBackgroundSample,
-                        ),
-                        _buildProgressChip(
-                          _customStatusLabel(currentProfile),
-                          currentProfile.status ==
-                              CustomSoundProfileStatus.ready,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    AdaptiveCard(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            statusIcon,
-                            color: statusColor,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  statusTitle,
-                                  style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w700,
-                                    color: scheme.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  statusDetail,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color:
-                                        scheme.onSurface.withValues(alpha: 0.7),
-                                  ),
-                                ),
-                                if (isBusy) ...[
-                                  const SizedBox(height: 10),
-                                  LinearProgressIndicator(
-                                    minHeight: 6,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    busyLabel,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 11,
-                                      color: scheme.onSurface
-                                          .withValues(alpha: 0.62),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    for (var index = 0;
-                        index < kRequiredCustomSoundSamples;
-                        index++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: AdaptiveButton(
-                          key: ValueKey(
-                            'custom-sample-${currentProfile.id}-${index + 1}-${currentProfile.targetSampleCount}-$isBusy-$activeSampleNumber',
-                          ),
-                          enabled: !isBusy,
-                          onPressed: isBusy
-                              ? null
-                              : () => runCapture(
-                                    sampleNumber: index + 1,
-                                    label: 'Sample ${index + 1}',
-                                    action: () =>
-                                        _customSoundService.captureTargetSample(
-                                      currentProfile,
-                                      index,
-                                    ),
-                                  ),
-                          label: isBusy && activeSampleNumber == index + 1
-                              ? 'Recording Sample ${index + 1}...'
-                              : index < currentProfile.targetSampleCount
-                                  ? 'Re-record Sample ${index + 1}'
-                                  : 'Record Sample ${index + 1}',
-                          style: AdaptiveButtonStyle.filled,
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: AdaptiveButton(
-                        key: ValueKey(
-                          'custom-background-${currentProfile.id}-${currentProfile.backgroundSampleCount}-$isBusy-$activeSampleNumber',
-                        ),
-                        enabled: !isBusy &&
-                            currentProfile.targetSampleCount >=
-                                kRequiredCustomSoundSamples,
-                        onPressed: isBusy ||
-                                currentProfile.targetSampleCount <
-                                    kRequiredCustomSoundSamples
-                            ? null
-                            : () => runCapture(
-                                  sampleNumber: kRequiredCustomSoundSamples + 1,
-                                  label: 'Background Calibration',
-                                  action: () => _customSoundService
-                                      .captureBackgroundSample(
-                                    currentProfile,
-                                  ),
-                                ),
-                        label: isBusy &&
-                                activeSampleNumber ==
-                                    kRequiredCustomSoundSamples + 1
-                            ? 'Recording Background Calibration...'
-                            : currentProfile.hasBackgroundSample
-                                ? 'Re-record Background Calibration'
-                                : 'Record Background Calibration',
-                        style: AdaptiveButtonStyle.filled,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: AdaptiveButton(
-                        key: ValueKey(
-                          'custom-train-${currentProfile.id}-${currentProfile.targetSampleCount}-${currentProfile.backgroundSampleCount}-${currentProfile.status.value}-$isBusy',
-                        ),
-                        enabled: !isBusy && currentProfile.hasEnoughSamples,
-                        onPressed: isBusy || !currentProfile.hasEnoughSamples
-                            ? null
-                            : runTraining,
-                        label: isBusy && isTraining
-                            ? 'Training Custom Model...'
-                            : currentProfile.status ==
-                                    CustomSoundProfileStatus.ready
-                                ? 'Retrain Custom Model'
-                                : 'Train Custom Model',
-                        style: AdaptiveButtonStyle.filled,
-                      ),
-                    ),
-                    if (currentProfile.lastError != null &&
-                        currentProfile.lastError!.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      AdaptiveCard(
-                        child: Text(
-                          currentProfile.lastError!,
-                          style: GoogleFonts.inter(
-                            color: scheme.error,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+  Future<void> _openCustomSoundEnrollmentPage(
+    CustomSoundProfile profile,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CustomSoundEnrollmentPage(initialProfile: profile),
+      ),
     );
-
-    await _customSoundService.discardDraft(currentProfile.id);
+    await _customSoundService.discardDraft(profile.id);
     await _customSoundService.refresh();
   }
 
@@ -870,18 +461,6 @@ class _AlertsPageState extends State<AlertsPage> {
     }
   }
 
-  CustomSoundProfile? _findCustomProfile(
-    List<CustomSoundProfile> profiles,
-    String profileId,
-  ) {
-    for (final profile in profiles) {
-      if (profile.id == profileId) {
-        return profile;
-      }
-    }
-    return null;
-  }
-
   String _customStatusLabel(CustomSoundProfile profile) {
     if (!profile.enabled) {
       return 'Disabled';
@@ -897,20 +476,6 @@ class _AlertsPageState extends State<AlertsPage> {
       CustomSoundProfileStatus.ready => 'Ready',
       CustomSoundProfileStatus.failed => 'Failed',
     };
-  }
-
-  Widget _buildProgressChip(String label, bool isComplete) {
-    return Chip(
-      avatar: Icon(
-        isComplete ? Icons.check_circle : Icons.radio_button_unchecked,
-        size: 16,
-      ),
-      label: Text(
-        label,
-        style: GoogleFonts.inter(fontSize: 11),
-      ),
-      visualDensity: VisualDensity.compact,
-    );
   }
 
   Widget _buildCustomSoundSection(
@@ -953,7 +518,7 @@ class _AlertsPageState extends State<AlertsPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Add a sound, record 5 examples and 1 background calibration, then train the custom model.',
+                    'Add a sound, record 10 target examples and 3 background samples, then train the custom model.',
                     style: GoogleFonts.inter(
                       color: scheme.onSurface.withValues(alpha: 0.68),
                     ),
@@ -1019,9 +584,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 ),
                 Chip(
                   label: Text(
-                    profile.hasBackgroundSample
-                        ? 'Background Ready'
-                        : 'Background Needed',
+                    'Background ${profile.backgroundSampleCount}/$kRequiredBackgroundSamples',
                     style: GoogleFonts.inter(fontSize: 10),
                   ),
                   visualDensity: VisualDensity.compact,
@@ -1039,22 +602,34 @@ class _AlertsPageState extends State<AlertsPage> {
           trailing: AdaptivePopupMenuButton.icon<String>(
             icon: 'ellipsis.circle',
             items: [
-              const AdaptivePopupMenuItem(label: 'Open', value: 'open'),
+              AdaptivePopupMenuItem(
+                label: 'Open',
+                value: 'open',
+                icon: PlatformInfo.isIOS26OrHigher() ? 'folder' : Icons.folder_open_rounded,
+              ),
               if (profile.hasEnoughSamples)
-                const AdaptivePopupMenuItem(
+                AdaptivePopupMenuItem(
                   label: 'Retrain',
                   value: 'retrain',
+                  icon: PlatformInfo.isIOS26OrHigher() ? 'arrow.triangle.2.circlepath' : Icons.autorenew_rounded,
                 ),
               AdaptivePopupMenuItem(
                 label: profile.enabled ? 'Disable' : 'Enable',
                 value: 'toggle',
+                icon: profile.enabled
+                    ? (PlatformInfo.isIOS26OrHigher() ? 'speaker.slash' : Icons.volume_off_rounded)
+                    : (PlatformInfo.isIOS26OrHigher() ? 'speaker.wave.2' : Icons.volume_up_rounded),
               ),
-              const AdaptivePopupMenuItem(label: 'Delete', value: 'delete'),
+              AdaptivePopupMenuItem(
+                label: 'Delete',
+                value: 'delete',
+                icon: PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
+              ),
             ],
             onSelected: (index, item) async {
               switch (item.value) {
                 case 'open':
-                  await _showCustomSoundSheet(profile);
+                  await _openCustomSoundEnrollmentPage(profile);
                   break;
                 case 'retrain':
                   await _retrainCustomSounds();
@@ -1068,7 +643,7 @@ class _AlertsPageState extends State<AlertsPage> {
               }
             },
           ),
-          onTap: () => _showCustomSoundSheet(profile),
+          onTap: () => _openCustomSoundEnrollmentPage(profile),
         ),
       ),
     ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1);
@@ -1076,6 +651,7 @@ class _AlertsPageState extends State<AlertsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final topInset = PlatformInfo.isIOS26OrHigher()
         ? MediaQuery.of(context).padding.top + kToolbarHeight
         : 0.0;
@@ -1095,18 +671,26 @@ class _AlertsPageState extends State<AlertsPage> {
                 width: double.infinity,
                 child: SizedBox(
                   height: 44,
-                  child: AdaptiveSegmentedControl(
-                    labels: const ['Recent Alerts', 'Trigger Words'],
-                    color: Theme.of(context).colorScheme.surface,
-                    selectedIndex: _selectedTabIndex,
-                    onValueChanged: (index) {
-                      setState(() {
-                        _selectedTabIndex = index;
-                        if (_selectedTabIndex != 0) {
-                          _clearAlertSelection();
-                        }
-                      });
-                    },
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      platformBrightness: theme.brightness,
+                    ),
+                    child: AdaptiveSegmentedControl(
+                      key: ValueKey(
+                        'alerts-tabs-${theme.brightness.name}',
+                      ),
+                      labels: const ['Recent Alerts', 'Alert Triggers'],
+                      color: theme.colorScheme.surface,
+                      selectedIndex: _selectedTabIndex,
+                      onValueChanged: (index) {
+                        setState(() {
+                          _selectedTabIndex = index;
+                          if (_selectedTabIndex != 0) {
+                            _clearAlertSelection();
+                          }
+                        });
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -1155,7 +739,7 @@ class _AlertsPageState extends State<AlertsPage> {
                     ).animate().scale(duration: 600.ms),
                     const SizedBox(height: 24),
                     Text(
-                      'No trigger word alerts yet',
+                      'No recent alerts yet',
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -1164,7 +748,7 @@ class _AlertsPageState extends State<AlertsPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Add trigger words and use text-to-speech to generate alerts',
+                      'Trigger detections and saved sounds will appear here',
                       style: GoogleFonts.inter(
                         color: scheme.onSurface.withValues(alpha: 0.68),
                       ),
@@ -1239,16 +823,16 @@ class _AlertsPageState extends State<AlertsPage> {
                                       ? (isSelected
                                           ? Icons.check_circle
                                           : Icons.radio_button_unchecked)
-                                      : Icons.warning_rounded,
+                                      : _alertIcon(alert),
                                   color: _isAlertSelectionMode
                                       ? (isSelected
                                           ? scheme.primary
                                           : scheme.onSurface
                                               .withValues(alpha: 0.65))
-                                      : scheme.error,
+                                      : _alertIconColor(alert, scheme),
                                 ),
                                 title: Text(
-                                  'Trigger: "${alert.triggerWord}"',
+                                  _alertTitle(alert),
                                   style: GoogleFonts.inter(
                                     fontWeight: FontWeight.bold,
                                     color: scheme.onSurface,
@@ -1257,27 +841,7 @@ class _AlertsPageState extends State<AlertsPage> {
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      alert.detectedText,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 12,
-                                        color: scheme.onSurface
-                                            .withValues(alpha: 0.8),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      TimeUtils.formatTimeAgoShort(
-                                          alert.timestamp),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: scheme.onSurface
-                                            .withValues(alpha: 0.68),
-                                      ),
-                                    ),
+                                    _buildAlertSubtitle(alert, scheme),
                                   ],
                                 ),
                                 trailing: _isAlertSelectionMode
@@ -1293,6 +857,8 @@ class _AlertsPageState extends State<AlertsPage> {
                                 onTap: () {
                                   if (_isAlertSelectionMode) {
                                     _toggleAlertSelection(alert.id);
+                                  } else if (_isSoundAlert(alert)) {
+                                    _showAlertDetails(alert);
                                   }
                                 },
                               ),
@@ -1427,19 +993,24 @@ class _AlertsPageState extends State<AlertsPage> {
                                         AdaptivePopupMenuButton.icon<String>(
                                       icon: 'ellipsis.circle',
                                       items: [
-                                        const AdaptivePopupMenuItem(
+                                        AdaptivePopupMenuItem(
                                           label: 'Edit',
                                           value: 'edit',
+                                          icon: PlatformInfo.isIOS26OrHigher() ? 'pencil' : Icons.edit_rounded,
                                         ),
                                         AdaptivePopupMenuItem(
                                           label: word.enabled
                                               ? 'Disable'
                                               : 'Enable',
                                           value: 'toggle',
+                                          icon: word.enabled
+                                              ? (PlatformInfo.isIOS26OrHigher() ? 'speaker.slash' : Icons.volume_off_rounded)
+                                              : (PlatformInfo.isIOS26OrHigher() ? 'speaker.wave.2' : Icons.volume_up_rounded),
                                         ),
-                                        const AdaptivePopupMenuItem(
+                                        AdaptivePopupMenuItem(
                                           label: 'Delete',
                                           value: 'delete',
+                                          icon: PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
                                         ),
                                       ],
                                       onSelected: (index, item) async {
@@ -1489,6 +1060,436 @@ class _AlertsPageState extends State<AlertsPage> {
           },
         );
       },
+    );
+  }
+}
+
+class _TriggerWordDialogResult {
+  const _TriggerWordDialogResult({
+    required this.word,
+    required this.caseSensitive,
+    required this.exactMatch,
+  });
+
+  final String word;
+  final bool caseSensitive;
+  final bool exactMatch;
+}
+
+class _TriggerWordDialog extends StatefulWidget {
+  const _TriggerWordDialog({
+    required this.title,
+    required this.primaryActionLabel,
+    required this.initialWord,
+    required this.initialCaseSensitive,
+    required this.initialExactMatch,
+    required this.onEmptyWord,
+  });
+
+  final String title;
+  final String primaryActionLabel;
+  final String initialWord;
+  final bool initialCaseSensitive;
+  final bool initialExactMatch;
+  final VoidCallback onEmptyWord;
+
+  @override
+  State<_TriggerWordDialog> createState() => _TriggerWordDialogState();
+}
+
+class _TriggerWordDialogState extends State<_TriggerWordDialog> {
+  late final TextEditingController _controller;
+  late bool _caseSensitive;
+  late bool _exactMatch;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialWord);
+    _caseSensitive = widget.initialCaseSensitive;
+    _exactMatch = widget.initialExactMatch;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final word = _controller.text.trim();
+    if (word.isEmpty) {
+      widget.onEmptyWord();
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _TriggerWordDialogResult(
+        word: word,
+        caseSensitive: _caseSensitive,
+        exactMatch: _exactMatch,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dialogBody = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: PlatformInfo.isIOS ? 19 : 22,
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 20),
+            AdaptiveTextField(
+              controller: _controller,
+              placeholder: 'Enter word to monitor',
+              autofocus: true,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: scheme.onSurface,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            _TriggerWordDialogOptionRow(
+              label: 'Case Sensitive',
+              value: _caseSensitive,
+              onChanged: (value) {
+                setState(() {
+                  _caseSensitive = value;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            _TriggerWordDialogOptionRow(
+              label: 'Exact Word Match (whole word only)',
+              value: _exactMatch,
+              onChanged: (value) {
+                setState(() {
+                  _exactMatch = value;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            if (PlatformInfo.isIOS)
+              Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      label: 'Cancel',
+                      style: AdaptiveButtonStyle.plain,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _submit,
+                      label: widget.primaryActionLabel,
+                      style: PlatformInfo.isIOS26OrHigher()
+                          ? AdaptiveButtonStyle.glass
+                          : AdaptiveButtonStyle.filled,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  const Spacer(),
+                  AdaptiveButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    label: 'Cancel',
+                    style: AdaptiveButtonStyle.plain,
+                  ),
+                  const SizedBox(width: 8),
+                  AdaptiveButton(
+                    onPressed: _submit,
+                    label: widget.primaryActionLabel,
+                    style: AdaptiveButtonStyle.filled,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (PlatformInfo.isIOS) {
+      return _IOSDialogScaffold(child: dialogBody);
+    }
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: scheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: dialogBody,
+      ),
+    );
+  }
+}
+
+class _NameEntryDialog extends StatefulWidget {
+  const _NameEntryDialog({
+    required this.title,
+    required this.placeholder,
+    required this.primaryActionLabel,
+  });
+
+  final String title;
+  final String placeholder;
+  final String primaryActionLabel;
+
+  @override
+  State<_NameEntryDialog> createState() => _NameEntryDialogState();
+}
+
+class _NameEntryDialogState extends State<_NameEntryDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    Navigator.of(context).pop(value.isEmpty ? null : value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dialogBody = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: PlatformInfo.isIOS ? 19 : 22,
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 20),
+            AdaptiveTextField(
+              controller: _controller,
+              placeholder: widget.placeholder,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: scheme.onSurface,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 24),
+            if (PlatformInfo.isIOS)
+              Row(
+                children: [
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      label: 'Cancel',
+                      style: AdaptiveButtonStyle.plain,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AdaptiveButton(
+                      onPressed: _submit,
+                      label: widget.primaryActionLabel,
+                      style: PlatformInfo.isIOS26OrHigher()
+                          ? AdaptiveButtonStyle.glass
+                          : AdaptiveButtonStyle.filled,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  const Spacer(),
+                  AdaptiveButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    label: 'Cancel',
+                    style: AdaptiveButtonStyle.plain,
+                  ),
+                  const SizedBox(width: 8),
+                  AdaptiveButton(
+                    onPressed: _submit,
+                    label: widget.primaryActionLabel,
+                    style: AdaptiveButtonStyle.filled,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (PlatformInfo.isIOS) {
+      return _IOSDialogScaffold(child: dialogBody);
+    }
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      backgroundColor: scheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: dialogBody,
+      ),
+    );
+  }
+}
+
+class _IOSDialogScaffold extends StatelessWidget {
+  const _IOSDialogScaffold({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final availableHeight = mediaQuery.size.height -
+        mediaQuery.padding.top -
+        mediaQuery.padding.bottom -
+        mediaQuery.viewInsets.bottom -
+        32;
+
+    return MediaQuery(
+      data: mediaQuery.copyWith(platformBrightness: theme.brightness),
+      child: CupertinoTheme(
+        data: CupertinoTheme.of(context).copyWith(
+          brightness: theme.brightness,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.fromLTRB(
+              24,
+              16,
+              24,
+              mediaQuery.viewInsets.bottom + 16,
+            ),
+            child: SafeArea(
+              child: Align(
+                alignment: Alignment.center,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 420,
+                    maxHeight: availableHeight
+                        .clamp(220.0, double.infinity)
+                        .toDouble(),
+                  ),
+                  child: AdaptiveCard(
+                    padding: const EdgeInsets.all(22),
+                    borderRadius: BorderRadius.circular(28),
+                    clipBehavior: Clip.antiAlias,
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TriggerWordDialogOptionRow extends StatelessWidget {
+  const _TriggerWordDialogOptionRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rowColor = PlatformInfo.isIOS
+        ? scheme.surfaceContainerHighest.withValues(alpha: 0.55)
+        : scheme.surfaceContainerHighest.withValues(alpha: 0.8);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: rowColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: AdaptiveCheckbox(
+                value: value,
+                onChanged: (nextValue) => onChanged(nextValue ?? false),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: scheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

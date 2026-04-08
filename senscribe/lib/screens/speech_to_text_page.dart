@@ -183,7 +183,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
 
     await service.add(item);
     if (!mounted) return;
-    _showSnackBar('Saved to history');
+    _showSnackBar('Text saved');
     setState(() => _isSaving = false);
   }
 
@@ -285,20 +285,13 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
 
               // Speech to Text Header
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.mic_rounded,
-                        color: theme.colorScheme.primary,
-                        size: 24,
-                      ),
+                    Icon(
+                      Icons.mic_rounded,
+                      color: theme.colorScheme.primary,
+                      size: 28,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -328,7 +321,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                         onPressed: _clearText,
                       ),
                   ],
-                ).animate().slideX(begin: -0.2, duration: 500.ms).fadeIn(),
+                ),
               ),
 
               // Transcribed Text Display

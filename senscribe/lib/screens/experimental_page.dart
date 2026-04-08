@@ -66,7 +66,7 @@ class ExperimentalPage extends StatelessWidget {
                     '• Show confidence percentage for accuracy\n'
                     '• Copy text to clipboard\n'
                     '• Share transcription\n'
-                    '• Save to history',
+                    '• Save text entries',
               ),
               const SizedBox(height: 16),
 
@@ -130,15 +130,15 @@ class ExperimentalPage extends StatelessWidget {
               // History & Management
               _buildSection(
                 context,
-                'History & Management',
+                'Saved Texts & Management',
                 Icons.history_rounded,
-                'Keep track of your transcriptions and audio:\n\n'
-                    '• View all past STT transcriptions\n'
-                    '• View all past TTS generated audio\n'
+                'Keep track of your saved text entries:\n\n'
+                    '• View saved STT transcriptions\n'
+                    '• View saved TTS text entries\n'
                     '• Search by date or keyword\n'
                     '• Delete individual items\n'
-                    '• Clear all history\n'
-                    '• Export as text/audio files',
+                    '• Clear saved texts\n'
+                    '• Export as text files',
               ),
               const SizedBox(height: 16),
 

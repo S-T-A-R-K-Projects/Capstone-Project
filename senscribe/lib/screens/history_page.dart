@@ -11,6 +11,35 @@ import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
 import 'model_settings_page.dart';
 
+Future<String?> _showRenameTranscriptionDialog(
+  BuildContext context, {
+  required String initialTitle,
+}) async {
+  final updatedTitle = await AdaptiveAlertDialog.inputShow(
+    context: context,
+    title: 'Rename transcription',
+    actions: [
+      AlertAction(
+        title: 'Cancel',
+        style: AlertActionStyle.cancel,
+        onPressed: () {},
+      ),
+      AlertAction(
+        title: 'Save',
+        style: AlertActionStyle.primary,
+        onPressed: () {},
+      ),
+    ],
+    input: AdaptiveAlertDialogInput(
+      placeholder: 'Name',
+      initialValue: initialTitle,
+      maxLength: 40,
+    ),
+  );
+
+  return updatedTitle?.trim();
+}
+
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
 
@@ -63,33 +92,11 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Future<void> _rename(HistoryItem item) async {
-    final controller = TextEditingController(text: item.title);
-    final updatedTitle = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename transcription'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Name',
-            border: OutlineInputBorder(),
-          ),
-          maxLength: 40,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final updatedTitle = await _showRenameTranscriptionDialog(
+      context,
+      initialTitle: item.title,
     );
 
-    controller.dispose();
     if (updatedTitle == null) return;
     final title = updatedTitle.trim();
     if (title.isEmpty) return;
@@ -102,8 +109,8 @@ class _HistoryPageState extends State<HistoryPage> {
     var shouldClear = false;
     await AdaptiveAlertDialog.show(
       context: context,
-      title: 'Clear history?',
-      message: 'This will remove all history entries.',
+      title: 'Clear saved texts?',
+      message: 'This will remove all saved text entries.',
       actions: [
         AlertAction(
           title: 'Cancel',
@@ -146,7 +153,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(
-        title: 'History',
+        title: 'Saved Texts',
         actions: [
           if (_items.isNotEmpty)
             AdaptiveAppBarAction(
@@ -170,7 +177,7 @@ class _HistoryPageState extends State<HistoryPage> {
                     child: Padding(
                       padding: EdgeInsets.only(top: topInset),
                       child: Text(
-                        'No history yet',
+                        'No saved texts yet',
                         style: GoogleFonts.inter(
                           color: theme.colorScheme.onSurface
                               .withValues(alpha: 0.72),
@@ -312,33 +319,11 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     final item = _item;
     if (item == null) return;
 
-    final controller = TextEditingController(text: item.title);
-    final updatedTitle = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Rename transcription'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Name',
-            border: OutlineInputBorder(),
-          ),
-          maxLength: 40,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final updatedTitle = await _showRenameTranscriptionDialog(
+      context,
+      initialTitle: item.title,
     );
 
-    controller.dispose();
     if (updatedTitle == null) return;
     final title = updatedTitle.trim();
     if (title.isEmpty) return;
@@ -546,72 +531,81 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
                       ),
                     ),
                   )
-                : Column(
-                    children: [
-                      if (topInset > 0) SizedBox(height: topInset),
-                      Container(
-                        margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.schedule,
-                              size: 16,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.72),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Recorded ${TimeUtils.formatTimeAgoShort(item.timestamp)}',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.72),
+                : SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      children: [
+                        if (topInset > 0) SizedBox(height: topInset),
+                        Container(
+                          margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.schedule,
+                                size: 16,
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.72),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Recorded ${TimeUtils.formatTimeAgoShort(item.timestamp)}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.72),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: SizedBox(
-                          height: 44,
-                          child: AdaptiveSegmentedControl(
-                            labels: const ['Transcript', 'Summary'],
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            selectedIndex: _selectedViewIndex,
-                            onValueChanged: (index) {
-                              setState(() {
-                                _selectedViewIndex = index;
-                              });
-                            },
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: IndexedStack(
-                          index: _selectedViewIndex,
-                          children: [
-                            _buildTranscriptTab(theme, item),
-                            _buildSummaryTab(theme, item),
-                          ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 44,
+                            child: MediaQuery(
+                              data: MediaQuery.of(context).copyWith(
+                                platformBrightness: theme.brightness,
+                              ),
+                              child: AdaptiveSegmentedControl(
+                                key: ValueKey(
+                                  'history-detail-tabs-${theme.brightness.name}',
+                                ),
+                                labels: const ['Transcript', 'Summary'],
+                                color: theme.colorScheme.surface,
+                                selectedIndex: _selectedViewIndex,
+                                onValueChanged: (index) {
+                                  setState(() {
+                                    _selectedViewIndex = index;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: IndexedStack(
+                            index: _selectedViewIndex,
+                            children: [
+                              _buildTranscriptTab(theme, item),
+                              _buildSummaryTab(theme, item),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
       ),
     );

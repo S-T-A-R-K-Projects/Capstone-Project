@@ -46,6 +46,8 @@ class LeapService {
   String? _loadedModelSlug;
   String? _loadedQuantization;
   ModelRunner? _runner;
+  StreamSubscription<DownloadEvent>? _modelDownloadSubscription;
+  Completer<void>? _modelDownloadCompleter;
   bool _isSummarizationInProgress = false;
   bool _isCancellationRequested = false;
 
@@ -74,31 +76,93 @@ class LeapService {
     required Function(String) onStatus,
   }) async {
     final resolved = _resolveModel(modelId);
+    final completer = Completer<void>();
+
+    if (_modelDownloadSubscription != null) {
+      throw LeapServiceException(
+          'Another model download is already in progress.');
+    }
 
     try {
-      await for (final event in _liquidAi.downloadModel(
+      _modelDownloadCompleter = completer;
+      _modelDownloadSubscription = _liquidAi
+          .downloadModel(
         resolved.modelSlug,
         resolved.quantizationSlug,
-      )) {
-        switch (event) {
-          case DownloadStartedEvent():
-            onStatus('Starting download...');
-          case DownloadProgressEvent(:final progress):
-            onProgress(progress.progress.clamp(0.0, 1.0));
-            final percentage = (progress.progress * 100).toStringAsFixed(1);
-            onStatus('Downloading... $percentage%');
-          case DownloadCompleteEvent():
-            onProgress(1.0);
-            onStatus('Download complete.');
-          case DownloadErrorEvent(:final error):
-            throw LeapServiceException('Model download failed: $error');
-          case DownloadCancelledEvent():
-            throw LeapServiceException('Model download cancelled.');
-        }
-      }
+      )
+          .listen(
+        (event) {
+          switch (event) {
+            case DownloadStartedEvent():
+              onStatus('Starting download...');
+            case DownloadProgressEvent(:final progress):
+              onProgress(progress.progress.clamp(0.0, 1.0));
+              final percentage = (progress.progress * 100).toStringAsFixed(1);
+              onStatus('Downloading... $percentage%');
+            case DownloadCompleteEvent():
+              onProgress(1.0);
+              onStatus('Download complete.');
+              if (!completer.isCompleted) {
+                completer.complete();
+              }
+            case DownloadErrorEvent(:final error):
+              if (!completer.isCompleted) {
+                completer.completeError(
+                  LeapServiceException('Model download failed: $error'),
+                );
+              }
+            case DownloadCancelledEvent():
+              if (!completer.isCompleted) {
+                completer.completeError(
+                  LeapServiceException('Model download cancelled.'),
+                );
+              }
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (!completer.isCompleted) {
+            completer.completeError(
+              LeapServiceException('Model download failed: $error'),
+              stackTrace,
+            );
+          }
+        },
+        onDone: () {
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        },
+        cancelOnError: false,
+      );
+
+      await completer.future;
     } catch (e) {
       if (e is LeapServiceException) rethrow;
       throw LeapServiceException('Model download failed: $e');
+    } finally {
+      final activeSubscription = _modelDownloadSubscription;
+      _modelDownloadSubscription = null;
+      _modelDownloadCompleter = null;
+      await activeSubscription?.cancel();
+    }
+  }
+
+  Future<void> cancelModelDownload() async {
+    final completer = _modelDownloadCompleter;
+    final subscription = _modelDownloadSubscription;
+    if (completer == null || subscription == null) {
+      return;
+    }
+
+    _modelDownloadSubscription = null;
+    _modelDownloadCompleter = null;
+
+    await subscription.cancel();
+
+    if (!completer.isCompleted) {
+      completer.completeError(
+        LeapServiceException('Model download cancelled.'),
+      );
     }
   }
 

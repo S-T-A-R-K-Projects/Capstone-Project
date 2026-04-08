@@ -9,7 +9,13 @@ import 'unified_home_page.dart';
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
-  static final GlobalKey<_HomeTabState> homeTabKey = GlobalKey<_HomeTabState>();
+  static final GlobalKey<_HomeTabState> _homeTabKey =
+      GlobalKey<_HomeTabState>();
+
+  static Key get navigationKey => _homeTabKey;
+
+  static Future<void> restartOnboarding() async =>
+      _homeTabKey.currentState?.showOnboarding();
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -26,6 +32,7 @@ class _HomeTabState extends State<HomeTab> {
       });
     }
   }
+
   bool _isFirstLaunch = true;
   bool _isLoading = true;
 

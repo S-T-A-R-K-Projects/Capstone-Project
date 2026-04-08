@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../models/model_download_snapshot.dart';
 import '../services/summarization_service.dart';
 import '../models/llm_model.dart';
 
@@ -22,72 +26,60 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
 
   bool _isConfigured = false;
   bool _isLoading = true;
-  bool _isDownloading = false;
-  double _downloadProgress = 0.0;
-  String _statusMessage = '';
+  ModelDownloadSnapshot _downloadSnapshot = ModelDownloadSnapshot.idle(
+    modelId: LLMModel.defaultModel.name,
+  );
+  StreamSubscription<ModelDownloadSnapshot>? _downloadSubscription;
 
   @override
   void initState() {
     super.initState();
+    _downloadSubscription =
+        _summarizationService.downloadStateStream.listen(_handleDownloadUpdate);
     _checkStatus();
+  }
+
+  @override
+  void dispose() {
+    _downloadSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkStatus() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    final configured = await _summarizationService.isModelConfigured();
+    final model = LLMModel.getModelByName(_modelId) ?? LLMModel.defaultModel;
+    final configured = await _summarizationService.isModelConfigured(model);
+    final downloadSnapshot =
+        await _summarizationService.refreshDownloadState(model);
 
     if (mounted) {
       setState(() {
         _isConfigured = configured;
+        _downloadSnapshot = downloadSnapshot;
         _isLoading = false;
       });
     }
   }
 
   Future<void> _startDownload() async {
-    setState(() {
-      _isDownloading = true;
-      _downloadProgress = 0.0;
-      _statusMessage = 'Initializing Liquid AI...';
-    });
+    if (_downloadSnapshot.isRunning) return;
+    final shouldContinue = await _showDownloadWarning();
+    if (!shouldContinue) return;
 
     try {
       final model = LLMModel.getModelByName(_modelId) ?? LLMModel.defaultModel;
-
-      await _summarizationService.downloadModelFiles(
-        model,
-        onProgress: (progress) {
-          if (mounted) {
-            setState(() => _downloadProgress = progress);
-          }
-        },
-        onStatus: (status) {
-          if (mounted) {
-            setState(() => _statusMessage = status);
-          }
-        },
-      );
-
-      if (mounted) {
-        _showSuccess('Model loaded and ready!');
-        await _checkStatus();
-      }
+      await _summarizationService.startModelDownload(model);
     } catch (e) {
       if (mounted) {
         _showError('Operation failed: $e');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isDownloading = false);
-        _statusMessage = '';
       }
     }
   }
 
   Future<void> _deleteModel() async {
-    if (!_isConfigured || _isDownloading) return;
+    if (!_isConfigured || _downloadSnapshot.isRunning) return;
 
     var shouldDelete = false;
     await AdaptiveAlertDialog.show(
@@ -144,6 +136,62 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
     );
   }
 
+  Future<bool> _showDownloadWarning() async {
+    var shouldContinue = false;
+    final message = Platform.isAndroid
+        ? 'Stay on this screen until the download starts. Android can continue the download in the background.'
+        : 'Stay on this screen until the download starts. iOS may pause the transfer if the app stays in the background too long.';
+
+    await AdaptiveAlertDialog.show(
+      context: context,
+      title: 'Keep this screen open',
+      message: message,
+      actions: [
+        AlertAction(
+          title: 'Cancel',
+          style: AlertActionStyle.cancel,
+          onPressed: () {},
+        ),
+        AlertAction(
+          title: 'Start Download',
+          style: AlertActionStyle.primary,
+          onPressed: () {
+            shouldContinue = true;
+          },
+        ),
+      ],
+    );
+    return shouldContinue;
+  }
+
+  void _handleDownloadUpdate(ModelDownloadSnapshot snapshot) {
+    if (snapshot.modelId != _modelId || !mounted) return;
+    final wasRunning = _downloadSnapshot.isRunning;
+
+    setState(() {
+      _downloadSnapshot = snapshot;
+    });
+
+    if (wasRunning && !snapshot.isRunning) {
+      if (snapshot.hasError) {
+        _showError('Operation failed: ${snapshot.lastError}');
+      } else if (snapshot.isComplete) {
+        _showSuccess('Model loaded and ready!');
+      }
+      unawaited(_checkStatus());
+    }
+  }
+
+  Future<void> _cancelDownload() async {
+    try {
+      await _summarizationService.cancelModelDownloadIfSupported();
+      await _checkStatus();
+    } catch (error) {
+      if (!mounted) return;
+      _showError('Unable to cancel download: $error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -188,7 +236,9 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
     final statusColor = _isConfigured ? Colors.green : Colors.orange;
     final statusIcon =
         _isConfigured ? Icons.check_circle : Icons.cloud_off_rounded;
-    final statusText = _isConfigured ? 'Model Found' : 'Model Not Found';
+    final statusText = _downloadSnapshot.isRunning
+        ? 'Download In Progress'
+        : (_isConfigured ? 'Model Found' : 'Model Not Found');
 
     return AdaptiveCard(
       padding: const EdgeInsets.all(16),
@@ -211,7 +261,11 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
                       ),
                     ),
                     Text(
-                      _isConfigured ? 'Ready for use' : 'Requires download',
+                      _downloadSnapshot.isRunning
+                          ? _downloadSnapshot.statusMessage
+                          : (_isConfigured
+                              ? 'Ready for use'
+                              : 'Requires download'),
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: Colors.grey[600],
@@ -228,28 +282,47 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   }
 
   Widget _buildActionSection(ThemeData theme) {
-    if (_isDownloading) {
+    if (_downloadSnapshot.isRunning) {
       return AdaptiveCard(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Text(
-              'Initializing Model...',
+              'Downloading Model...',
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
-            if (_downloadProgress > 0 && _downloadProgress < 1.0)
-              LinearProgressIndicator(value: _downloadProgress)
+            if (_downloadSnapshot.progress > 0 &&
+                _downloadSnapshot.progress < 1.0)
+              LinearProgressIndicator(value: _downloadSnapshot.progress)
             else
               const LinearProgressIndicator(), // Indeterminate active
 
             const SizedBox(height: 8),
-            if (_statusMessage.isNotEmpty)
+            if (_downloadSnapshot.statusMessage.isNotEmpty)
               Text(
-                _statusMessage,
+                _downloadSnapshot.statusMessage,
                 style: GoogleFonts.inter(color: Colors.grey, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
+            const SizedBox(height: 8),
+            Text(
+              _downloadSnapshot.platformCanContinueInBackground
+                  ? 'This download can continue while you leave the screen.'
+                  : 'Keep this screen open when possible for the most stable transfer.',
+              style: GoogleFonts.inter(color: Colors.grey, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: AdaptiveButton(
+                onPressed: _cancelDownload,
+                label: 'Cancel Download',
+                style: AdaptiveButtonStyle.bordered,
+                color: Colors.red,
+              ),
+            ),
           ],
         ),
       );

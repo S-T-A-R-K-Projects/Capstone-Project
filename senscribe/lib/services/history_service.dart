@@ -18,17 +18,23 @@ class HistoryService {
   /// Stream that emits when history data changes
   Stream<void> get onHistoryChanged => _changeController.stream;
 
+  // In-memory cache — invalidated on every write operation.
+  List<HistoryItem>? _cache;
+
   /// Notify listeners that history has changed
   void _notifyChange() {
     _changeController.add(null);
   }
 
   Future<List<HistoryItem>> loadHistory() async {
+    if (_cache != null) return _cache!;
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_kKey);
     if (json == null || json.isEmpty) return [];
     try {
-      return HistoryItem.decodeList(json);
+      final items = HistoryItem.decodeList(json);
+      _cache = items;
+      return items;
     } catch (_) {
       return [];
     }
@@ -38,6 +44,7 @@ class HistoryService {
     final prefs = await SharedPreferences.getInstance();
     final json = HistoryItem.encodeList(items);
     await prefs.setString(_kKey, json);
+    _cache = items;
   }
 
   Future<int> nextTextIndex() async {
@@ -73,6 +80,7 @@ class HistoryService {
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kKey);
+    _cache = null;
     _notifyChange();
   }
 

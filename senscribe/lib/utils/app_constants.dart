@@ -7,6 +7,7 @@ class AppConstants {
   static const int alertHistoryMaxItems = 100;
   static const double audioConfidenceThreshold = 0.6;
   static const int historyPreviewMaxLength = 64;
+  static const Duration repeatingSoundRefreshWindow = Duration(seconds: 10);
 
   static const double defaultSectionHeight = 250.0;
   static const double sttSectionHeight = 280.0;
@@ -31,7 +32,7 @@ class AppConstants {
 class CriticalSounds {
   CriticalSounds._();
 
-  static const List<String> labels = [
+  static const Set<String> labels = {
     'siren',
     'fire_alarm',
     'smoke_alarm',
@@ -39,7 +40,7 @@ class CriticalSounds {
     'baby_crying',
     'glass_breaking',
     'gunshot',
-  ];
+  };
 
   static bool isCritical(String label) {
     return labels.contains(label.toLowerCase().replaceAll(' ', '_'));

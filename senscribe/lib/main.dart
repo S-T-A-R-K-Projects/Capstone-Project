@@ -1,12 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'services/audio_classification_service.dart';
+import 'services/app_settings_service.dart';
+import 'services/live_update_service.dart';
 import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
 
-void main() {
-  GoogleFonts.config.allowRuntimeFetching = true;
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false;
+  await ThemeProvider.instance.load();
+  await LiveUpdateService().initialize(
+    audioService: AudioClassificationService(),
+  );
   runApp(const SenScribeApp());
 }
 
@@ -16,8 +26,14 @@ class ThemeProvider extends ChangeNotifier {
   factory ThemeProvider() => _instance;
   ThemeProvider._internal();
 
+  final AppSettingsService _settingsService = AppSettingsService();
+
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
+
+  Future<void> load() async {
+    _themeMode = await _settingsService.loadThemeMode();
+  }
 
   void toggleTheme() {
     // Cycle: System -> Light -> Dark -> System
@@ -28,12 +44,14 @@ class ThemeProvider extends ChangeNotifier {
     } else {
       _themeMode = ThemeMode.system;
     }
+    unawaited(_settingsService.saveThemeMode(_themeMode));
     notifyListeners();
   }
 
   void setTheme(ThemeMode mode) {
     if (_themeMode != mode) {
       _themeMode = mode;
+      unawaited(_settingsService.saveThemeMode(_themeMode));
       notifyListeners();
     }
   }
@@ -74,6 +92,20 @@ class _SenScribeAppState extends State<SenScribeApp> {
       cupertinoLightTheme: AppTheme.cupertinoLightTheme,
       cupertinoDarkTheme: AppTheme.cupertinoDarkTheme,
       themeMode: _themeProvider.themeMode,
+      builder: (context, child) {
+        if (child == null) {
+          return const SizedBox.shrink();
+        }
+
+        if (!PlatformInfo.isAndroid) {
+          return child;
+        }
+
+        return SafeArea(
+          top: false,
+          child: child,
+        );
+      },
       home: const MainNavigationPage(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

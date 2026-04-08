@@ -15,7 +15,9 @@ class AudioClassificationService {
       EventChannel('senscribe/audio_classifier_events');
 
   final List<SoundCaption> _history = [];
-  List<SoundCaption> get history => List.unmodifiable(_history);
+  List<SoundCaption> get history => _visibleHistorySnapshot();
+  int? _historyLimit = AppConstants.soundHistoryMaxItems;
+  int? get historyLimit => _historyLimit;
 
   final _historyController = StreamController<List<SoundCaption>>.broadcast();
   Stream<List<SoundCaption>> get historyStream => _historyController.stream;
@@ -69,8 +71,11 @@ class AudioClassificationService {
     final sourceValue = data['source'] as String? ?? 'builtIn';
     final timestampMs = data['timestampMs'] as int?;
     final customSoundId = data['customSoundId'] as String?;
+    final isCustom = sourceValue == 'custom';
 
-    if (confidence < AppConstants.audioConfidenceThreshold) return;
+    if (!isCustom && confidence < AppConstants.audioConfidenceThreshold) {
+      return;
+    }
 
     final caption = SoundCaption(
       sound: label,
@@ -78,18 +83,46 @@ class AudioClassificationService {
           ? DateTime.now()
           : DateTime.fromMillisecondsSinceEpoch(timestampMs),
       isCritical: CriticalSounds.isCritical(label),
-      direction: 'Unknown',
       confidence: confidence,
-      source: sourceValue == 'custom'
-          ? SoundCaptionSource.custom
-          : SoundCaptionSource.builtIn,
+      source: isCustom ? SoundCaptionSource.custom : SoundCaptionSource.builtIn,
       customSoundId: customSoundId,
     );
 
     _history.insert(0, caption);
-    if (_history.length > AppConstants.soundHistoryMaxItems) {
-      _history.removeLast();
+    _broadcastHistory();
+  }
+
+  void clearHistory() {
+    if (_history.isEmpty) return;
+    _history.clear();
+    _broadcastHistory();
+  }
+
+  bool deleteCaption(SoundCaption caption) {
+    final removed = _history.remove(caption);
+    if (!removed) return false;
+    _broadcastHistory();
+    return true;
+  }
+
+  void setHistoryLimit(int? limit) {
+    if (limit != null && limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be greater than zero.');
     }
-    _historyController.add(_history);
+    if (_historyLimit == limit) return;
+    _historyLimit = limit;
+    _broadcastHistory();
+  }
+
+  List<SoundCaption> _visibleHistorySnapshot() {
+    final limit = _historyLimit;
+    if (limit == null) {
+      return List<SoundCaption>.unmodifiable(_history);
+    }
+    return List<SoundCaption>.unmodifiable(_history.take(limit));
+  }
+
+  void _broadcastHistory() {
+    _historyController.add(_visibleHistorySnapshot());
   }
 }

@@ -1,6 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import '../models/live_activity_snapshot.dart';
+import '../models/sound_caption.dart';
+import 'app_settings_service.dart';
+import 'audio_classification_service.dart';
 
 class LiveUpdateService {
   static final LiveUpdateService _instance = LiveUpdateService._internal();
@@ -9,12 +15,23 @@ class LiveUpdateService {
 
   static const MethodChannel _methodChannel =
       MethodChannel('senscribe/audio_classifier');
+  static const MethodChannel _iosMethodChannel =
+      MethodChannel('senscribe/ios_live_activities');
+  final AppSettingsService _settingsService = AppSettingsService();
 
   bool _isEnabled = false;
   bool get isEnabled => _isEnabled;
 
   final _statusController = StreamController<bool>.broadcast();
   Stream<bool> get statusStream => _statusController.stream;
+
+  AudioClassificationService? _audioService;
+  StreamSubscription<List<SoundCaption>>? _audioHistorySubscription;
+  Future<void>? _initializationFuture;
+  LiveActivitySnapshot? _currentSnapshot;
+  String? _lastProcessedEventSignature;
+  bool _isIosPluginReady = false;
+  bool _isInitializing = false;
 
   void _log(String message) {
     assert(() {
@@ -24,10 +41,67 @@ class LiveUpdateService {
     }());
   }
 
-  Future<void> startLiveUpdates() async {
+  Future<void> initialize({
+    required AudioClassificationService audioService,
+  }) async {
+    _audioService = audioService;
+    _audioHistorySubscription ??=
+        audioService.historyStream.listen(_handleAudioHistoryUpdate);
+
+    if (_initializationFuture != null) {
+      return _initializationFuture;
+    }
+
+    _initializationFuture = _initializeInternal(audioService);
+    return _initializationFuture;
+  }
+
+  Future<void> _initializeInternal(
+      AudioClassificationService audioService) async {
+    _isInitializing = true;
+    try {
+      if (Platform.isIOS) {
+        _isIosPluginReady = true;
+      }
+    } catch (e) {
+      _isIosPluginReady = false;
+      _log('Failed to initialize live updates: $e');
+    } finally {
+      _isInitializing = false;
+    }
+
+    await _syncMonitoringStateInternal(isMonitoring: audioService.isMonitoring);
+  }
+
+  Future<void> syncMonitoringState({required bool isMonitoring}) async {
+    if (!_isInitializing) {
+      await (_initializationFuture ?? Future<void>.value());
+    }
+    await _syncMonitoringStateInternal(isMonitoring: isMonitoring);
+  }
+
+  Future<void> _syncMonitoringStateInternal(
+      {required bool isMonitoring}) async {
+    final liveUpdatesEnabled = await _settingsService.loadLiveUpdatesEnabled();
+
+    if (!liveUpdatesEnabled || !isMonitoring) {
+      await _disableLiveUpdates();
+      return;
+    }
+
+    if (Platform.isAndroid) {
+      await _startAndroidLiveUpdates();
+      return;
+    }
+
+    if (Platform.isIOS) {
+      await _startOrRefreshIosLiveActivity();
+    }
+  }
+
+  Future<void> _startAndroidLiveUpdates() async {
     if (_isEnabled) return;
 
-    // Request notification permission if needed
     final status = await Permission.notification.status;
     if (!status.isGranted) {
       final result = await Permission.notification.request();
@@ -38,29 +112,127 @@ class LiveUpdateService {
 
     try {
       await _methodChannel.invokeMethod('startLiveUpdates');
-      _isEnabled = true;
-      _statusController.add(true);
-      _log('Live updates started');
+      _setEnabledState(true);
+      _log('Android live updates started');
     } catch (e) {
-      _log('Failed to start live updates: $e');
+      _log('Failed to start Android live updates: $e');
       rethrow;
     }
   }
 
-  Future<void> stopLiveUpdates() async {
+  Future<void> _startOrRefreshIosLiveActivity() async {
+    if (!_isIosPluginReady) return;
+
+    try {
+      final snapshot = _currentSnapshot ??
+          LiveActivitySnapshot(
+            status: LiveActivityStatus.listening,
+            startedAtMs: DateTime.now().millisecondsSinceEpoch,
+          );
+
+      _currentSnapshot = snapshot;
+
+      await _iosMethodChannel.invokeMethod<void>(
+        'createOrUpdate',
+        snapshot.toActivityData(),
+      );
+      _setEnabledState(true);
+      _log('iOS Live Activity synced');
+    } catch (e) {
+      _log('Failed to create/update iOS Live Activity: $e');
+      await _endIosActivities(resetSnapshot: false);
+    }
+  }
+
+  Future<void> _disableLiveUpdates() async {
+    if (Platform.isAndroid) {
+      await _stopAndroidLiveUpdates();
+      return;
+    }
+
+    if (Platform.isIOS) {
+      await _endIosActivities();
+    }
+  }
+
+  Future<void> _stopAndroidLiveUpdates() async {
     if (!_isEnabled) return;
+
     try {
       await _methodChannel.invokeMethod('stopLiveUpdates');
-      _isEnabled = false;
-      _statusController.add(false);
-      _log('Live updates stopped');
+      _setEnabledState(false);
+      _log('Android live updates stopped');
     } catch (e) {
-      _log('Failed to stop live updates: $e');
+      _log('Failed to stop Android live updates: $e');
       rethrow;
     }
+  }
+
+  Future<void> _endIosActivities({bool resetSnapshot = true}) async {
+    if (_isIosPluginReady) {
+      try {
+        await _iosMethodChannel.invokeMethod<void>('endAll');
+      } catch (e) {
+        _log('Failed to end iOS Live Activities: $e');
+      }
+    }
+
+    if (resetSnapshot) {
+      _currentSnapshot = null;
+      _lastProcessedEventSignature = null;
+    }
+
+    _setEnabledState(false);
+  }
+
+  Future<void> _handleAudioHistoryUpdate(List<SoundCaption> events) async {
+    if (!Platform.isIOS || !(_audioService?.isMonitoring ?? false)) {
+      return;
+    }
+    if (events.isEmpty) return;
+
+    final latestEvent = events.first;
+    final eventSignature = [
+      latestEvent.source.name,
+      latestEvent.customSoundId ?? '',
+      latestEvent.sound,
+      latestEvent.timestamp.millisecondsSinceEpoch,
+    ].join('|');
+
+    if (eventSignature == _lastProcessedEventSignature) {
+      return;
+    }
+
+    _lastProcessedEventSignature = eventSignature;
+    _currentSnapshot = (_currentSnapshot ??
+            LiveActivitySnapshot(
+              status: LiveActivityStatus.listening,
+              startedAtMs: DateTime.now().millisecondsSinceEpoch,
+            ))
+        .copyWith(
+      status: LiveActivityStatus.detected,
+      lastDetectedIdentifier: latestEvent.sound,
+      lastDetectedLabel: latestEvent.displaySound,
+      lastDetectedConfidencePercent: (latestEvent.confidence * 100).round(),
+      lastDetectedAtMs: latestEvent.timestamp.millisecondsSinceEpoch,
+    );
+
+    try {
+      await syncMonitoringState(isMonitoring: true);
+    } catch (e) {
+      _log('Failed to refresh iOS Live Activity from audio event: $e');
+    }
+  }
+
+  void _setEnabledState(bool enabled) {
+    if (_isEnabled == enabled) return;
+    _isEnabled = enabled;
+    _statusController.add(enabled);
   }
 
   void dispose() {
+    unawaited(_audioHistorySubscription?.cancel());
+    _audioHistorySubscription = null;
     _statusController.close();
   }
 }

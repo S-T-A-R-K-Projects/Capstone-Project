@@ -7,28 +7,24 @@ import '../utils/time_utils.dart';
 
 class SoundCaptionCard extends StatelessWidget {
   final SoundCaption caption;
+  final VoidCallback? onDelete;
+  final VoidCallback? onViewDetails;
+  final VoidCallback? onSaveToAlerts;
 
-  const SoundCaptionCard({super.key, required this.caption});
-
-  IconData _getDirectionIcon(String direction) {
-    switch (direction.toLowerCase()) {
-      case 'front':
-        return Icons.arrow_upward_rounded;
-      case 'back':
-        return Icons.arrow_downward_rounded;
-      case 'left':
-        return Icons.arrow_back_rounded;
-      case 'right':
-        return Icons.arrow_forward_rounded;
-      default:
-        return Icons.my_location_rounded;
-    }
-  }
+  const SoundCaptionCard({
+    super.key,
+    required this.caption,
+    this.onDelete,
+    this.onViewDetails,
+    this.onSaveToAlerts,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final leadingIcon = caption.icon;
+    final leadingColor = caption.isCritical ? Colors.red : scheme.primary;
 
     return AdaptiveCard(
       padding: const EdgeInsets.all(0),
@@ -54,7 +50,7 @@ class SoundCaptionCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Sound Direction Indicator
+              // Sound event indicator
               Container(
                 width: 48,
                 height: 48,
@@ -79,12 +75,8 @@ class SoundCaptionCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  caption.isCritical
-                      ? Icons.warning_rounded
-                      : _getDirectionIcon(caption.direction),
-                  color: caption.isCritical
-                      ? Colors.red
-                      : Theme.of(context).colorScheme.primary,
+                  leadingIcon,
+                  color: leadingColor,
                   size: 24,
                 ),
               ),
@@ -99,7 +91,9 @@ class SoundCaptionCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            caption.sound,
+                            caption.displaySound,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -156,11 +150,6 @@ class SoundCaptionCard extends StatelessWidget {
                           context,
                         ),
                         _buildInfoChip(
-                          _getDirectionIcon(caption.direction),
-                          caption.direction,
-                          context,
-                        ),
-                        _buildInfoChip(
                           Icons.graphic_eq_rounded,
                           '${(caption.confidence * 100).toInt()}%',
                           context,
@@ -171,26 +160,10 @@ class SoundCaptionCard extends StatelessWidget {
                 ),
               ),
 
-              // Quick Actions - using AdaptivePopupMenuButton
-              AdaptivePopupMenuButton.icon<String>(
-                icon: 'ellipsis.circle',
-                items: [
-                  AdaptivePopupMenuItem(
-                    label: 'View Details',
-                    value: 'details',
-                  ),
-                  AdaptivePopupMenuItem(
-                    label: 'Create Alert',
-                    value: 'alert',
-                  ),
-                  AdaptivePopupMenuItem(
-                    label: 'Train Custom',
-                    value: 'train',
-                  ),
-                ],
-                onSelected: (index, item) {
-                  //
-                },
+              _SoundCaptionMenuButton(
+                onViewDetails: onViewDetails,
+                onSaveToAlerts: onSaveToAlerts,
+                onDelete: onDelete,
               ),
             ],
           ),
@@ -220,6 +193,93 @@ class SoundCaptionCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SoundCardAction {
+  const _SoundCardAction({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+}
+
+class _SoundCaptionMenuButton extends StatefulWidget {
+  const _SoundCaptionMenuButton({
+    this.onViewDetails,
+    this.onSaveToAlerts,
+    this.onDelete,
+  });
+
+  final VoidCallback? onViewDetails;
+  final VoidCallback? onSaveToAlerts;
+  final VoidCallback? onDelete;
+
+  @override
+  State<_SoundCaptionMenuButton> createState() => _SoundCaptionMenuButtonState();
+}
+
+class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
+  List<_SoundCardAction> get _actions => [
+        if (widget.onViewDetails != null)
+          const _SoundCardAction(label: 'View Details', value: 'details'),
+        if (widget.onSaveToAlerts != null)
+          const _SoundCardAction(
+            label: 'Save to Alerts',
+            value: 'save_to_alerts',
+          ),
+        if (widget.onDelete != null)
+          const _SoundCardAction(label: 'Delete', value: 'delete'),
+      ];
+
+  List<AdaptivePopupMenuEntry> get _menuItems => _actions
+      .map(
+        (action) => AdaptivePopupMenuItem<String>(
+          label: action.label,
+          icon: switch (action.value) {
+            'details' => PlatformInfo.isIOS26OrHigher() ? 'info.circle' : Icons.info_outline_rounded,
+            'save_to_alerts' => PlatformInfo.isIOS26OrHigher() ? 'bookmark' : Icons.bookmark_border_rounded,
+            'delete' => PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
+            _ => null,
+          },
+          value: action.value,
+        ),
+      )
+      .toList();
+
+  void _handleMenuSelection(String value) {
+    switch (value) {
+      case 'details':
+        widget.onViewDetails?.call();
+        break;
+      case 'save_to_alerts':
+        widget.onSaveToAlerts?.call();
+        break;
+      case 'delete':
+        widget.onDelete?.call();
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: AdaptivePopupMenuButton.icon<String>(
+        icon: PlatformInfo.isIOS26OrHigher()
+            ? 'ellipsis.circle'
+            : Icons.more_horiz_rounded,
+        items: _menuItems,
+        onSelected: (index, item) {
+          final value = item.value;
+          if (value == null) return;
+          _handleMenuSelection(value);
+        },
+      ),
     );
   }
 }

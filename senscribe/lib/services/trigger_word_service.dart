@@ -22,12 +22,19 @@ class TriggerWordService {
       _triggerWordsController.stream;
   Stream<List<TriggerAlert>> get alertsStream => _alertsController.stream;
 
+  // In-memory caches — invalidated on every write operation.
+  List<TriggerWord>? _triggerWordsCache;
+  List<TriggerAlert>? _alertsCache;
+
   Future<List<TriggerWord>> loadTriggerWords() async {
+    if (_triggerWordsCache != null) return _triggerWordsCache!;
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_kTriggerWordsKey);
     if (json == null || json.isEmpty) return [];
     try {
-      return TriggerWord.decodeList(json);
+      final words = TriggerWord.decodeList(json);
+      _triggerWordsCache = words;
+      return words;
     } catch (_) {
       return [];
     }
@@ -37,6 +44,7 @@ class TriggerWordService {
     final prefs = await SharedPreferences.getInstance();
     final json = TriggerWord.encodeList(words);
     await prefs.setString(_kTriggerWordsKey, json);
+    _triggerWordsCache = words;
     _triggerWordsController.add(words);
   }
 
@@ -96,11 +104,14 @@ class TriggerWordService {
 
   // Alert management
   Future<List<TriggerAlert>> loadAlerts() async {
+    if (_alertsCache != null) return _alertsCache!;
     final prefs = await SharedPreferences.getInstance();
     final json = prefs.getString(_kTriggerAlertsKey);
     if (json == null || json.isEmpty) return [];
     try {
-      return TriggerAlert.decodeList(json);
+      final alerts = _normalizeAlerts(TriggerAlert.decodeList(json));
+      _alertsCache = alerts;
+      return alerts;
     } catch (_) {
       return [];
     }
@@ -108,24 +119,37 @@ class TriggerWordService {
 
   Future<void> saveAlerts(List<TriggerAlert> alerts) async {
     final prefs = await SharedPreferences.getInstance();
-    final json = TriggerAlert.encodeList(alerts);
+    final normalizedAlerts = _normalizeAlerts(alerts);
+    final json = TriggerAlert.encodeList(normalizedAlerts);
     await prefs.setString(_kTriggerAlertsKey, json);
-    _alertsController.add(alerts);
+    _alertsCache = normalizedAlerts;
+    _alertsController.add(normalizedAlerts);
   }
 
-  Future<void> addAlert(TriggerAlert alert) async {
+  Future<bool> addAlert(TriggerAlert alert) async {
     final alerts = await loadAlerts();
+    if (alert.isSoundAlert) {
+      final alreadySaved = alerts.any(
+        (existingAlert) =>
+            existingAlert.isSoundAlert &&
+            existingAlert.normalizedSoundKey == alert.normalizedSoundKey,
+      );
+      if (alreadySaved) return false;
+    }
+
     alerts.insert(0, alert);
     if (alerts.length > AppConstants.alertHistoryMaxItems) {
       alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
     }
     await saveAlerts(alerts);
     // TODO: Add vibration/haptic feedback for alert trigger.
+    return true;
   }
 
   Future<void> clearAlerts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kTriggerAlertsKey);
+    _alertsCache = null;
     _alertsController.add([]);
   }
 
@@ -133,6 +157,31 @@ class TriggerWordService {
     final alerts = await loadAlerts();
     alerts.removeWhere((a) => a.id == alertId);
     await saveAlerts(alerts);
+  }
+
+  List<TriggerAlert> _normalizeAlerts(List<TriggerAlert> alerts) {
+    final seenSoundAlerts = <String>{};
+    final normalized = <TriggerAlert>[];
+
+    for (final alert in alerts) {
+      if (!alert.isSoundAlert) {
+        normalized.add(alert);
+        continue;
+      }
+
+      if (seenSoundAlerts.add(alert.normalizedSoundKey)) {
+        normalized.add(alert);
+      }
+    }
+
+    if (normalized.length > AppConstants.alertHistoryMaxItems) {
+      normalized.removeRange(
+        AppConstants.alertHistoryMaxItems,
+        normalized.length,
+      );
+    }
+
+    return normalized;
   }
 
   void dispose() {

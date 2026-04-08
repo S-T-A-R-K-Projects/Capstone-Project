@@ -1,53 +1,48 @@
 # Android Custom Sound Recognition Implementation
 
-This document describes how custom sound recognition is currently implemented on Android in `senscribe`.
+This document describes the current Android custom sound recognition pipeline in `senscribe`.
 
-## Scope
+## Summary
 
-- Platform: Android only for this document
-- Flutter UI: shared Flutter screens using `adaptive_platform_ui`
-- Native Android: sample capture, prototype building, persistence, and live custom matching
-- iOS: documented separately in `Documentation/ios-custom-sound-recognition.md`
+Android custom sounds are implemented as an on-device feature-bank matcher.
 
-## High-Level Flow
+The current flow is:
 
-The Android custom sound feature is split into four parts:
+1. Flutter creates and manages custom sound profiles.
+2. Android records fixed-length WAV samples for target and background audio.
+3. Training extracts hand-crafted features from overlapping windows in each recording.
+4. A calibrated target bank, background bank, detection threshold, and background margin are stored per profile.
+5. During live monitoring, each inference window is scored against all active custom profiles.
+6. The best valid match is emitted back to Flutter as a `source: custom` result.
 
-1. Flutter UI on the Alerts page lets the user create and manage custom sounds.
-2. Flutter service code persists profile metadata and forwards capture/train requests to Android.
-3. Native Android code records audio samples, stores them in app-private storage, and builds custom sound prototypes from audio embeddings.
-4. During live sound recognition, Android runs the built-in YAMNet classifier and the custom matcher side-by-side on the same microphone stream.
+## Shared Flutter Layer
 
-## Flutter UI
+### UI
 
-Current UI entry point:
+Primary screens:
 
 - `lib/screens/alerts_page.dart`
+- `lib/screens/custom_sound_enrollment_page.dart`
 
-Current user flow:
+Current enrollment requirements:
 
-1. The user opens `Alerts` -> `Trigger Words`.
-2. The user taps `Add Custom Sound`.
-3. A draft profile is created with a name.
-4. A bottom sheet opens for that profile.
-5. The user records 5 target samples.
-6. The user records 1 background calibration sample.
-7. The user taps `Train Custom Model`.
+- `10` target samples
+- `3` background samples
+- each recording lasts about `5` seconds
 
-Current shared UI behavior:
+The enrollment page text and behavior already match this requirement:
 
-- Each target sample is recorded separately.
-- The background sample is recorded separately.
-- Reopening a saved custom sound lets the user re-record samples and retrain.
-- Training is only enabled after 5 target samples and 1 background sample exist.
+- target clips are recorded first
+- background clips are enabled only after all target clips exist
+- training is enabled only when `hasEnoughSamples` is true
 
-## Flutter Data Model
+### Shared model
 
 Primary model:
 
 - `lib/models/custom_sound_profile.dart`
 
-The shared model stores:
+Key fields:
 
 - `id`
 - `name`
@@ -59,22 +54,22 @@ The shared model stores:
 - `updatedAt`
 - `lastError`
 
-Current sample requirements:
+Current constants:
 
-- `kRequiredCustomSoundSamples = 5`
-- `kRequiredBackgroundSamples = 1`
+- `kRequiredCustomSoundSamples = 10`
+- `kRequiredBackgroundSamples = 3`
 
-## Flutter Service Layer
+### Shared service
 
 Primary service:
 
 - `lib/services/custom_sound_service.dart`
 
-Method channel:
+Android uses the shared method channel:
 
 - `senscribe/audio_classifier`
 
-Important Android-used methods:
+Methods used for custom sounds:
 
 - `loadCustomSounds`
 - `captureSample`
@@ -82,228 +77,214 @@ Important Android-used methods:
 - `setCustomSoundEnabled`
 - `deleteCustomSound`
 
-Unlike the previous iOS-only behavior, the shared Flutter service now uses the same method-channel flow for both iOS and Android.
+`CustomSoundService.loadProfiles()` merges Flutter `SharedPreferences` state with native profile state so the UI stays aligned with the actual files stored on device.
 
-## Native Android Implementation
+## Android Native Files
 
-Primary native file:
+Core files:
 
 - `android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt`
+- `android/app/src/main/kotlin/com/example/senscribe/CustomAudioFeatureExtractor.kt`
+- `android/app/src/main/kotlin/com/example/senscribe/CustomSoundMatching.kt`
+- `android/app/src/test/kotlin/com/example/senscribe/CustomSoundMatchingTest.kt`
 
-The plugin handles both:
-
-- built-in live sound classification
-- Android custom sound enrollment and matching
-
-Main native components:
-
-- `AudioRecord` for microphone capture
-- MediaPipe `AudioClassifier` for built-in YAMNet results
-- MediaPipe `AudioEmbedder` for custom sound embeddings
-- JSON persistence in app-private storage for saved profiles and prototype data
-
-## Method Channel Contract
-
-The Android plugin currently supports:
-
-- `start`
-- `stop`
-- `loadCustomSounds`
-- `captureSample`
-- `trainOrRebuildCustomModel`
-- `deleteCustomSound`
-- `setCustomSoundEnabled`
-
-The event channel remains:
-
-- `senscribe/audio_classifier_events`
-
-Event payloads for live detection include:
-
-- `label`
-- `confidence`
-- `source`
-- `timestampMs`
-- optional `customSoundId`
-
-`source` is:
-
-- `builtIn`
-- `custom`
-
-## Sample Recording
-
-Sample capture is handled natively by `captureSample(...)`.
-
-Current Android recording details:
-
-- recorder: `AudioRecord`
-- source: `MediaRecorder.AudioSource.VOICE_RECOGNITION`
-- sample rate: `16_000`
-- channels: `1`
-- encoding: `PCM 16-bit`
-- duration: `5` seconds
-- file format: `.wav`
-
-Files are stored under app-private storage in:
-
-- `filesDir/custom_sounds/<soundId>/target/`
-- `filesDir/custom_sounds/<soundId>/background/`
-
-Naming pattern:
-
-- target: `target_1.wav`, `target_2.wav`, ...
-- background: `background_1.wav`
-
-Important behavior:
-
-- If live monitoring is running, the plugin stops monitoring before capture.
-- After capture completes or fails, it resumes monitoring if needed.
-- Recording a new sample clears previously derived prototype data so the profile must be retrained.
-
-## Profile Persistence on Android
+## Native Profile Persistence
 
 Profiles are stored in:
 
 - `filesDir/custom_sounds/profiles.json`
 
-Each profile record stores Flutter-visible fields plus Android-specific derived fields:
+Per-profile sample folders:
 
-- `prototypeEmbedding`
-- `backgroundEmbedding`
+- `filesDir/custom_sounds/<soundId>/target/`
+- `filesDir/custom_sounds/<soundId>/background/`
+
+File names:
+
+- target: `target_1.wav`, `target_2.wav`, ...
+- background: `background_1.wav`, `background_2.wav`, ...
+
+In addition to Flutter-visible fields, Android persists matcher-specific fields:
+
+- `targetEmbeddingBank`
+- `backgroundEmbeddingBank`
 - `detectionThreshold`
 - `backgroundMargin`
 
-The Flutter layer also persists profile metadata in `SharedPreferences`. On Android, `CustomSoundService.loadProfiles()` merges Flutter-side and native-side profile state so the UI stays aligned with the files actually stored on disk.
+The profile normalization logic also downgrades stale profiles back to `draft` when:
 
-## Training Model on Android
+- sample requirements are no longer met
+- a profile claims `ready` but is missing saved banks or thresholds
 
-Android does not currently retrain a neural network model inside the app. Instead, the current implementation builds a custom matcher from embeddings generated by MediaPipe.
+## Sample Capture
 
-Training is triggered from Flutter by calling:
+Custom sample recording is handled in `captureSample(...)` and `beginSampleCapture(...)`.
 
-- `trainOrRebuildCustomModel`
+### Recording format
 
-Current training flow:
+- source: `MediaRecorder.AudioSource.VOICE_RECOGNITION`
+- sample rate: `16_000 Hz`
+- channels: mono
+- encoding: PCM 16-bit
+- container: WAV
+- duration: `5` seconds
 
-1. Load saved profiles from native storage.
-2. Select enabled profiles with 5 target samples and 1 background sample.
-3. Mark eligible profiles as `training`.
-4. Create a MediaPipe `AudioEmbedder` using the bundled `yamnet.tflite`.
-5. Read each saved WAV file.
-6. Split each recording into overlapping windows sized to the YAMNet receptive field.
-7. Generate embeddings for each window.
-8. Average normalized target embeddings into one target prototype.
-9. Average normalized background embeddings into one background prototype.
-10. Derive a per-profile detection threshold and background margin from similarity statistics.
-11. Save the resulting matcher data back into `profiles.json`.
-12. Mark successful profiles as `ready` or failed profiles as `failed`.
+The plugin writes the WAV header itself and stores raw PCM16 little-endian sample data.
 
-This means Android custom sound training is currently:
+### Capture behavior
 
-- on-device
-- local only
-- embedding/prototype based
-- not a full TFLite retraining pipeline
+- only one custom recording can run at a time
+- if live monitoring is active, monitoring is stopped before recording
+- the profile is moved to `recording` before capture starts
+- after success, the profile returns to `draft`
+- any previously trained banks and thresholds are cleared after a new recording
+- monitoring is resumed automatically if it had been active before capture
 
-## Training Heuristics
+This invalidation step is important: changing even one recorded sample forces the profile to be retrained.
 
-For each eligible custom sound, Android computes:
+## Training Pipeline
 
-- target-to-prototype cosine similarities
-- background-to-target-prototype cosine similarities
+Training is handled by `trainOrRebuildCustomModel(...)` and `trainProfile(...)`.
 
-The plugin then derives:
+Android does not retrain YAMNet or generate a new TFLite model. Instead it builds a calibrated matcher for each eligible profile.
 
+### Eligibility
+
+A profile is eligible for training when:
+
+- `enabled == true`
+- it has at least `10` target samples
+- it has at least `3` background samples
+
+Eligible profiles are marked `training`. Ineligible profiles keep their current state, except stale `training` profiles are reset to `draft`.
+
+### Feature extraction
+
+For each WAV file:
+
+1. The plugin reads the PCM samples.
+2. The recording is sliced into `15_600`-sample windows.
+3. Windows advance by `7_800` samples during training (`EMBEDDING_STEP_SAMPLE_COUNT`).
+4. Each window is converted into a hand-crafted feature vector by `CustomAudioFeatureExtractor`.
+
+`CustomAudioFeatureExtractor` currently includes:
+
+- 18 log-energy spectral bands derived with Goertzel analysis
+- 18 per-band variance values
+- 8 envelope buckets
+- RMS
+- peak
+- zero-crossing rate
+
+The resulting feature vector is normalized before matching.
+
+### Window selection
+
+Training does not keep every window from every recording.
+
+Target recordings:
+
+- windows are ranked by signal strength
+- the strongest windows are favored
+- up to `3` windows per target recording are kept
+
+Background recordings:
+
+- windows are ranked separately
+- up to `4` windows per background recording are kept
+
+This reduces noisy or silent windows and makes the banks more stable.
+
+### Calibration
+
+`CustomSoundMatching.calibrate(...)` computes:
+
+- a representative target bank
+- a representative background bank
+- a per-profile `detectionThreshold`
+- a per-profile `backgroundMargin`
+
+Important limits in `CustomSoundMatching`:
+
+- target bank max size: `24`
+- background bank max size: `18`
+- detection threshold clamp: `0.64` to `0.94`
+- background margin clamp: `0.005` to `0.03`
+
+The matcher uses cosine similarity over normalized feature vectors.
+
+### Training result
+
+Successful training stores:
+
+- `status = "ready"`
+- refreshed sample path lists
+- `targetEmbeddingBank`
+- `backgroundEmbeddingBank`
 - `detectionThreshold`
 - `backgroundMargin`
 
-Current behavior:
+Failed training stores:
 
-- the plugin prefers to train even when target and background overlap somewhat
-- instead of aborting immediately, it tightens runtime gating when the samples are less distinct
-- the plugin logs training statistics with tag `AudioClassifierPlugin` for debugging
+- `status = "failed"`
+- `lastError`
+- matcher banks and thresholds cleared
 
-This makes Android more tolerant of controlled speaker playback tests and less likely to fail training on borderline recordings.
+After training completes, active matchers are reloaded and live monitoring is restarted if it was already running.
 
-## Live Detection
+## Live Custom Detection
 
-When sound recognition starts on Android:
+During live sound recognition, Android runs built-in YAMNet classification and custom matching on the same rolling microphone window.
 
-1. The plugin creates a MediaPipe `AudioClassifier` for the built-in YAMNet path.
-2. If trained custom profiles exist, it also creates a MediaPipe `AudioEmbedder`.
-3. A single `AudioRecord` microphone stream is read continuously.
-4. Each audio window is sent to the built-in classifier.
-5. The same window is also embedded for custom matching.
-6. Built-in and custom results are emitted separately to Flutter.
+The custom path is implemented in `processCustomEmbedding(...)`.
 
-## Built-In Detection Path
+### Runtime checks
 
-Current built-in classifier:
+A custom event is only emitted when all of the following pass:
 
-- MediaPipe `AudioClassifier`
-- model asset: `android/app/src/main/assets/yamnet/yamnet.tflite`
+- signal RMS is high enough, or peak is high enough
+- similarity against the target bank is at or above the profile threshold
+- similarity beats background similarity by at least the required gap
+- the best profile also beats the runner-up profile by a margin
+- the same profile wins for enough consecutive windows
+- the per-profile throttle window has expired
 
-Current built-in guards:
+Current custom runtime constants:
 
-- score threshold: `0.4`
-- throttle interval: `700 ms`
+- minimum signal RMS: `0.008`
+- minimum signal peak: `0.024`
+- minimum win margin over another custom sound: `0.03`
+- minimum separation from background: max(profile margin, `0.045`)
+- required consecutive matches: `2`
+- throttle per custom sound: `5_000 ms`
 
-## Custom Detection Path
+Returned event payload:
 
-The custom path compares live embeddings against saved profile prototypes using cosine similarity.
+- `type = "result"`
+- `label = <profile name>`
+- `confidence = <similarity score>`
+- `source = "custom"`
+- `timestampMs`
+- `customSoundId = <profile id>`
 
-Current custom runtime checks:
+## Tests
 
-- minimum signal RMS gate
-- minimum signal peak gate
-- similarity must exceed the saved `detectionThreshold`
-- similarity must exceed background similarity by the saved `backgroundMargin`
-- best candidate must beat the runner-up by a small win margin
-- the same custom profile must match consecutively before emission
-- per-profile throttle is applied before sending events to Flutter
+Current Android matcher tests live in:
 
-Current custom guard values in code:
+- `android/app/src/test/kotlin/com/example/senscribe/CustomSoundMatchingTest.kt`
 
-- minimum RMS: `0.008`
-- minimum peak: `0.024`
-- minimum consecutive matches: `2`
-- throttle interval: `1000 ms`
+The tests cover:
 
-These values are Android-specific and independent from the iOS custom detection guards.
+- threshold calibration staying in bounds
+- background probes not passing target matching
+- higher-scoring custom banks winning
+- stale legacy profiles being normalized back to `draft`
 
-## Failure Behavior
+## Key Files To Read
 
-If training fails, the Android plugin:
-
-- marks the profile as `failed`
-- stores the failure message in `lastError`
-- leaves the saved sample files on disk so the user can retrain or re-record
-
-If capture fails, the Android plugin:
-
-- marks the profile as `failed`
-- writes the failure message to `lastError`
-- resumes monitoring if it was active before capture started
-
-## Limitations
-
-Current Android limitations:
-
-- custom matching is prototype-based, not full neural-network retraining
-- quality depends heavily on the 5 target recordings and 1 background recording
-- there is no dedicated Android foreground service for background microphone monitoring yet
-- threshold tuning may still need adjustment on real devices and different playback conditions
-
-## Files Involved
-
-Primary files:
-
-- `android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt`
-- `lib/services/custom_sound_service.dart`
-- `lib/models/custom_sound_profile.dart`
-- `lib/screens/alerts_page.dart`
-
-Bundled model asset:
-
-- `android/app/src/main/assets/yamnet/yamnet.tflite`
+- `senscribe/android/app/src/main/kotlin/com/example/senscribe/AudioClassificationPlugin.kt`
+- `senscribe/android/app/src/main/kotlin/com/example/senscribe/CustomAudioFeatureExtractor.kt`
+- `senscribe/android/app/src/main/kotlin/com/example/senscribe/CustomSoundMatching.kt`
+- `senscribe/lib/models/custom_sound_profile.dart`
+- `senscribe/lib/services/custom_sound_service.dart`
+- `senscribe/lib/screens/custom_sound_enrollment_page.dart`

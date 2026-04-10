@@ -204,10 +204,15 @@ class _HomePageState extends State<HomePage> {
     final confidence = (caption.confidence * 100).round();
     final priority = caption.isCritical ? 'Critical' : 'Standard';
     final detectedAt = TimeUtils.formatExactDateTime(caption.timestamp);
+    final locationText = caption.locationLabel != null
+        ? '\nLocation: ${caption.locationLabel}'
+        : '';
+
     return 'Detector: $sourceLabel\n'
         'Confidence: $confidence%\n'
         'Priority: $priority\n'
-        'Detected: $detectedAt';
+        'Detected: $detectedAt'
+        '$locationText';
   }
 
   dynamic _detailIconForCaption(SoundCaption caption) {

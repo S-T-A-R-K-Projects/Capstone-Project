@@ -149,6 +149,12 @@ class SoundCaptionCard extends StatelessWidget {
                           TimeUtils.formatTimeAgoForSound(caption.timestamp),
                           context,
                         ),
+                        if (caption.locationLabel != null)
+                          _buildInfoChip(
+                            Icons.location_on_rounded,
+                            caption.locationLabel!,
+                            context,
+                          ),
                         _buildInfoChip(
                           Icons.graphic_eq_rounded,
                           '${(caption.confidence * 100).toInt()}%',

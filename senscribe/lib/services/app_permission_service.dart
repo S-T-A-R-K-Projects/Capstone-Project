@@ -16,6 +16,7 @@ class AppPermissionSnapshot {
   final PermissionStatus microphone;
   final PermissionStatus notifications;
   final PermissionStatus? speechRecognition;
+  final PermissionStatus? location;
   final PermissionStatus? ignoreBatteryOptimizations;
 }
 
@@ -39,6 +40,7 @@ class AppPermissionService {
 
     final microphone = await Permission.microphone.status;
     final notifications = await Permission.notification.status;
+    final location = await Permission.locationWhenInUse.status;
     final speechRecognition =
         Platform.isIOS ? await Permission.speech.status : null;
     final ignoreBatteryOptimizations = Platform.isAndroid
@@ -48,6 +50,7 @@ class AppPermissionService {
     return AppPermissionSnapshot(
       microphone: microphone,
       notifications: notifications,
+      location: location,
       speechRecognition: speechRecognition,
       ignoreBatteryOptimizations: ignoreBatteryOptimizations,
     );
@@ -64,6 +67,7 @@ class AppPermissionService {
       return AppPermissionSnapshot(
         microphone: _mapNativeStatus(response['microphone'] as String?),
         notifications: _mapNativeStatus(response['notifications'] as String?),
+        location: _mapNativeStatus(response['location'] as String?),
         speechRecognition:
             _mapNativeStatus(response['speechRecognition'] as String?),
       );
@@ -105,6 +109,7 @@ class AppPermissionService {
     }
 
     await requestNotifications();
+    await requestLocation();
 
     if (Platform.isAndroid) {
       await requestIgnoreBatteryOptimizations();
@@ -117,6 +122,10 @@ class AppPermissionService {
 
   Future<PermissionStatus> requestNotifications() {
     return Permission.notification.request();
+  }
+
+  Future<PermissionStatus> requestLocation() {
+    return Permission.locationWhenInUse.request();
   }
 
   Future<PermissionStatus> requestSpeechRecognition() {

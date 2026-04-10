@@ -326,6 +326,25 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
                       disableMessage:
                           'Use system settings if you want to revoke notification access for SenScribe.',
                     ),
+                    if (_snapshot!.location != null) ...[
+                      const SizedBox(height: 16),
+                      _buildPermissionCard(
+                        title: 'Location',
+                        description:
+                            'Required to tag detected sounds with the location where they occurred. Works offline using device location services.',
+                        icon: Icons.location_on_rounded,
+                        status: _snapshot!.location!,
+                        onEnable: () => _requestPermission(
+                          _permissionService.requestLocation,
+                          grantedMessage: 'Location permission granted',
+                          deniedMessage: 'Location permission denied',
+                          permanentlyDeniedMessage:
+                              'Location access is blocked. Open Settings to enable it for SenScribe.',
+                        ),
+                        disableMessage:
+                            'Use system settings if you want to revoke location access for SenScribe.',
+                      ),
+                    ],
                     if (Platform.isIOS &&
                         _snapshot!.speechRecognition != null) ...[
                       const SizedBox(height: 16),

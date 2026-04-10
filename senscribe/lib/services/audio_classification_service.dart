@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import '../models/sound_caption.dart';
+import '../services/location_service.dart';
 import '../utils/app_constants.dart';
 
 class AudioClassificationService {
@@ -22,6 +23,7 @@ class AudioClassificationService {
   final _historyController = StreamController<List<SoundCaption>>.broadcast();
   Stream<List<SoundCaption>> get historyStream => _historyController.stream;
 
+  final LocationService _locationService = LocationService();
   StreamSubscription? _nativeSubscription;
   bool _isMonitoring = false;
   bool get isMonitoring => _isMonitoring;
@@ -40,11 +42,11 @@ class AudioClassificationService {
       await _methodChannel.invokeMethod('start');
       _isMonitoring = true;
       _nativeSubscription =
-          _eventChannel.receiveBroadcastStream().listen((event) {
+          _eventChannel.receiveBroadcastStream().listen((event) async {
         if (event is Map) {
           final data = Map<String, dynamic>.from(event);
           if (data['type'] == 'result') {
-            _handleEvent(data);
+            await _handleEvent(data);
           }
         }
       });
@@ -65,7 +67,7 @@ class AudioClassificationService {
     }
   }
 
-  void _handleEvent(Map<String, dynamic> data) {
+  Future<void> _handleEvent(Map<String, dynamic> data) async {
     final label = data['label'] as String? ?? 'Unknown';
     final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
     final sourceValue = data['source'] as String? ?? 'builtIn';
@@ -77,6 +79,9 @@ class AudioClassificationService {
       return;
     }
 
+    final locationLabel = await _locationService.getLocationLabel();
+    final locationPosition = await _locationService.getCurrentLocation();
+
     final caption = SoundCaption(
       sound: label,
       timestamp: timestampMs == null
@@ -86,6 +91,9 @@ class AudioClassificationService {
       confidence: confidence,
       source: isCustom ? SoundCaptionSource.custom : SoundCaptionSource.builtIn,
       customSoundId: customSoundId,
+      latitude: locationPosition?.latitude,
+      longitude: locationPosition?.longitude,
+      locationDescription: locationLabel,
     );
 
     _history.insert(0, caption);

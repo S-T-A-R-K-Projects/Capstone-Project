@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'services/audio_classification_service.dart';
 import 'services/app_settings_service.dart';
 import 'services/live_update_service.dart';
+import 'services/sound_filter_service.dart';
 import 'theme/app_theme.dart';
 import 'navigation/main_navigation.dart';
 
@@ -14,6 +15,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
   await ThemeProvider.instance.load();
+  await SoundFilterService().initialize();
   await LiveUpdateService().initialize(
     audioService: AudioClassificationService(),
   );

@@ -20,7 +20,7 @@ class SoundCaption {
     this.customSoundId,
   });
 
-  static final RegExp _displaySoundPattern = RegExp(r'[_\s]+');
+  static final RegExp _displaySoundPattern = RegExp(r'[_\-\s]+');
 
   late final String displaySound = _computeDisplaySound();
 

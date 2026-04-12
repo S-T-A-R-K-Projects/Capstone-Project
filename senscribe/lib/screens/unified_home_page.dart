@@ -10,6 +10,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../services/audio_classification_service.dart';
 import '../services/text_to_speech_service.dart';
 import '../models/sound_caption.dart';
+import '../models/sound_filter.dart';
 import 'package:flutter/services.dart';
 
 import 'speech_to_text_page.dart';
@@ -24,6 +25,7 @@ import '../services/stt_transcript_service.dart';
 import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
 import '../services/live_update_service.dart';
+import '../services/sound_filter_service.dart';
 
 class UnifiedHomePage extends StatefulWidget {
   const UnifiedHomePage({super.key});
@@ -39,6 +41,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   final SpeechToText _speech = SpeechToText();
   final TextToSpeechService _ttsService = TextToSpeechService();
   final LiveUpdateService _liveUpdateService = LiveUpdateService();
+  final SoundFilterService _soundFilterService = SoundFilterService();
 
   // State
   List<SoundCaption> _soundEvents = [];
@@ -56,6 +59,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   bool _isSpeechAvailable = false;
 
   StreamSubscription? _audioSubscription;
+  StreamSubscription<Set<SoundFilterId>>? _filterSelectionSubscription;
   StreamSubscription<SttTranscriptSnapshot>? _transcriptSubscription;
   String _currentSpeechBuffer = '';
   final List<String> _speechTranscript = [];
@@ -72,6 +76,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   @override
   void initState() {
     super.initState();
+    unawaited(_soundFilterService.initialize());
     // Sync initial state
     _isSoundMonitoring = _audioService.isMonitoring;
     _soundEvents = List.from(_audioService.history);
@@ -83,6 +88,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
           _soundEvents = events;
         });
       }
+    });
+    _filterSelectionSubscription =
+        _soundFilterService.selectionStream.listen((_) {
+      if (!mounted) return;
+      setState(() {});
     });
 
     _soundPulseController =
@@ -178,6 +188,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   @override
   void dispose() {
     _audioSubscription?.cancel();
+    _filterSelectionSubscription?.cancel();
     _transcriptSubscription?.cancel();
     _speechRestartTimer?.cancel();
 
@@ -456,122 +467,122 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         : SystemUiOverlayStyle.dark;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: overlayStyle,
-      child: AdaptiveScaffold(
-        body: Material(
-        color: Colors.transparent,
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 120),
-            child: Column(
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.asset(
-                          'assets/images/real_logo.png',
-                          height: 32,
-                          width: 32,
-                        ),
+        value: overlayStyle,
+        child: AdaptiveScaffold(
+          body: Material(
+            color: Colors.transparent,
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 120),
+                child: Column(
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.asset(
+                              'assets/images/real_logo.png',
+                              height: 32,
+                              width: 32,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text("SenScribe",
+                              style: GoogleFonts.inter(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.5)),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Text("SenScribe",
-                          style: GoogleFonts.inter(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.5)),
-                    ],
-                  ),
-                ),
+                    ),
 
-                // 1. Sound Recognition Section (Top)
-                Animate(
-                  effects: [
-                    FadeEffect(duration: 400.ms),
-                    SlideEffect(
-                        begin: Offset(0, 0.1),
-                        duration: 400.ms,
-                        curve: Curves.easeOutQuad)
-                  ],
-                  child: _buildSectionContainer(
-                    title: "Sound Recognition",
-                    icon: Icons.hearing_rounded,
-                    height: 250,
-                    isExpanded: _isSoundExpanded,
-                    isMonitoring: _isSoundMonitoring,
-                    onToggle: _toggleSoundMonitoring,
-                    onCollapseToggle: () =>
-                        setState(() => _isSoundExpanded = !_isSoundExpanded),
-                    onExpand: () {
-                      // Navigate to detailed Sound page (HomePage)
-                      _navigateToExpanded(HomePage(
+                    // 1. Sound Recognition Section (Top)
+                    Animate(
+                      effects: [
+                        FadeEffect(duration: 400.ms),
+                        SlideEffect(
+                            begin: Offset(0, 0.1),
+                            duration: 400.ms,
+                            curve: Curves.easeOutQuad)
+                      ],
+                      child: _buildSectionContainer(
+                        title: "Sound Recognition",
+                        icon: Icons.hearing_rounded,
+                        height: 250,
+                        isExpanded: _isSoundExpanded,
                         isMonitoring: _isSoundMonitoring,
-                        pulseController: _soundPulseController,
-                        onToggleMonitoring: _toggleSoundMonitoring,
-                      ));
-                    },
-                    child: _buildSoundContent(),
-                  ),
-                ),
-                // 2. STT Section (Middle)
-                Animate(
-                  effects: [
-                    FadeEffect(duration: 400.ms, delay: 100.ms),
-                    SlideEffect(
-                        begin: Offset(0, 0.1),
-                        duration: 400.ms,
-                        curve: Curves.easeOutQuad,
-                        delay: 100.ms)
+                        onToggle: _toggleSoundMonitoring,
+                        onCollapseToggle: () => setState(
+                            () => _isSoundExpanded = !_isSoundExpanded),
+                        onExpand: () {
+                          // Navigate to detailed Sound page (HomePage)
+                          _navigateToExpanded(HomePage(
+                            isMonitoring: _isSoundMonitoring,
+                            pulseController: _soundPulseController,
+                            onToggleMonitoring: _toggleSoundMonitoring,
+                          ));
+                        },
+                        child: _buildSoundContent(),
+                      ),
+                    ),
+                    // 2. STT Section (Middle)
+                    Animate(
+                      effects: [
+                        FadeEffect(duration: 400.ms, delay: 100.ms),
+                        SlideEffect(
+                            begin: Offset(0, 0.1),
+                            duration: 400.ms,
+                            curve: Curves.easeOutQuad,
+                            delay: 100.ms)
+                      ],
+                      child: _buildSectionContainer(
+                        title: "Speech to Text",
+                        icon: Icons.mic_rounded,
+                        height: 280, // Reduced from 400 as requested
+                        isExpanded: _isSTTExpanded,
+                        isMonitoring: _isSpeechMonitoring,
+                        onToggle: _toggleSpeechMonitoring,
+                        onCollapseToggle: () =>
+                            setState(() => _isSTTExpanded = !_isSTTExpanded),
+                        onExpand: _openExpandedSpeechPage,
+                        child: _buildSTTContent(),
+                      ),
+                    ),
+                    // 3. TTS Section (Bottom)
+                    Animate(
+                      effects: [
+                        FadeEffect(duration: 400.ms, delay: 200.ms),
+                        SlideEffect(
+                            begin: Offset(0, 0.1),
+                            duration: 400.ms,
+                            curve: Curves.easeOutQuad,
+                            delay: 200.ms)
+                      ],
+                      child: _buildSectionContainer(
+                        title: "Text to Speech",
+                        icon: Icons.record_voice_over_rounded,
+                        isExpanded: _isTTSExpanded,
+                        isMonitoring: false, // TTS doesn't monitor
+                        showToggle: false,
+                        scrollableBody: false,
+                        onCollapseToggle: () =>
+                            setState(() => _isTTSExpanded = !_isTTSExpanded),
+                        onExpand: () => _navigateToExpanded(TextToSpeechPage(
+                            isMonitoring: false,
+                            pulseController: _speechPulseController,
+                            onToggleMonitoring: () {})),
+                        child: _buildTTSContent(),
+                      ),
+                    ),
                   ],
-                  child: _buildSectionContainer(
-                    title: "Speech to Text",
-                    icon: Icons.mic_rounded,
-                    height: 280, // Reduced from 400 as requested
-                    isExpanded: _isSTTExpanded,
-                    isMonitoring: _isSpeechMonitoring,
-                    onToggle: _toggleSpeechMonitoring,
-                    onCollapseToggle: () =>
-                        setState(() => _isSTTExpanded = !_isSTTExpanded),
-                    onExpand: _openExpandedSpeechPage,
-                    child: _buildSTTContent(),
-                  ),
                 ),
-                // 3. TTS Section (Bottom)
-                Animate(
-                  effects: [
-                    FadeEffect(duration: 400.ms, delay: 200.ms),
-                    SlideEffect(
-                        begin: Offset(0, 0.1),
-                        duration: 400.ms,
-                        curve: Curves.easeOutQuad,
-                        delay: 200.ms)
-                  ],
-                  child: _buildSectionContainer(
-                    title: "Text to Speech",
-                    icon: Icons.record_voice_over_rounded,
-                    isExpanded: _isTTSExpanded,
-                    isMonitoring: false, // TTS doesn't monitor
-                    showToggle: false,
-                    scrollableBody: false,
-                    onCollapseToggle: () =>
-                        setState(() => _isTTSExpanded = !_isTTSExpanded),
-                    onExpand: () => _navigateToExpanded(TextToSpeechPage(
-                        isMonitoring: false,
-                        pulseController: _speechPulseController,
-                        onToggleMonitoring: () {})),
-                    child: _buildTTSContent(),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    ));
+        ));
   }
 
   Widget _buildSectionContainer({
@@ -716,26 +727,32 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   Widget _buildSoundContent() {
     final scheme = Theme.of(context).colorScheme;
+    final visibleSoundEvents =
+        _soundFilterService.visibleCaptions(_soundEvents);
 
     return Column(
       children: [
         // Sound Events List
-        if (_soundEvents.isEmpty)
+        if (visibleSoundEvents.isEmpty)
           _buildSectionEmptyState(
             icon: Icons.graphic_eq_rounded,
-            title: 'No sounds detected yet',
-            subtitle: _isSoundMonitoring
-                ? 'Listening for nearby audio.'
-                : 'Start monitoring to classify nearby audio.',
+            title: _soundFilterService.hasAnySelectedFilters
+                ? 'No sounds detected yet'
+                : 'No filters selected',
+            subtitle: !_soundFilterService.hasAnySelectedFilters
+                ? 'Open the full Sound Recognition page and select a filter to show sounds here.'
+                : _isSoundMonitoring
+                    ? 'Listening for sounds that match your selected filters.'
+                    : 'Start monitoring to classify nearby audio.',
             iconColor: scheme.onSurface.withValues(alpha: 0.32),
           )
         else
           ListView.builder(
             physics: const NeverScrollableScrollPhysics(), // Nested scrolling
             shrinkWrap: true, // Needed inside SingleChildScrollView
-            itemCount: _soundEvents.length,
+            itemCount: visibleSoundEvents.length,
             itemBuilder: (context, index) {
-              final event = _soundEvents[index];
+              final event = visibleSoundEvents[index];
               final matchLabel =
                   '${(event.confidence * 100).toStringAsFixed(0)}%';
 

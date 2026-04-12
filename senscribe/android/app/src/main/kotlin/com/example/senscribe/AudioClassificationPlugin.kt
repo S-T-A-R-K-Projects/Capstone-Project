@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -18,7 +19,6 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
-import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -234,11 +234,7 @@ class AudioClassificationPlugin private constructor(
       )
 
       val muteStateText = if (isLiveUpdateMuted) "Muted - no content updates" else "Tap Stop to end monitoring"
-      val remoteViews = RemoteViews(context.packageName, R.layout.live_update_notification).apply {
-        setTextViewText(R.id.notification_title, title)
-        setTextViewText(R.id.notification_content, content)
-        setTextViewText(R.id.notification_subtitle, muteStateText)
-      }
+      val largeIcon = BitmapFactory.decodeResource(context.resources, R.mipmap.senscribe_logo_round)
 
       val stopIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
         action = LiveUpdateForegroundService.ACTION_STOP
@@ -265,12 +261,20 @@ class AudioClassificationPlugin private constructor(
 
       return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-        .setCustomContentView(remoteViews)
-        .setCustomBigContentView(remoteViews)
-        .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        .setLargeIcon(largeIcon)
+        .setContentTitle(title)
+        .setContentText(content)
+        .setSubText(muteStateText)
+        .setStyle(
+          NotificationCompat.BigTextStyle()
+            .setBigContentTitle(title)
+            .bigText(content)
+            .setSummaryText(muteStateText)
+        )
         .setOngoing(true)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentIntent(pendingIntent)
+        .setOnlyAlertOnce(true)
         .addAction(
           NotificationCompat.Action.Builder(
             android.R.drawable.ic_menu_view,

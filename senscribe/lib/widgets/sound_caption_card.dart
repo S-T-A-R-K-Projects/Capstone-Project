@@ -266,6 +266,21 @@ class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformInfo.isIOS26OrHigher()) {
+      return PopupMenuButton<String>(
+        icon: const Icon(Icons.more_horiz_rounded),
+        onSelected: _handleMenuSelection,
+        itemBuilder: (context) => _actions
+            .map(
+              (action) => PopupMenuItem<String>(
+                value: action.value,
+                child: Text(action.label),
+              ),
+            )
+            .toList(growable: false),
+      );
+    }
+
     return SizedBox(
       width: 44,
       height: 44,

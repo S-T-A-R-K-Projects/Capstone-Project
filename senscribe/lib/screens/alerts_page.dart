@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import '../navigation/adaptive_page_route.dart';
 import '../models/custom_sound_profile.dart';
 import 'custom_sound_enrollment_page.dart';
 import '../services/trigger_word_service.dart';
@@ -12,12 +13,25 @@ import '../models/trigger_alert.dart';
 import '../utils/time_utils.dart';
 
 class AlertsPage extends StatefulWidget {
+  static final GlobalKey<_AlertsPageState> _alertsPageKey =
+      GlobalKey<_AlertsPageState>();
+
   final int initialTabIndex;
 
   const AlertsPage({
     super.key,
     this.initialTabIndex = 0,
   });
+
+  static Key get navigationKey => _alertsPageKey;
+
+  static void showRecentAlerts() {
+    _alertsPageKey.currentState?._setSelectedTabIndex(0);
+  }
+
+  static void showTriggerWords() {
+    _alertsPageKey.currentState?._setSelectedTabIndex(1);
+  }
 
   @override
   State<AlertsPage> createState() => _AlertsPageState();
@@ -30,16 +44,30 @@ class _AlertsPageState extends State<AlertsPage> {
   bool _isAlertSelectionMode = false;
   final Set<String> _selectedAlertIds = <String>{};
 
+  bool get _disableEntryAnimationsOnCurrentPlatform => PlatformInfo.isIOS;
+
   @override
   void initState() {
     super.initState();
-    if (widget.initialTabIndex < 0) {
-      _selectedTabIndex = 0;
-    } else if (widget.initialTabIndex > 1) {
-      _selectedTabIndex = 1;
-    } else {
-      _selectedTabIndex = widget.initialTabIndex;
-    }
+    _selectedTabIndex = _clampTabIndex(widget.initialTabIndex);
+  }
+
+  int _clampTabIndex(int index) {
+    if (index < 0) return 0;
+    if (index > 1) return 1;
+    return index;
+  }
+
+  void _setSelectedTabIndex(int index) {
+    if (!mounted) return;
+
+    final nextIndex = _clampTabIndex(index);
+    setState(() {
+      _selectedTabIndex = nextIndex;
+      if (_selectedTabIndex != 0) {
+        _clearAlertSelection();
+      }
+    });
   }
 
   bool _isSoundAlert(TriggerAlert alert) {
@@ -198,17 +226,26 @@ class _AlertsPageState extends State<AlertsPage> {
     bool initialCaseSensitive = false,
     bool initialExactMatch = true,
   }) async {
+    Widget builder(BuildContext dialogContext) => _TriggerWordDialog(
+          title: title,
+          primaryActionLabel: primaryActionLabel,
+          initialWord: initialWord,
+          initialCaseSensitive: initialCaseSensitive,
+          initialExactMatch: initialExactMatch,
+          onEmptyWord: _showTriggerWordEmptyWarning,
+        );
+
+    if (PlatformInfo.isIOS) {
+      return showCupertinoDialog<_TriggerWordDialogResult>(
+        context: context,
+        builder: builder,
+      );
+    }
+
     return showDialog<_TriggerWordDialogResult>(
       context: context,
       barrierDismissible: true,
-      builder: (dialogContext) => _TriggerWordDialog(
-        title: title,
-        primaryActionLabel: primaryActionLabel,
-        initialWord: initialWord,
-        initialCaseSensitive: initialCaseSensitive,
-        initialExactMatch: initialExactMatch,
-        onEmptyWord: _showTriggerWordEmptyWarning,
-      ),
+      builder: builder,
     );
   }
 
@@ -342,15 +379,22 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _showAddCustomSoundDialog() async {
-    final soundName = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) => const _NameEntryDialog(
-        title: 'Add Custom Sound',
-        placeholder: 'Name this sound',
-        primaryActionLabel: 'Continue',
-      ),
-    );
+    Widget builder(BuildContext dialogContext) => const _NameEntryDialog(
+          title: 'Add Custom Sound',
+          placeholder: 'Name this sound',
+          primaryActionLabel: 'Continue',
+        );
+    final soundName = PlatformInfo.isIOS
+        ? await showCupertinoDialog<String>(
+            context: context,
+            builder: builder,
+          )
+        : await showDialog<String>(
+            context: context,
+            barrierDismissible: true,
+            builder: builder,
+          );
+    if (!mounted) return;
     if (soundName == null) return;
 
     try {
@@ -370,10 +414,9 @@ class _AlertsPageState extends State<AlertsPage> {
   Future<void> _openCustomSoundEnrollmentPage(
     CustomSoundProfile profile,
   ) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CustomSoundEnrollmentPage(initialProfile: profile),
-      ),
+    await pushAdaptivePage<void>(
+      context,
+      builder: (_) => CustomSoundEnrollmentPage(initialProfile: profile),
     );
     await _customSoundService.discardDraft(profile.id);
     await _customSoundService.refresh();
@@ -550,7 +593,7 @@ class _AlertsPageState extends State<AlertsPage> {
       CustomSoundProfileStatus.draft => scheme.secondary,
     };
 
-    return AdaptiveCard(
+    final card = AdaptiveCard(
       padding: EdgeInsets.zero,
       borderRadius: BorderRadius.circular(16),
       child: ClipRRect(
@@ -599,35 +642,60 @@ class _AlertsPageState extends State<AlertsPage> {
               ],
             ),
           ),
-          trailing: AdaptivePopupMenuButton.icon<String>(
-            icon: 'ellipsis.circle',
+          trailing: _buildStringMenuButton(
             items: [
+              const PopupMenuItem<String>(value: 'open', child: Text('Open')),
+              if (profile.hasEnoughSamples)
+                const PopupMenuItem<String>(
+                  value: 'retrain',
+                  child: Text('Retrain'),
+                ),
+              PopupMenuItem<String>(
+                value: 'toggle',
+                child: Text(profile.enabled ? 'Disable' : 'Enable'),
+              ),
+              const PopupMenuItem<String>(
+                value: 'delete',
+                child: Text('Delete'),
+              ),
+            ],
+            adaptiveItems: [
               AdaptivePopupMenuItem(
                 label: 'Open',
                 value: 'open',
-                icon: PlatformInfo.isIOS26OrHigher() ? 'folder' : Icons.folder_open_rounded,
+                icon: PlatformInfo.isIOS26OrHigher()
+                    ? 'folder'
+                    : Icons.folder_open_rounded,
               ),
               if (profile.hasEnoughSamples)
                 AdaptivePopupMenuItem(
                   label: 'Retrain',
                   value: 'retrain',
-                  icon: PlatformInfo.isIOS26OrHigher() ? 'arrow.triangle.2.circlepath' : Icons.autorenew_rounded,
+                  icon: PlatformInfo.isIOS26OrHigher()
+                      ? 'arrow.triangle.2.circlepath'
+                      : Icons.autorenew_rounded,
                 ),
               AdaptivePopupMenuItem(
                 label: profile.enabled ? 'Disable' : 'Enable',
                 value: 'toggle',
                 icon: profile.enabled
-                    ? (PlatformInfo.isIOS26OrHigher() ? 'speaker.slash' : Icons.volume_off_rounded)
-                    : (PlatformInfo.isIOS26OrHigher() ? 'speaker.wave.2' : Icons.volume_up_rounded),
+                    ? (PlatformInfo.isIOS26OrHigher()
+                          ? 'speaker.slash'
+                          : Icons.volume_off_rounded)
+                    : (PlatformInfo.isIOS26OrHigher()
+                          ? 'speaker.wave.2'
+                          : Icons.volume_up_rounded),
               ),
               AdaptivePopupMenuItem(
                 label: 'Delete',
                 value: 'delete',
-                icon: PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
+                icon: PlatformInfo.isIOS26OrHigher()
+                    ? 'trash'
+                    : Icons.delete_outline_rounded,
               ),
             ],
-            onSelected: (index, item) async {
-              switch (item.value) {
+            onSelected: (value) async {
+              switch (value) {
                 case 'open':
                   await _openCustomSoundEnrollmentPage(profile);
                   break;
@@ -646,7 +714,9 @@ class _AlertsPageState extends State<AlertsPage> {
           onTap: () => _openCustomSoundEnrollmentPage(profile),
         ),
       ),
-    ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1);
+    );
+
+    return _animateEntry(card);
   }
 
   @override
@@ -669,30 +739,7 @@ class _AlertsPageState extends State<AlertsPage> {
               padding: const EdgeInsets.all(16),
               child: SizedBox(
                 width: double.infinity,
-                child: SizedBox(
-                  height: 44,
-                  child: MediaQuery(
-                    data: MediaQuery.of(context).copyWith(
-                      platformBrightness: theme.brightness,
-                    ),
-                    child: AdaptiveSegmentedControl(
-                      key: ValueKey(
-                        'alerts-tabs-${theme.brightness.name}',
-                      ),
-                      labels: const ['Recent Alerts', 'Alert Triggers'],
-                      color: theme.colorScheme.surface,
-                      selectedIndex: _selectedTabIndex,
-                      onValueChanged: (index) {
-                        setState(() {
-                          _selectedTabIndex = index;
-                          if (_selectedTabIndex != 0) {
-                            _clearAlertSelection();
-                          }
-                        });
-                      },
-                    ),
-                  ),
-                ),
+                child: _buildAlertsTabSelector(theme),
               ),
             ),
             Expanded(
@@ -732,11 +779,13 @@ class _AlertsPageState extends State<AlertsPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.notifications_off_rounded,
-                      size: 80,
-                      color: scheme.onSurface.withValues(alpha: 0.45),
-                    ).animate().scale(duration: 600.ms),
+                    _animateScale(
+                      Icon(
+                        Icons.notifications_off_rounded,
+                        size: 80,
+                        color: scheme.onSurface.withValues(alpha: 0.45),
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     Text(
                       'No recent alerts yet',
@@ -755,7 +804,7 @@ class _AlertsPageState extends State<AlertsPage> {
                       textAlign: TextAlign.center,
                     ),
                   ],
-                ).animate().fadeIn(duration: 800.ms),
+                ),
               );
             }
 
@@ -775,6 +824,7 @@ class _AlertsPageState extends State<AlertsPage> {
                             onPressed: () => _selectAllAlerts(alerts),
                             label: 'Select All',
                             style: AdaptiveButtonStyle.plain,
+                            useNative: false,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -787,6 +837,7 @@ class _AlertsPageState extends State<AlertsPage> {
                             label: 'Delete',
                             style: AdaptiveButtonStyle.plain,
                             color: scheme.error,
+                            useNative: false,
                           ),
                         ),
                         SizedBox(
@@ -795,6 +846,7 @@ class _AlertsPageState extends State<AlertsPage> {
                             onPressed: _clearAlertSelection,
                             label: 'Cancel',
                             style: AdaptiveButtonStyle.plain,
+                            useNative: false,
                           ),
                         ),
                       ],
@@ -808,63 +860,67 @@ class _AlertsPageState extends State<AlertsPage> {
                       final alert = alerts[index];
                       final isSelected = _selectedAlertIds.contains(alert.id);
 
-                      return GestureDetector(
-                        onLongPress: () => _startAlertSelection(alert.id),
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: AdaptiveCard(
-                            padding: EdgeInsets.zero,
-                            borderRadius: BorderRadius.circular(16),
-                            child: ClipRRect(
+                      return _animateEntry(
+                        GestureDetector(
+                          onLongPress: () => _startAlertSelection(alert.id),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: AdaptiveCard(
+                              padding: EdgeInsets.zero,
                               borderRadius: BorderRadius.circular(16),
-                              child: AdaptiveListTile(
-                                leading: Icon(
-                                  _isAlertSelectionMode
-                                      ? (isSelected
-                                          ? Icons.check_circle
-                                          : Icons.radio_button_unchecked)
-                                      : _alertIcon(alert),
-                                  color: _isAlertSelectionMode
-                                      ? (isSelected
-                                          ? scheme.primary
-                                          : scheme.onSurface
-                                              .withValues(alpha: 0.65))
-                                      : _alertIconColor(alert, scheme),
-                                ),
-                                title: Text(
-                                  _alertTitle(alert),
-                                  style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.bold,
-                                    color: scheme.onSurface,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: AdaptiveListTile(
+                                  leading: Icon(
+                                    _isAlertSelectionMode
+                                        ? (isSelected
+                                            ? Icons.check_circle
+                                            : Icons.radio_button_unchecked)
+                                        : _alertIcon(alert),
+                                    color: _isAlertSelectionMode
+                                        ? (isSelected
+                                            ? scheme.primary
+                                            : scheme.onSurface
+                                                .withValues(alpha: 0.65))
+                                        : _alertIconColor(alert, scheme),
                                   ),
+                                  title: Text(
+                                    _alertTitle(alert),
+                                    style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.bold,
+                                      color: scheme.onSurface,
+                                    ),
+                                  ),
+                                  subtitle: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildAlertSubtitle(alert, scheme),
+                                    ],
+                                  ),
+                                  trailing: _isAlertSelectionMode
+                                      ? null
+                                      : AdaptiveButton.icon(
+                                          icon: Icons.delete_outline,
+                                          onPressed: () async {
+                                            await _triggerWordService
+                                                .removeAlert(alert.id);
+                                          },
+                                          style: AdaptiveButtonStyle.plain,
+                                          useNative: false,
+                                        ),
+                                  onTap: () {
+                                    if (_isAlertSelectionMode) {
+                                      _toggleAlertSelection(alert.id);
+                                    } else if (_isSoundAlert(alert)) {
+                                      _showAlertDetails(alert);
+                                    }
+                                  },
                                 ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildAlertSubtitle(alert, scheme),
-                                  ],
-                                ),
-                                trailing: _isAlertSelectionMode
-                                    ? null
-                                    : AdaptiveButton.icon(
-                                        icon: Icons.delete_outline,
-                                        onPressed: () async {
-                                          await _triggerWordService
-                                              .removeAlert(alert.id);
-                                        },
-                                        style: AdaptiveButtonStyle.plain,
-                                      ),
-                                onTap: () {
-                                  if (_isAlertSelectionMode) {
-                                    _toggleAlertSelection(alert.id);
-                                  } else if (_isSoundAlert(alert)) {
-                                    _showAlertDetails(alert);
-                                  }
-                                },
                               ),
                             ),
                           ),
-                        ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.1),
+                        ),
                       );
                     },
                   ),
@@ -935,120 +991,145 @@ class _AlertsPageState extends State<AlertsPage> {
                                 ],
                               ),
                             ),
-                          ).animate().fadeIn(duration: 800.ms)
+                          )
                         else
-                          ...displayWords.map(
-                            (word) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: AdaptiveCard(
-                                padding: EdgeInsets.zero,
-                                borderRadius: BorderRadius.circular(16),
-                                child: ClipRRect(
+                          ...displayWords.map((word) {
+                            return _animateEntry(
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: AdaptiveCard(
+                                  padding: EdgeInsets.zero,
                                   borderRadius: BorderRadius.circular(16),
-                                  child: AdaptiveListTile(
-                                    leading: Icon(
-                                      word.enabled
-                                          ? Icons.label_rounded
-                                          : Icons.label_off_rounded,
-                                      color: word.enabled
-                                          ? scheme.primary
-                                          : scheme.onSurface
-                                              .withValues(alpha: 0.65),
-                                    ),
-                                    title: Text(
-                                      '"${word.word}"',
-                                      style: GoogleFonts.inter(
-                                        fontWeight: FontWeight.bold,
-                                        color: scheme.onSurface,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: AdaptiveListTile(
+                                      leading: Icon(
+                                        word.enabled
+                                            ? Icons.label_rounded
+                                            : Icons.label_off_rounded,
+                                        color: word.enabled
+                                            ? scheme.primary
+                                            : scheme.onSurface
+                                                .withValues(alpha: 0.65),
                                       ),
-                                    ),
-                                    subtitle: Row(
-                                      children: [
-                                        if (word.caseSensitive)
-                                          Chip(
-                                            label: Text(
-                                              'Case Sensitive',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 10,
+                                      title: Text(
+                                        '"${word.word}"',
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.bold,
+                                          color: scheme.onSurface,
+                                        ),
+                                      ),
+                                      subtitle: Row(
+                                        children: [
+                                          if (word.caseSensitive)
+                                            Chip(
+                                              label: Text(
+                                                'Case Sensitive',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 10,
+                                                ),
                                               ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
                                             ),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                          ),
-                                        const SizedBox(width: 8),
-                                        if (word.exactMatch)
-                                          Chip(
-                                            label: Text(
-                                              'Exact Match',
-                                              style: GoogleFonts.inter(
-                                                fontSize: 10,
+                                          const SizedBox(width: 8),
+                                          if (word.exactMatch)
+                                            Chip(
+                                              label: Text(
+                                                'Exact Match',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 10,
+                                                ),
                                               ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
                                             ),
-                                            visualDensity:
-                                                VisualDensity.compact,
+                                        ],
+                                      ),
+                                      trailing: _buildStringMenuButton(
+                                        items: [
+                                          const PopupMenuItem<String>(
+                                            value: 'edit',
+                                            child: Text('Edit'),
                                           ),
-                                      ],
-                                    ),
-                                    trailing:
-                                        AdaptivePopupMenuButton.icon<String>(
-                                      icon: 'ellipsis.circle',
-                                      items: [
-                                        AdaptivePopupMenuItem(
-                                          label: 'Edit',
-                                          value: 'edit',
-                                          icon: PlatformInfo.isIOS26OrHigher() ? 'pencil' : Icons.edit_rounded,
-                                        ),
-                                        AdaptivePopupMenuItem(
-                                          label: word.enabled
-                                              ? 'Disable'
-                                              : 'Enable',
-                                          value: 'toggle',
-                                          icon: word.enabled
-                                              ? (PlatformInfo.isIOS26OrHigher() ? 'speaker.slash' : Icons.volume_off_rounded)
-                                              : (PlatformInfo.isIOS26OrHigher() ? 'speaker.wave.2' : Icons.volume_up_rounded),
-                                        ),
-                                        AdaptivePopupMenuItem(
-                                          label: 'Delete',
-                                          value: 'delete',
-                                          icon: PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
-                                        ),
-                                      ],
-                                      onSelected: (index, item) async {
-                                        if (item.value == 'edit') {
-                                          _showEditTriggerWordDialog(word);
-                                        } else if (item.value == 'toggle') {
-                                          await _triggerWordService
-                                              .updateTriggerWord(
-                                            word.word,
-                                            word.copyWith(
-                                              enabled: !word.enabled,
+                                          PopupMenuItem<String>(
+                                            value: 'toggle',
+                                            child: Text(
+                                              word.enabled
+                                                  ? 'Disable'
+                                                  : 'Enable',
                                             ),
-                                          );
-                                        } else if (item.value == 'delete') {
-                                          await _triggerWordService
-                                              .removeTriggerWord(word.word);
-                                        }
-                                      },
+                                          ),
+                                          const PopupMenuItem<String>(
+                                            value: 'delete',
+                                            child: Text('Delete'),
+                                          ),
+                                        ],
+                                        adaptiveItems: [
+                                          AdaptivePopupMenuItem(
+                                            label: 'Edit',
+                                            value: 'edit',
+                                            icon: PlatformInfo.isIOS26OrHigher()
+                                                ? 'pencil'
+                                                : Icons.edit_rounded,
+                                          ),
+                                          AdaptivePopupMenuItem(
+                                            label: word.enabled
+                                                ? 'Disable'
+                                                : 'Enable',
+                                            value: 'toggle',
+                                            icon: word.enabled
+                                                ? (PlatformInfo.isIOS26OrHigher()
+                                                      ? 'speaker.slash'
+                                                      : Icons.volume_off_rounded)
+                                                : (PlatformInfo.isIOS26OrHigher()
+                                                      ? 'speaker.wave.2'
+                                                      : Icons.volume_up_rounded),
+                                          ),
+                                          AdaptivePopupMenuItem(
+                                            label: 'Delete',
+                                            value: 'delete',
+                                            icon: PlatformInfo.isIOS26OrHigher()
+                                                ? 'trash'
+                                                : Icons.delete_outline_rounded,
+                                          ),
+                                        ],
+                                        onSelected: (value) async {
+                                          if (value == 'edit') {
+                                            _showEditTriggerWordDialog(word);
+                                          } else if (value == 'toggle') {
+                                            await _triggerWordService
+                                                .updateTriggerWord(
+                                              word.word,
+                                              word.copyWith(
+                                                enabled: !word.enabled,
+                                              ),
+                                            );
+                                          } else if (value == 'delete') {
+                                            await _triggerWordService
+                                                .removeTriggerWord(word.word);
+                                          }
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ),
-                              )
-                                  .animate()
-                                  .fadeIn(duration: 400.ms)
-                                  .slideX(begin: 0.1),
-                            ),
-                          ),
+                              ),
+                            );
+                          }),
                         const SizedBox(height: 8),
                         AdaptiveButton(
                           onPressed: _showAddTriggerWordDialog,
                           label: 'Add Trigger Word',
                           style: AdaptiveButtonStyle.filled,
+                          useNative: false,
                         ),
                         const SizedBox(height: 12),
                         AdaptiveButton(
                           onPressed: _showAddCustomSoundDialog,
                           label: 'Add Custom Sound',
                           style: AdaptiveButtonStyle.tinted,
+                          useNative: false,
                         ),
                         _buildCustomSoundSection(displayProfiles, scheme),
                       ],
@@ -1061,6 +1142,75 @@ class _AlertsPageState extends State<AlertsPage> {
         );
       },
     );
+  }
+
+  Widget _buildAlertsTabSelector(ThemeData theme) {
+    void onTabChanged(int index) {
+      setState(() {
+        _selectedTabIndex = index;
+        if (_selectedTabIndex != 0) {
+          _clearAlertSelection();
+        }
+      });
+    }
+
+    return SizedBox(
+      height: 44,
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          platformBrightness: theme.brightness,
+        ),
+        child: AdaptiveSegmentedControl(
+          key: ValueKey('alerts-tabs-${theme.brightness.name}'),
+          labels: const ['Recent Alerts', 'Alert Triggers'],
+          color: theme.colorScheme.surface,
+          selectedIndex: _selectedTabIndex,
+          onValueChanged: onTabChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStringMenuButton({
+    required List<PopupMenuEntry<String>> items,
+    required List<AdaptivePopupMenuEntry> adaptiveItems,
+    required ValueChanged<String> onSelected,
+  }) {
+    if (PlatformInfo.isIOS26OrHigher()) {
+      return PopupMenuButton<String>(
+        icon: const Icon(Icons.more_horiz_rounded),
+        onSelected: onSelected,
+        itemBuilder: (context) => items,
+      );
+    }
+
+    return AdaptivePopupMenuButton.icon<String>(
+      icon: PlatformInfo.isIOS26OrHigher()
+          ? 'ellipsis.circle'
+          : Icons.more_horiz_rounded,
+      items: adaptiveItems,
+      onSelected: (index, item) {
+        final value = item.value;
+        if (value == null) return;
+        onSelected(value);
+      },
+    );
+  }
+
+  Widget _animateEntry(Widget child) {
+    if (_disableEntryAnimationsOnCurrentPlatform) {
+      return child;
+    }
+
+    return child.animate().fadeIn(duration: 400.ms).slideX(begin: 0.1);
+  }
+
+  Widget _animateScale(Widget child, {int durationMs = 600}) {
+    if (_disableEntryAnimationsOnCurrentPlatform) {
+      return child;
+    }
+
+    return child.animate().scale(duration: durationMs.ms);
   }
 }
 
@@ -1134,7 +1284,91 @@ class _TriggerWordDialogState extends State<_TriggerWordDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final cupertinoBrightness = CupertinoTheme.of(context).brightness
+        ?? MediaQuery.platformBrightnessOf(context);
     final scheme = Theme.of(context).colorScheme;
+    final cupertinoTheme = CupertinoThemeData(
+      brightness: cupertinoBrightness,
+      primaryColor: CupertinoTheme.of(context).primaryColor,
+    );
+
+    if (PlatformInfo.isIOS) {
+      return CupertinoTheme(
+        data: cupertinoTheme,
+        child: CupertinoAlertDialog(
+          title: Text(
+            widget.title,
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+          ),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Column(
+              children: [
+                CupertinoTextField(
+                  controller: _controller,
+                  placeholder: 'Enter word to monitor',
+                  autofocus: true,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    color: cupertinoBrightness == Brightness.dark
+                        ? CupertinoColors.white
+                        : CupertinoColors.black,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cupertinoBrightness == Brightness.dark
+                        ? CupertinoColors.tertiarySystemFill.darkColor
+                        : CupertinoColors.tertiarySystemFill,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  onSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 12),
+                _TriggerWordDialogOptionRow(
+                  label: 'Case Sensitive',
+                  value: _caseSensitive,
+                  inCupertinoDialog: true,
+                  onChanged: (value) {
+                    setState(() {
+                      _caseSensitive = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                _TriggerWordDialogOptionRow(
+                  label: 'Exact Word Match (whole word only)',
+                  value: _exactMatch,
+                  inCupertinoDialog: true,
+                  onChanged: (value) {
+                    setState(() {
+                      _exactMatch = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel', style: GoogleFonts.inter()),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: _submit,
+              child: Text(
+                widget.primaryActionLabel,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final dialogBody = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
       child: SingleChildScrollView(
@@ -1233,10 +1467,6 @@ class _TriggerWordDialogState extends State<_TriggerWordDialog> {
       ),
     );
 
-    if (PlatformInfo.isIOS) {
-      return _IOSDialogScaffold(child: dialogBody);
-    }
-
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: scheme.surface,
@@ -1286,7 +1516,66 @@ class _NameEntryDialogState extends State<_NameEntryDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final cupertinoBrightness = CupertinoTheme.of(context).brightness
+        ?? MediaQuery.platformBrightnessOf(context);
     final scheme = Theme.of(context).colorScheme;
+    final cupertinoTheme = CupertinoThemeData(
+      brightness: cupertinoBrightness,
+      primaryColor: CupertinoTheme.of(context).primaryColor,
+    );
+
+    if (PlatformInfo.isIOS) {
+      return CupertinoTheme(
+        data: cupertinoTheme,
+        child: CupertinoAlertDialog(
+          title: Text(
+            widget.title,
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+          ),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: CupertinoTextField(
+              controller: _controller,
+              placeholder: widget.placeholder,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: cupertinoBrightness == Brightness.dark
+                    ? CupertinoColors.white
+                    : CupertinoColors.black,
+              ),
+              decoration: BoxDecoration(
+                color: cupertinoBrightness == Brightness.dark
+                    ? CupertinoColors.tertiarySystemFill.darkColor
+                    : CupertinoColors.tertiarySystemFill,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel', style: GoogleFonts.inter()),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: _submit,
+              child: Text(
+                widget.primaryActionLabel,
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final dialogBody = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
       child: SingleChildScrollView(
@@ -1366,10 +1655,6 @@ class _NameEntryDialogState extends State<_NameEntryDialog> {
       ),
     );
 
-    if (PlatformInfo.isIOS) {
-      return _IOSDialogScaffold(child: dialogBody);
-    }
-
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: scheme.surface,
@@ -1382,111 +1667,51 @@ class _NameEntryDialogState extends State<_NameEntryDialog> {
   }
 }
 
-class _IOSDialogScaffold extends StatelessWidget {
-  const _IOSDialogScaffold({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final theme = Theme.of(context);
-    final availableHeight = mediaQuery.size.height -
-        mediaQuery.padding.top -
-        mediaQuery.padding.bottom -
-        mediaQuery.viewInsets.bottom -
-        32;
-
-    return MediaQuery(
-      data: mediaQuery.copyWith(platformBrightness: theme.brightness),
-      child: CupertinoTheme(
-        data: CupertinoTheme.of(context).copyWith(
-          brightness: theme.brightness,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: AnimatedPadding(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            padding: EdgeInsets.fromLTRB(
-              24,
-              16,
-              24,
-              mediaQuery.viewInsets.bottom + 16,
-            ),
-            child: SafeArea(
-              child: Align(
-                alignment: Alignment.center,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 420,
-                    maxHeight: availableHeight
-                        .clamp(220.0, double.infinity)
-                        .toDouble(),
-                  ),
-                  child: AdaptiveCard(
-                    padding: const EdgeInsets.all(22),
-                    borderRadius: BorderRadius.circular(28),
-                    clipBehavior: Clip.antiAlias,
-                    child: child,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _TriggerWordDialogOptionRow extends StatelessWidget {
   const _TriggerWordDialogOptionRow({
     required this.label,
     required this.value,
     required this.onChanged,
+    this.inCupertinoDialog = false,
   });
 
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
+  /// When true, forces CupertinoSwitch even on iOS 26 because
+  /// UiKitView platform views cannot render inside CupertinoAlertDialog.
+  final bool inCupertinoDialog;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final rowColor = PlatformInfo.isIOS
-        ? scheme.surfaceContainerHighest.withValues(alpha: 0.55)
-        : scheme.surfaceContainerHighest.withValues(alpha: 0.8);
+
+    // Inside a CupertinoAlertDialog we must use CupertinoSwitch.
+    // UiKitView (used by IOS26Switch) cannot be composed inside
+    // the overlay route that CupertinoAlertDialog uses.
+    final switchWidget = (PlatformInfo.isIOS && inCupertinoDialog)
+        ? CupertinoSwitch(value: value, onChanged: onChanged)
+        : AdaptiveSwitch(value: value, onChanged: onChanged);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: rowColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: AdaptiveCheckbox(
-                value: value,
-                onChanged: (nextValue) => onChanged(nextValue ?? false),
-              ),
-            ),
-            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 style: GoogleFonts.inter(
-                  fontSize: 16,
+                  fontSize: 15,
                   color: scheme.onSurface,
                 ),
               ),
             ),
+            const SizedBox(width: 12),
+            switchWidget,
           ],
         ),
       ),

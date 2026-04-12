@@ -7,7 +7,18 @@ import '../screens/settings_page.dart';
 import '../services/app_permission_service.dart';
 
 class MainNavigationPage extends StatefulWidget {
+  static final GlobalKey<_MainNavigationPageState> _navigationKey =
+      GlobalKey<_MainNavigationPageState>();
+
   const MainNavigationPage({super.key});
+
+  static Key get navigationKey => _navigationKey;
+
+  static void showAlertsTab({int selectedTabIndex = 0}) {
+    _navigationKey.currentState?._showAlertsTab(
+      selectedTabIndex: selectedTabIndex,
+    );
+  }
 
   @override
   State<MainNavigationPage> createState() => _MainNavigationPageState();
@@ -19,7 +30,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   final List<Widget> _pages = [
     HomeTab(key: HomeTab.navigationKey),
     const HistoryPage(),
-    const AlertsPage(),
+    AlertsPage(key: AlertsPage.navigationKey),
     const SettingsPage(),
   ];
 
@@ -37,6 +48,22 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
         _selectedIndex = index;
       });
     }
+  }
+
+  void _showAlertsTab({int selectedTabIndex = 0}) {
+    if (mounted && _selectedIndex != 2) {
+      setState(() {
+        _selectedIndex = 2;
+      });
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (selectedTabIndex == 1) {
+        AlertsPage.showTriggerWords();
+      } else {
+        AlertsPage.showRecentAlerts();
+      }
+    });
   }
 
   @override

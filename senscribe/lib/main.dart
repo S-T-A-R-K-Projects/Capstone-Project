@@ -108,7 +108,7 @@ class _SenScribeAppState extends State<SenScribeApp> {
           child: child,
         );
       },
-      home: const MainNavigationPage(),
+      home: MainNavigationPage(key: MainNavigationPage.navigationKey),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

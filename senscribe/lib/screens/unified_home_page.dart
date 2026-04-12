@@ -7,6 +7,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../navigation/adaptive_page_route.dart';
 import '../services/audio_classification_service.dart';
 import '../services/text_to_speech_service.dart';
 import '../models/sound_caption.dart';
@@ -442,19 +443,18 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   // --- Navigation Helpers ---
   void _navigateToExpanded(Widget page) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
+    pushAdaptivePage<void>(context, builder: (_) => page);
   }
 
   Future<void> _openExpandedSpeechPage() async {
     if (!mounted) return;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => SpeechToTextPage(
-          isMonitoring: _isSpeechMonitoring,
-          pulseController: _speechPulseController,
-          onToggleMonitoring: _toggleSpeechMonitoringFromDetail,
-        ),
+    await pushAdaptivePage<void>(
+      context,
+      builder: (_) => SpeechToTextPage(
+        isMonitoring: _isSpeechMonitoring,
+        pulseController: _speechPulseController,
+        onToggleMonitoring: _toggleSpeechMonitoringFromDetail,
       ),
     );
   }
@@ -634,22 +634,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                     SizedBox(
                       height: 36,
                       width: 36,
-                      child: AdaptiveButton.child(
+                      child: _buildSectionIconButton(
+                        icon: isExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
                         onPressed: onCollapseToggle,
-                        style: PlatformInfo.isIOS26OrHigher()
-                            ? AdaptiveButtonStyle.glass
-                            : AdaptiveButtonStyle.plain,
-                        child: Center(
-                          child: Transform.translate(
-                            offset: const Offset(-0.5, 0),
-                            child: Icon(
-                              isExpanded
-                                  ? Icons.expand_less_rounded
-                                  : Icons.expand_more_rounded,
-                              size: 20,
-                            ),
-                          ),
-                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -676,17 +665,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                     SizedBox(
                       height: 36,
                       width: 36,
-                      child: AdaptiveButton.child(
+                      child: _buildSectionIconButton(
+                        icon: Icons.chevron_right_rounded,
                         onPressed: onExpand,
-                        style: PlatformInfo.isIOS26OrHigher()
-                            ? AdaptiveButtonStyle.glass
-                            : AdaptiveButtonStyle.plain,
-                        child: Center(
-                          child: Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 16,
-                          ),
-                        ),
                       ),
                     ),
                   ],
@@ -719,6 +700,32 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   ),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final backgroundColor = PlatformInfo.isIOS
+        ? scheme.primary.withValues(alpha: 0.12)
+        : scheme.surfaceContainerHighest;
+
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onPressed,
+        child: Center(
+          child: Icon(
+            icon,
+            size: 22,
+            color: scheme.primary,
           ),
         ),
       ),
@@ -834,6 +841,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   label: "Save",
                   style: AdaptiveButtonStyle.plain,
                   size: AdaptiveButtonSize.small,
+                  useNative: false,
                 ),
               ),
               SizedBox(
@@ -844,6 +852,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                   style: AdaptiveButtonStyle.plain,
                   color: scheme.error,
                   size: AdaptiveButtonSize.small,
+                  useNative: false,
                 ),
               ),
             ],

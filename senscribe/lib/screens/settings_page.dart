@@ -6,7 +6,8 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../main.dart';
-import 'alerts_page.dart';
+import '../navigation/adaptive_page_route.dart';
+import '../navigation/main_navigation.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
 import 'home_tab.dart';
@@ -157,13 +158,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const ExperimentalPage(),
-                            ),
+                          onPressed: () => pushAdaptivePage<void>(
+                            context,
+                            builder: (_) => const ExperimentalPage(),
                           ),
                           label: 'Manage',
                           style: AdaptiveButtonStyle.plain,
+                          useNative: false,
                         ),
                       ),
                     ],
@@ -210,13 +211,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const ModelSettingsPage(),
-                            ),
+                          onPressed: () => pushAdaptivePage<void>(
+                            context,
+                            builder: (_) => const ModelSettingsPage(),
                           ),
                           label: 'Configure',
                           style: AdaptiveButtonStyle.plain,
+                          useNative: false,
                         ),
                       ),
                     ],
@@ -265,14 +266,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const AlertsPage(initialTabIndex: 1),
-                            ),
-                          ),
+                          onPressed: () =>
+                              MainNavigationPage.showAlertsTab(
+                                selectedTabIndex: 1,
+                              ),
                           label: 'Open Alert Triggers',
                           style: AdaptiveButtonStyle.plain,
+                          useNative: false,
                         ),
                       ),
                     ],
@@ -317,13 +317,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const PrivacyDataPage(),
-                            ),
+                          onPressed: () => pushAdaptivePage<void>(
+                            context,
+                            builder: (_) => const PrivacyDataPage(),
                           ),
                           label: 'Manage',
                           style: AdaptiveButtonStyle.plain,
+                          useNative: false,
                         ),
                       ),
                     ],
@@ -372,13 +372,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const PermissionsBackgroundPage(),
-                            ),
+                          onPressed: () => pushAdaptivePage<void>(
+                            context,
+                            builder: (_) => const PermissionsBackgroundPage(),
                           ),
                           label: 'Open',
                           style: AdaptiveButtonStyle.plain,
+                          useNative: false,
                         ),
                       ),
                     ],
@@ -438,6 +438,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           },
                           label: 'Run Onboarding',
                           style: AdaptiveButtonStyle.filled,
+                          useNative: false,
                         ),
                       ),
                     ],
@@ -478,13 +479,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AboutSupportPage(),
-                            ),
+                          onPressed: () => pushAdaptivePage<void>(
+                            context,
+                            builder: (_) => const AboutSupportPage(),
                           ),
                           label: 'Acknowledgements',
                           style: AdaptiveButtonStyle.plain,
+                          useNative: false,
                         ),
                       ),
                     ],

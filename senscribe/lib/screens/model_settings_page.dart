@@ -321,6 +321,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
                 label: 'Cancel Download',
                 style: AdaptiveButtonStyle.bordered,
                 color: Colors.red,
+                useNative: false,
               ),
             ),
           ],
@@ -338,6 +339,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
             onPressed: _startDownload,
             label: _isConfigured ? 'Reload Model' : 'Download Model (~1.25 GB)',
             style: AdaptiveButtonStyle.filled,
+            useNative: false,
           ),
         ),
         if (_isConfigured)
@@ -350,6 +352,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
                 label: 'Delete Model from Device',
                 style: AdaptiveButtonStyle.plain,
                 color: Colors.red,
+                useNative: false,
               ),
             ),
           ),

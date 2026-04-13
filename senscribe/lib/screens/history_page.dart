@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../navigation/adaptive_page_route.dart';
 import '../models/history_item.dart';
+import '../widgets/adaptive_input_sheet.dart';
 import '../services/history_service.dart';
 import '../services/summarization_service.dart';
 import '../utils/time_utils.dart';
@@ -16,102 +16,16 @@ Future<String?> _showRenameTranscriptionDialog(
   BuildContext context, {
   required String initialTitle,
 }) async {
-  final controller = TextEditingController(text: initialTitle);
-  try {
-    if (PlatformInfo.isIOS) {
-      final cupertinoBrightness = CupertinoTheme.of(context).brightness
-          ?? MediaQuery.platformBrightnessOf(context);
-      final primaryColor = CupertinoTheme.of(context).primaryColor;
-      final result = await showCupertinoDialog<String>(
-        context: context,
-        builder: (dialogContext) {
-          return CupertinoTheme(
-            data: CupertinoThemeData(
-              brightness: cupertinoBrightness,
-              primaryColor: primaryColor,
-            ),
-            child: CupertinoAlertDialog(
-              title: Text(
-                'Rename transcription',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              content: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: CupertinoTextField(
-                  controller: controller,
-                  autofocus: true,
-                  maxLength: 40,
-                  placeholder: 'Name',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    color: cupertinoBrightness == Brightness.dark
-                        ? CupertinoColors.white
-                        : CupertinoColors.black,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cupertinoBrightness == Brightness.dark
-                        ? CupertinoColors.tertiarySystemFill.darkColor
-                        : CupertinoColors.tertiarySystemFill,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.inter(),
-                  ),
-                ),
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  onPressed: () => Navigator.of(dialogContext).pop(
-                    controller.text.trim(),
-                  ),
-                  child: Text(
-                    'Save',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-      return result?.trim();
-    }
+  final updatedTitle = await showAdaptiveTextEntrySheet(
+    context: context,
+    title: 'Rename transcription',
+    placeholder: 'Name',
+    primaryActionLabel: 'Save',
+    initialValue: initialTitle,
+    maxLength: 40,
+  );
 
-    final updatedTitle = await AdaptiveAlertDialog.inputShow(
-      context: context,
-      title: 'Rename transcription',
-      actions: [
-        AlertAction(
-          title: 'Cancel',
-          style: AlertActionStyle.cancel,
-          onPressed: () {},
-        ),
-        AlertAction(
-          title: 'Save',
-          style: AlertActionStyle.primary,
-          onPressed: () {},
-        ),
-      ],
-      input: AdaptiveAlertDialogInput(
-        placeholder: 'Name',
-        initialValue: initialTitle,
-        maxLength: 40,
-      ),
-    );
-
-    return updatedTitle?.trim();
-  } finally {
-    controller.dispose();
-  }
+  return updatedTitle?.trim();
 }
 
 class HistoryPage extends StatefulWidget {

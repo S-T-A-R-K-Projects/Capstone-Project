@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -11,6 +10,7 @@ import '../services/custom_sound_service.dart';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
 import '../utils/time_utils.dart';
+import '../widgets/adaptive_input_sheet.dart';
 
 class AlertsPage extends StatefulWidget {
   static final GlobalKey<_AlertsPageState> _alertsPageKey =
@@ -225,27 +225,17 @@ class _AlertsPageState extends State<AlertsPage> {
     String initialWord = '',
     bool initialCaseSensitive = false,
     bool initialExactMatch = true,
-  }) async {
-    Widget builder(BuildContext dialogContext) => _TriggerWordDialog(
-          title: title,
-          primaryActionLabel: primaryActionLabel,
-          initialWord: initialWord,
-          initialCaseSensitive: initialCaseSensitive,
-          initialExactMatch: initialExactMatch,
-          onEmptyWord: _showTriggerWordEmptyWarning,
-        );
-
-    if (PlatformInfo.isIOS) {
-      return showCupertinoDialog<_TriggerWordDialogResult>(
-        context: context,
-        builder: builder,
-      );
-    }
-
-    return showDialog<_TriggerWordDialogResult>(
+  }) {
+    return showAdaptiveModalSheet<_TriggerWordDialogResult>(
       context: context,
-      barrierDismissible: true,
-      builder: builder,
+      builder: (sheetContext, closeSheet) => _TriggerWordDialog(
+        title: title,
+        primaryActionLabel: primaryActionLabel,
+        initialWord: initialWord,
+        initialCaseSensitive: initialCaseSensitive,
+        initialExactMatch: initialExactMatch,
+        onEmptyWord: _showTriggerWordEmptyWarning,
+      ),
     );
   }
 
@@ -379,21 +369,14 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _showAddCustomSoundDialog() async {
-    Widget builder(BuildContext dialogContext) => const _NameEntryDialog(
-          title: 'Add Custom Sound',
-          placeholder: 'Name this sound',
-          primaryActionLabel: 'Continue',
-        );
-    final soundName = PlatformInfo.isIOS
-        ? await showCupertinoDialog<String>(
-            context: context,
-            builder: builder,
-          )
-        : await showDialog<String>(
-            context: context,
-            barrierDismissible: true,
-            builder: builder,
-          );
+    final soundName = await showAdaptiveTextEntrySheet(
+      context: context,
+      title: 'Add Custom Sound',
+      placeholder: 'Name this sound',
+      primaryActionLabel: 'Continue',
+      textCapitalization: TextCapitalization.words,
+    );
+
     if (!mounted) return;
     if (soundName == null) return;
 
@@ -680,11 +663,11 @@ class _AlertsPageState extends State<AlertsPage> {
                 value: 'toggle',
                 icon: profile.enabled
                     ? (PlatformInfo.isIOS26OrHigher()
-                          ? 'speaker.slash'
-                          : Icons.volume_off_rounded)
+                        ? 'speaker.slash'
+                        : Icons.volume_off_rounded)
                     : (PlatformInfo.isIOS26OrHigher()
-                          ? 'speaker.wave.2'
-                          : Icons.volume_up_rounded),
+                        ? 'speaker.wave.2'
+                        : Icons.volume_up_rounded),
               ),
               AdaptivePopupMenuItem(
                 label: 'Delete',
@@ -1079,12 +1062,14 @@ class _AlertsPageState extends State<AlertsPage> {
                                                 : 'Enable',
                                             value: 'toggle',
                                             icon: word.enabled
-                                                ? (PlatformInfo.isIOS26OrHigher()
-                                                      ? 'speaker.slash'
-                                                      : Icons.volume_off_rounded)
-                                                : (PlatformInfo.isIOS26OrHigher()
-                                                      ? 'speaker.wave.2'
-                                                      : Icons.volume_up_rounded),
+                                                ? (PlatformInfo
+                                                        .isIOS26OrHigher()
+                                                    ? 'speaker.slash'
+                                                    : Icons.volume_off_rounded)
+                                                : (PlatformInfo
+                                                        .isIOS26OrHigher()
+                                                    ? 'speaker.wave.2'
+                                                    : Icons.volume_up_rounded),
                                           ),
                                           AdaptivePopupMenuItem(
                                             label: 'Delete',
@@ -1284,197 +1269,83 @@ class _TriggerWordDialogState extends State<_TriggerWordDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cupertinoBrightness = CupertinoTheme.of(context).brightness
-        ?? MediaQuery.platformBrightnessOf(context);
     final scheme = Theme.of(context).colorScheme;
-    final cupertinoTheme = CupertinoThemeData(
-      brightness: cupertinoBrightness,
-      primaryColor: CupertinoTheme.of(context).primaryColor,
-    );
 
-    if (PlatformInfo.isIOS) {
-      return CupertinoTheme(
-        data: cupertinoTheme,
-        child: CupertinoAlertDialog(
-          title: Text(
-            widget.title,
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+    return AdaptiveInputSheet(
+      title: widget.title,
+      maxWidth: 520,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AdaptiveTextField(
+            controller: _controller,
+            placeholder: 'Enter word to monitor',
+            autofocus: true,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: scheme.onSurface,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            onSubmitted: (_) => _submit(),
           ),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Column(
-              children: [
-                CupertinoTextField(
-                  controller: _controller,
-                  placeholder: 'Enter word to monitor',
-                  autofocus: true,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    color: cupertinoBrightness == Brightness.dark
-                        ? CupertinoColors.white
-                        : CupertinoColors.black,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cupertinoBrightness == Brightness.dark
-                        ? CupertinoColors.tertiarySystemFill.darkColor
-                        : CupertinoColors.tertiarySystemFill,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  onSubmitted: (_) => _submit(),
-                ),
-                const SizedBox(height: 12),
-                _TriggerWordDialogOptionRow(
-                  label: 'Case Sensitive',
-                  value: _caseSensitive,
-                  inCupertinoDialog: true,
-                  onChanged: (value) {
+          const SizedBox(height: 16),
+          PlatformInfo.isIOS26OrHigher()
+              ? _TriggerWordDialogIOS26OptionsPanel(
+                  caseSensitive: _caseSensitive,
+                  exactMatch: _exactMatch,
+                  onCaseSensitiveChanged: (value) {
                     setState(() {
                       _caseSensitive = value;
                     });
                   },
-                ),
-                const SizedBox(height: 8),
-                _TriggerWordDialogOptionRow(
-                  label: 'Exact Word Match (whole word only)',
-                  value: _exactMatch,
-                  inCupertinoDialog: true,
-                  onChanged: (value) {
+                  onExactMatchChanged: (value) {
                     setState(() {
                       _exactMatch = value;
                     });
                   },
+                )
+              : Column(
+                  children: [
+                    _TriggerWordDialogOptionRow(
+                      label: 'Case Sensitive',
+                      value: _caseSensitive,
+                      onChanged: (value) {
+                        setState(() {
+                          _caseSensitive = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _TriggerWordDialogOptionRow(
+                      label: 'Exact Word Match (whole word only)',
+                      value: _exactMatch,
+                      onChanged: (value) {
+                        setState(() {
+                          _exactMatch = value;
+                        });
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel', style: GoogleFonts.inter()),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: _submit,
-              child: Text(
-                widget.primaryActionLabel,
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final dialogBody = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.title,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: PlatformInfo.isIOS ? 19 : 22,
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 20),
-            AdaptiveTextField(
-              controller: _controller,
-              placeholder: 'Enter word to monitor',
-              autofocus: true,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                color: scheme.onSurface,
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            _TriggerWordDialogOptionRow(
-              label: 'Case Sensitive',
-              value: _caseSensitive,
-              onChanged: (value) {
-                setState(() {
-                  _caseSensitive = value;
-                });
-              },
-            ),
-            const SizedBox(height: 10),
-            _TriggerWordDialogOptionRow(
-              label: 'Exact Word Match (whole word only)',
-              value: _exactMatch,
-              onChanged: (value) {
-                setState(() {
-                  _exactMatch = value;
-                });
-              },
-            ),
-            const SizedBox(height: 24),
-            if (PlatformInfo.isIOS)
-              Row(
-                children: [
-                  Expanded(
-                    child: AdaptiveButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      label: 'Cancel',
-                      style: AdaptiveButtonStyle.plain,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: AdaptiveButton(
-                      onPressed: _submit,
-                      label: widget.primaryActionLabel,
-                      style: PlatformInfo.isIOS26OrHigher()
-                          ? AdaptiveButtonStyle.glass
-                          : AdaptiveButtonStyle.filled,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  const Spacer(),
-                  AdaptiveButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    label: 'Cancel',
-                    style: AdaptiveButtonStyle.plain,
-                  ),
-                  const SizedBox(width: 8),
-                  AdaptiveButton(
-                    onPressed: _submit,
-                    label: widget.primaryActionLabel,
-                    style: AdaptiveButtonStyle.filled,
-                  ),
-                ],
-              ),
-          ],
-        ),
+        ],
       ),
-    );
-
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      backgroundColor: scheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: dialogBody,
-      ),
+      actions: [
+        AdaptiveSheetAction<_TriggerWordDialogResult?>(
+          label: 'Cancel',
+          style: AdaptiveButtonStyle.plain,
+          onPressed: (closeSheet) => closeSheet(null),
+        ),
+        AdaptiveSheetAction<_TriggerWordDialogResult?>(
+          label: widget.primaryActionLabel,
+          style: PlatformInfo.isIOS26OrHigher()
+              ? AdaptiveButtonStyle.glass
+              : AdaptiveButtonStyle.filled,
+          onPressed: (closeSheet) => _submit(),
+        ),
+      ],
     );
   }
 }
@@ -1516,152 +1387,142 @@ class _NameEntryDialogState extends State<_NameEntryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cupertinoBrightness = CupertinoTheme.of(context).brightness
-        ?? MediaQuery.platformBrightnessOf(context);
     final scheme = Theme.of(context).colorScheme;
-    final cupertinoTheme = CupertinoThemeData(
-      brightness: cupertinoBrightness,
-      primaryColor: CupertinoTheme.of(context).primaryColor,
-    );
 
-    if (PlatformInfo.isIOS) {
-      return CupertinoTheme(
-        data: cupertinoTheme,
-        child: CupertinoAlertDialog(
-          title: Text(
-            widget.title,
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+    return AdaptiveInputSheet(
+      title: widget.title,
+      maxWidth: 520,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AdaptiveTextField(
+            controller: _controller,
+            placeholder: widget.placeholder,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: scheme.onSurface,
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            onSubmitted: (_) => _submit(),
           ),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: CupertinoTextField(
-              controller: _controller,
-              placeholder: widget.placeholder,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                color: cupertinoBrightness == Brightness.dark
-                    ? CupertinoColors.white
-                    : CupertinoColors.black,
-              ),
-              decoration: BoxDecoration(
-                color: cupertinoBrightness == Brightness.dark
-                    ? CupertinoColors.tertiarySystemFill.darkColor
-                    : CupertinoColors.tertiarySystemFill,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
-              onSubmitted: (_) => _submit(),
-            ),
-          ),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel', style: GoogleFonts.inter()),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: _submit,
-              child: Text(
-                widget.primaryActionLabel,
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final dialogBody = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.title,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: PlatformInfo.isIOS ? 19 : 22,
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 20),
-            AdaptiveTextField(
-              controller: _controller,
-              placeholder: widget.placeholder,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                color: scheme.onSurface,
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 24),
-            if (PlatformInfo.isIOS)
-              Row(
-                children: [
-                  Expanded(
-                    child: AdaptiveButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      label: 'Cancel',
-                      style: AdaptiveButtonStyle.plain,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: AdaptiveButton(
-                      onPressed: _submit,
-                      label: widget.primaryActionLabel,
-                      style: PlatformInfo.isIOS26OrHigher()
-                          ? AdaptiveButtonStyle.glass
-                          : AdaptiveButtonStyle.filled,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  const Spacer(),
-                  AdaptiveButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    label: 'Cancel',
-                    style: AdaptiveButtonStyle.plain,
-                  ),
-                  const SizedBox(width: 8),
-                  AdaptiveButton(
-                    onPressed: _submit,
-                    label: widget.primaryActionLabel,
-                    style: AdaptiveButtonStyle.filled,
-                  ),
-                ],
-              ),
-          ],
-        ),
+        ],
       ),
+      actions: [
+        AdaptiveSheetAction<String?>(
+          label: 'Cancel',
+          style: AdaptiveButtonStyle.plain,
+          onPressed: (closeSheet) => closeSheet(null),
+        ),
+        AdaptiveSheetAction<String?>(
+          label: widget.primaryActionLabel,
+          style: PlatformInfo.isIOS26OrHigher()
+              ? AdaptiveButtonStyle.glass
+              : AdaptiveButtonStyle.filled,
+          onPressed: (closeSheet) => _submit(),
+        ),
+      ],
     );
+  }
+}
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      backgroundColor: scheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: dialogBody,
+class _TriggerWordDialogIOS26OptionsPanel extends StatelessWidget {
+  const _TriggerWordDialogIOS26OptionsPanel({
+    required this.caseSensitive,
+    required this.exactMatch,
+    required this.onCaseSensitiveChanged,
+    required this.onExactMatchChanged,
+  });
+
+  final bool caseSensitive;
+  final bool exactMatch;
+  final ValueChanged<bool> onCaseSensitiveChanged;
+  final ValueChanged<bool> onExactMatchChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onCaseSensitiveChanged(!caseSensitive),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Case Sensitive',
+                      maxLines: 2,
+                      softWrap: true,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        color: scheme.onSurface,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 26),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onExactMatchChanged(!exactMatch),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Exact Word Match (whole word only)',
+                      maxLines: 2,
+                      softWrap: true,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        color: scheme.onSurface,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onCaseSensitiveChanged(!caseSensitive),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: AdaptiveSwitch(
+                    value: caseSensitive,
+                    onChanged: onCaseSensitiveChanged,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onExactMatchChanged(!exactMatch),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: AdaptiveSwitch(
+                    value: exactMatch,
+                    onChanged: onExactMatchChanged,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1672,25 +1533,17 @@ class _TriggerWordDialogOptionRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
-    this.inCupertinoDialog = false,
   });
 
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
-  /// When true, forces CupertinoSwitch even on iOS 26 because
-  /// UiKitView platform views cannot render inside CupertinoAlertDialog.
-  final bool inCupertinoDialog;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-
-    // Inside a CupertinoAlertDialog we must use CupertinoSwitch.
-    // UiKitView (used by IOS26Switch) cannot be composed inside
-    // the overlay route that CupertinoAlertDialog uses.
-    final switchWidget = (PlatformInfo.isIOS && inCupertinoDialog)
-        ? CupertinoSwitch(value: value, onChanged: onChanged)
+    final switchWidget = PlatformInfo.isIOS
+        ? Switch.adaptive(value: value, onChanged: onChanged)
         : AdaptiveSwitch(value: value, onChanged: onChanged);
 
     return GestureDetector(
@@ -1699,14 +1552,19 @@ class _TriggerWordDialogOptionRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  color: scheme.onSurface,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  softWrap: true,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    color: scheme.onSurface,
+                  ),
                 ),
               ),
             ),

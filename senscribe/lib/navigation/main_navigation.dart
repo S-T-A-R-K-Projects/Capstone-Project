@@ -20,6 +20,10 @@ class MainNavigationPage extends StatefulWidget {
     );
   }
 
+  static void setTabBarHidden(bool hidden) {
+    _navigationKey.currentState?._setTabBarHidden(hidden);
+  }
+
   @override
   State<MainNavigationPage> createState() => _MainNavigationPageState();
 }
@@ -27,6 +31,7 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> {
   final AppPermissionService _permissionService = AppPermissionService();
   int _selectedIndex = 0;
+  bool _tabBarHidden = false;
   final List<Widget> _pages = [
     HomeTab(key: HomeTab.navigationKey),
     const HistoryPage(),
@@ -66,11 +71,22 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     });
   }
 
+  void _setTabBarHidden(bool hidden) {
+    if (!mounted || _tabBarHidden == hidden) {
+      return;
+    }
+
+    setState(() {
+      _tabBarHidden = hidden;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final useNativeBar = PlatformInfo.isIOS26OrHigher();
 
     return AdaptiveScaffold(
+      tabBarHidden: _tabBarHidden,
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           return true; // Stop scroll notifications from reaching AdaptiveScaffold to prevent dock scaling

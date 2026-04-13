@@ -83,6 +83,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   void initState() {
     super.initState();
     unawaited(_soundFilterService.initialize());
+    unawaited(_triggerWordService.warmCache());
     // Sync initial state
     _isSoundMonitoring = _audioService.isMonitoring;
     _soundEvents = List.from(_audioService.history);
@@ -210,14 +211,16 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   void _handleAndroidSpeechEvent(AndroidOfflineSpeechEvent event) {
     switch (event.type) {
       case AndroidOfflineSpeechEventType.partial:
-        _sttTranscriptService.setPartialWords(event.text);
-        if (event.text.isNotEmpty) {
-          unawaited(_checkAndNotifyPartialTriggers(event.text));
+        final refinedText = _triggerWordService.refineRecognizedText(event.text);
+        _sttTranscriptService.setPartialWords(refinedText);
+        if (refinedText.isNotEmpty) {
+          unawaited(_checkAndNotifyPartialTriggers(refinedText));
         }
         break;
       case AndroidOfflineSpeechEventType.finalResult:
-        if (event.text.isNotEmpty) {
-          _sttTranscriptService.commitFinalWords(event.text);
+        final refinedText = _triggerWordService.refineRecognizedText(event.text);
+        if (refinedText.isNotEmpty) {
+          _sttTranscriptService.commitFinalWords(refinedText);
           _scrollToBottom();
         }
         break;
@@ -347,14 +350,17 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         await _speech.cancel();
         await _speech.listen(
           onResult: (result) {
-            _sttTranscriptService.setPartialWords(result.recognizedWords);
+            final refinedText = _triggerWordService.refineRecognizedText(
+              result.recognizedWords,
+            );
+            _sttTranscriptService.setPartialWords(refinedText);
 
-            if (!result.finalResult && result.recognizedWords.isNotEmpty) {
-              _checkAndNotifyPartialTriggers(result.recognizedWords);
+            if (!result.finalResult && refinedText.isNotEmpty) {
+              _checkAndNotifyPartialTriggers(refinedText);
             }
 
-            if (result.finalResult && result.recognizedWords.isNotEmpty) {
-              _sttTranscriptService.commitFinalWords(result.recognizedWords);
+            if (result.finalResult && refinedText.isNotEmpty) {
+              _sttTranscriptService.commitFinalWords(refinedText);
               _scrollToBottom();
             }
           },

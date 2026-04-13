@@ -43,6 +43,7 @@ internal class AndroidOfflineSpeechPlugin private constructor(
   private val mainHandler = Handler(Looper.getMainLooper())
   private val initLock = Any()
   private val stagingLock = Any()
+  private val recognizerLock = Any()
   private val processingBuffer = ShortArray(SharedAudioInputFrameSize)
   private val stagingBuffer = ShortArray(STAGING_BUFFER_SAMPLE_COUNT)
 
@@ -117,12 +118,24 @@ internal class AndroidOfflineSpeechPlugin private constructor(
               toConsume
             }
 
-          val activeRecognizer = recognizer ?: return
-          val isSegmentFinal = activeRecognizer.acceptWaveForm(processingBuffer, sampleCount)
-          if (isSegmentFinal) {
-            emitFinalFromJson(activeRecognizer.getResult())
+          val recognitionResult =
+            synchronized(recognizerLock) {
+              val activeRecognizer = recognizer ?: return
+              val isSegmentFinal = activeRecognizer.acceptWaveForm(processingBuffer, sampleCount)
+              RecognitionResult(
+                isFinal = isSegmentFinal,
+                payload =
+                  if (isSegmentFinal) {
+                    activeRecognizer.getResult()
+                  } else {
+                    activeRecognizer.getPartialResult()
+                  },
+              )
+            }
+          if (recognitionResult.isFinal) {
+            emitFinalFromJson(recognitionResult.payload)
           } else {
-            emitPartialFromJson(activeRecognizer.getPartialResult())
+            emitPartialFromJson(recognitionResult.payload)
           }
         }
       }
@@ -235,18 +248,22 @@ internal class AndroidOfflineSpeechPlugin private constructor(
         speechProcessingScheduled = false
       }
       lastPartialText = ""
-      recognizer =
-        Recognizer(loadedModel, SAMPLE_RATE).apply {
-          setPartialWords(false)
-          setWords(false)
+      synchronized(recognizerLock) {
+        recognizer =
+          Recognizer(loadedModel, SAMPLE_RATE).apply {
+            setPartialWords(false)
+            setWords(false)
+          }
         }
       SharedAudioInputManager.addListener(context, AUDIO_LISTENER_ID, audioListener)
       isListening = true
       emitEvent(mapOf("type" to "status", "status" to "listening"))
       result.success(null)
     } catch (error: Exception) {
-      recognizer?.close()
-      recognizer = null
+      synchronized(recognizerLock) {
+        recognizer?.close()
+        recognizer = null
+      }
       result.error("start_failed", error.message ?: "Unable to start offline speech recognition.", null)
     }
   }
@@ -282,12 +299,21 @@ internal class AndroidOfflineSpeechPlugin private constructor(
     }
 
     recognitionHandler?.removeCallbacksAndMessages(null)
-    val activeRecognizer = recognizer
-    recognizer = null
-    if (flushFinalResult && activeRecognizer != null) {
-      emitFinalFromJson(activeRecognizer.getFinalResult())
+    val finalJson =
+      synchronized(recognizerLock) {
+        val activeRecognizer = recognizer
+        recognizer = null
+        if (activeRecognizer == null) {
+          null
+        } else {
+          val resultJson = if (flushFinalResult) activeRecognizer.getFinalResult() else null
+          activeRecognizer.close()
+          resultJson
+        }
+      }
+    if (finalJson != null) {
+      emitFinalFromJson(finalJson)
     }
-    activeRecognizer?.close()
     lastPartialText = ""
 
     if (emitStatus) {
@@ -360,3 +386,8 @@ internal class AndroidOfflineSpeechPlugin private constructor(
 }
 
 private const val SharedAudioInputFrameSize = 4800
+
+private data class RecognitionResult(
+  val isFinal: Boolean,
+  val payload: String,
+)

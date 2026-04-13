@@ -61,30 +61,44 @@ class TriggerAlert {
         : 'Standard';
   }
 
-  String get normalizedSoundKey =>
-      '${source.trim().toLowerCase()}:'
-      '${triggerWord.trim().toLowerCase()}:'
-      '${timestamp.toIso8601String()}';
+  String get soundEventKey {
+    final metadataKey = metadata['soundEventKey'];
+    if (metadataKey is String && metadataKey.trim().isNotEmpty) {
+      return metadataKey.trim().toLowerCase();
+    }
+
+    final customSoundId = metadata['customSoundId'];
+    final customKeyPart =
+        customSoundId is String && customSoundId.trim().isNotEmpty
+            ? ':${customSoundId.trim().toLowerCase()}'
+            : '';
+
+    return '${source.trim().toLowerCase()}:'
+        '${triggerWord.trim().toLowerCase()}:'
+        '${timestamp.millisecondsSinceEpoch}$customKeyPart';
+  }
+
+  String get normalizedSoundKey => soundEventKey;
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'triggerWord': triggerWord,
-    'detectedText': detectedText,
-    'timestamp': timestamp.toIso8601String(),
-    'source': source,
-    'metadata': metadata,
-  };
+        'id': id,
+        'triggerWord': triggerWord,
+        'detectedText': detectedText,
+        'timestamp': timestamp.toIso8601String(),
+        'source': source,
+        'metadata': metadata,
+      };
 
   factory TriggerAlert.fromJson(Map<String, dynamic> json) => TriggerAlert(
-    id: json['id'],
-    triggerWord: json['triggerWord'] ?? '',
-    detectedText: json['detectedText'] ?? '',
-    timestamp: DateTime.parse(
-      json['timestamp'] ?? DateTime.now().toIso8601String(),
-    ),
-    source: json['source'] ?? 'unknown',
-    metadata: Map<String, dynamic>.from(json['metadata'] ?? const {}),
-  );
+        id: json['id'],
+        triggerWord: json['triggerWord'] ?? '',
+        detectedText: json['detectedText'] ?? '',
+        timestamp: DateTime.parse(
+          json['timestamp'] ?? DateTime.now().toIso8601String(),
+        ),
+        source: json['source'] ?? 'unknown',
+        metadata: Map<String, dynamic>.from(json['metadata'] ?? const {}),
+      );
 
   static String encodeList(List<TriggerAlert> items) =>
       jsonEncode(items.map((e) => e.toJson()).toList());

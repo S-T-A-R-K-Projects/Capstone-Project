@@ -10,6 +10,7 @@ import '../services/custom_sound_service.dart';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
 import '../utils/time_utils.dart';
+import '../utils/themed_adaptive_alert_dialog.dart';
 import '../widgets/adaptive_input_sheet.dart';
 
 class AlertsPage extends StatefulWidget {
@@ -101,7 +102,7 @@ class _AlertsPageState extends State<AlertsPage> {
 
   Future<void> _showAlertDetails(TriggerAlert alert) async {
     final isSoundAlert = _isSoundAlert(alert);
-    await AdaptiveAlertDialog.show(
+    await showThemedAdaptiveAlertDialog(
       context: context,
       title: alert.triggerWord,
       message: isSoundAlert
@@ -626,22 +627,6 @@ class _AlertsPageState extends State<AlertsPage> {
             ),
           ),
           trailing: _buildStringMenuButton(
-            items: [
-              const PopupMenuItem<String>(value: 'open', child: Text('Open')),
-              if (profile.hasEnoughSamples)
-                const PopupMenuItem<String>(
-                  value: 'retrain',
-                  child: Text('Retrain'),
-                ),
-              PopupMenuItem<String>(
-                value: 'toggle',
-                child: Text(profile.enabled ? 'Disable' : 'Enable'),
-              ),
-              const PopupMenuItem<String>(
-                value: 'delete',
-                child: Text('Delete'),
-              ),
-            ],
             adaptiveItems: [
               AdaptivePopupMenuItem(
                 label: 'Open',
@@ -1030,24 +1015,6 @@ class _AlertsPageState extends State<AlertsPage> {
                                         ],
                                       ),
                                       trailing: _buildStringMenuButton(
-                                        items: [
-                                          const PopupMenuItem<String>(
-                                            value: 'edit',
-                                            child: Text('Edit'),
-                                          ),
-                                          PopupMenuItem<String>(
-                                            value: 'toggle',
-                                            child: Text(
-                                              word.enabled
-                                                  ? 'Disable'
-                                                  : 'Enable',
-                                            ),
-                                          ),
-                                          const PopupMenuItem<String>(
-                                            value: 'delete',
-                                            child: Text('Delete'),
-                                          ),
-                                        ],
                                         adaptiveItems: [
                                           AdaptivePopupMenuItem(
                                             label: 'Edit',
@@ -1157,18 +1124,9 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildStringMenuButton({
-    required List<PopupMenuEntry<String>> items,
     required List<AdaptivePopupMenuEntry> adaptiveItems,
     required ValueChanged<String> onSelected,
   }) {
-    if (PlatformInfo.isIOS26OrHigher()) {
-      return PopupMenuButton<String>(
-        icon: const Icon(Icons.more_horiz_rounded),
-        onSelected: onSelected,
-        itemBuilder: (context) => items,
-      );
-    }
-
     return AdaptivePopupMenuButton.icon<String>(
       icon: PlatformInfo.isIOS26OrHigher()
           ? 'ellipsis.circle'

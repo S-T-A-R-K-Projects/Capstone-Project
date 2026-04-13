@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import '../utils/themed_adaptive_alert_dialog.dart';
 import '../models/sound_caption.dart';
 import '../models/sound_filter.dart';
 import '../models/trigger_alert.dart';
@@ -151,6 +152,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _saveCaptionToAlerts(SoundCaption caption) async {
+    final eventKey = [
+      caption.source == SoundCaptionSource.custom
+          ? TriggerAlert.sourceCustomSound
+          : TriggerAlert.sourceSoundRecognition,
+      caption.displaySound.trim().toLowerCase(),
+      caption.timestamp.millisecondsSinceEpoch.toString(),
+      if ((caption.customSoundId ?? '').trim().isNotEmpty)
+        caption.customSoundId!.trim().toLowerCase(),
+    ].join(':');
+
     final alert = TriggerAlert(
       triggerWord: caption.displaySound,
       detectedText: _buildCaptionSummary(caption),
@@ -158,7 +169,7 @@ class _HomePageState extends State<HomePage> {
       source: caption.source == SoundCaptionSource.custom
           ? TriggerAlert.sourceCustomSound
           : TriggerAlert.sourceSoundRecognition,
-      metadata: _buildCaptionMetadata(caption),
+      metadata: _buildCaptionMetadata(caption, eventKey: eventKey),
     );
 
     final inserted = await _triggerWordService.addAlert(alert);
@@ -175,7 +186,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showCaptionDetails(SoundCaption caption) async {
-    await AdaptiveAlertDialog.show(
+    await showThemedAdaptiveAlertDialog(
       context: context,
       title: caption.displaySound,
       message: _buildCaptionDetailsMessage(caption),
@@ -192,12 +203,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Map<String, dynamic> _buildCaptionMetadata(SoundCaption caption) {
+  Map<String, dynamic> _buildCaptionMetadata(
+    SoundCaption caption, {
+    String? eventKey,
+  }) {
     return {
       'detectorLabel': _captionDetectorLabel(caption),
       'confidencePercent': (caption.confidence * 100).round(),
       'priorityLabel': caption.isCritical ? 'Critical' : 'Standard',
       'isCritical': caption.isCritical,
+      if ((caption.customSoundId ?? '').trim().isNotEmpty)
+        'customSoundId': caption.customSoundId,
+      if ((eventKey ?? '').trim().isNotEmpty) 'soundEventKey': eventKey,
     };
   }
 

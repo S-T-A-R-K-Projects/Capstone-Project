@@ -219,7 +219,8 @@ class _SoundCaptionMenuButton extends StatefulWidget {
   final VoidCallback? onDelete;
 
   @override
-  State<_SoundCaptionMenuButton> createState() => _SoundCaptionMenuButtonState();
+  State<_SoundCaptionMenuButton> createState() =>
+      _SoundCaptionMenuButtonState();
 }
 
 class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
@@ -240,9 +241,15 @@ class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
         (action) => AdaptivePopupMenuItem<String>(
           label: action.label,
           icon: switch (action.value) {
-            'details' => PlatformInfo.isIOS26OrHigher() ? 'info.circle' : Icons.info_outline_rounded,
-            'save_to_alerts' => PlatformInfo.isIOS26OrHigher() ? 'bookmark' : Icons.bookmark_border_rounded,
-            'delete' => PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
+            'details' => PlatformInfo.isIOS26OrHigher()
+                ? 'info.circle'
+                : Icons.info_outline_rounded,
+            'save_to_alerts' => PlatformInfo.isIOS26OrHigher()
+                ? 'bookmark'
+                : Icons.bookmark_border_rounded,
+            'delete' => PlatformInfo.isIOS26OrHigher()
+                ? 'trash'
+                : Icons.delete_outline_rounded,
             _ => null,
           },
           value: action.value,
@@ -266,21 +273,6 @@ class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
 
   @override
   Widget build(BuildContext context) {
-    if (PlatformInfo.isIOS26OrHigher()) {
-      return PopupMenuButton<String>(
-        icon: const Icon(Icons.more_horiz_rounded),
-        onSelected: _handleMenuSelection,
-        itemBuilder: (context) => _actions
-            .map(
-              (action) => PopupMenuItem<String>(
-                value: action.value,
-                child: Text(action.label),
-              ),
-            )
-            .toList(growable: false),
-      );
-    }
-
     return SizedBox(
       width: 44,
       height: 44,

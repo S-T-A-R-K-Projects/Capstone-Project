@@ -16,6 +16,8 @@ class AboutSupportPage extends StatelessWidget {
     'flutter_staggered_animations',
     'flutter_tts',
     'google_fonts',
+    'leap_sdk',
+    'litert (TensorFlow Lite)',
     'live_activities',
     'liquid_ai',
     'path',
@@ -26,6 +28,7 @@ class AboutSupportPage extends StatelessWidget {
     'speech_to_text',
     'url_launcher',
     'uuid',
+    'vosk_android',
   ];
 
   void _copyEmail(BuildContext context) async {

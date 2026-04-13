@@ -321,8 +321,6 @@ class AudioClassificationPlugin private constructor(
   private var pendingPermissionContinuation: (() -> Unit)? = null
 
   private var yamnetRunner: YamnetLiteRtRunner? = null
-  private var audioRecord: AudioRecord? = null
-  private var captureThread: Thread? = null
   private var inferenceThread: HandlerThread? = null
   private var inferenceHandler: Handler? = null
   private var wakeLock: PowerManager.WakeLock? = null
@@ -355,6 +353,34 @@ class AudioClassificationPlugin private constructor(
   private var activeCustomMatchers: List<CustomSoundMatcher> = emptyList()
   private var shouldConfigureMonitoringAudioEffects = true
   private var speechRecognitionActive = false
+
+  private val sharedAudioListener =
+    object : SharedAudioInputManager.Listener {
+      override fun onAudioFrame(
+        buffer: ShortArray,
+        count: Int,
+      ) {
+        synchronized(stagingLock) {
+          for (i in 0 until count) {
+            val writeIndex = stagingWriteOffset % stagingBuffer.size
+            stagingBuffer[writeIndex] = buffer[i] / 32768f
+            stagingWriteOffset++
+          }
+          val overflow = (stagingWriteOffset - stagingReadOffset) - stagingBuffer.size
+          if (overflow > 0) {
+            stagingReadOffset += overflow
+          }
+        }
+      }
+
+      override fun onAudioError(
+        code: String,
+        message: String,
+      ) {
+        postError(code, message)
+        mainHandler.post { stopClassification() }
+      }
+    }
 
   // Notification state
   private var isLiveUpdateEnabled = false
@@ -389,6 +415,7 @@ class AudioClassificationPlugin private constructor(
     hideLiveUpdateNotification()
     methodChannel.setMethodCallHandler(null)
     eventChannel.setStreamHandler(null)
+    sharedInstance = null
   }
 
   fun updateActivity(activity: Activity) {
@@ -599,20 +626,7 @@ class AudioClassificationPlugin private constructor(
       )
     }
 
-    val minBufferSize =
-      AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-    val bufferSizeInBytes = max(minBufferSize, BUILT_IN_CLASSIFICATION_SAMPLE_COUNT * 2)
-    val (recorder, monitoringAudioSource) =
-      createMonitoringAudioRecord(bufferSizeInBytes)
-
-    if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-      runner.close()
-      recorder.release()
-      throw IllegalStateException("Unable to initialize microphone for audio classification.")
-    }
-
     yamnetRunner = runner
-    audioRecord = recorder
 
     builtInWindowFillCount = 0
     builtInRollingWindow.fill(0f)
@@ -625,69 +639,29 @@ class AudioClassificationPlugin private constructor(
     resetEmissionThrottleState()
     resetBuiltInCandidate(clearTemporalScores = true)
     resetCustomCandidate()
-    isRunning.set(true)
 
     acquireWakeLock()
-    recorder.startRecording()
-    configureMonitoringAudioEffects(recorder.audioSessionId)
-    logMonitoringCaptureState(recorder)
 
-    // Drain stale audio from the mic init phase.
-    val drainBuffer = ShortArray(INFERENCE_HOP_SAMPLE_COUNT)
-    recorder.read(drainBuffer, 0, drainBuffer.size, AudioRecord.READ_NON_BLOCKING)
-
-    // Start capture thread: reads audio continuously, writes to staging buffer.
-    captureThread = Thread({
-      android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
-      captureLoop()
-    }, "senscribe-audio-capture").also { it.start() }
-
-    // Start inference thread: consumes staging buffer, runs YAMNet.
-    inferenceThread = HandlerThread("senscribe-audio-inference").also { it.start() }
-    inferenceHandler = Handler(inferenceThread!!.looper).also { handler ->
-      handler.post(inferenceRunnable)
+    try {
+      SharedAudioInputManager.addListener(context, "senscribe.sound_monitoring", sharedAudioListener)
+      isRunning.set(true)
+      // Start inference thread: consumes staged audio and runs YAMNet.
+      inferenceThread = HandlerThread("senscribe-audio-inference").also { it.start() }
+      inferenceHandler = Handler(inferenceThread!!.looper).also { handler ->
+        handler.post(inferenceRunnable)
+      }
+    } catch (error: Exception) {
+      inferenceHandler?.removeCallbacksAndMessages(null)
+      inferenceHandler = null
+      inferenceThread?.quitSafely()
+      inferenceThread = null
+      yamnetRunner?.close()
+      yamnetRunner = null
+      releaseWakeLock()
+      throw error
     }
 
     sendStatus("started")
-  }
-
-  /** Capture thread: continuously reads PCM from mic into the staging buffer. */
-  private fun captureLoop() {
-    val readBuffer = captureReadBuffer
-    while (isRunning.get()) {
-      val recorder = audioRecord ?: break
-
-      var totalRead = 0
-      while (totalRead < INFERENCE_HOP_SAMPLE_COUNT && isRunning.get()) {
-        val read = recorder.read(
-          readBuffer,
-          totalRead,
-          INFERENCE_HOP_SAMPLE_COUNT - totalRead,
-          AudioRecord.READ_BLOCKING,
-        )
-        if (read < 0) {
-          postError("stream_failed", "Audio recorder read failure: $read")
-          mainHandler.post { stopClassification() }
-          return
-        }
-        totalRead += read
-      }
-
-      if (!isRunning.get() || totalRead <= 0) break
-
-      // Convert to float and write into the staging ring buffer.
-      synchronized(stagingLock) {
-        for (i in 0 until totalRead) {
-          val writeIndex = stagingWriteOffset % stagingBuffer.size
-          stagingBuffer[writeIndex] = readBuffer[i] / 32768f
-          stagingWriteOffset++
-        }
-        val overflow = (stagingWriteOffset - stagingReadOffset) - stagingBuffer.size
-        if (overflow > 0) {
-          stagingReadOffset += overflow
-        }
-      }
-    }
   }
 
   /** Inference thread: consumes staged audio, runs YAMNet and custom matching. */
@@ -990,25 +964,13 @@ class AudioClassificationPlugin private constructor(
       return
     }
 
+    SharedAudioInputManager.removeListener("senscribe.sound_monitoring")
+
     // Stop inference thread first.
     inferenceHandler?.removeCallbacksAndMessages(null)
     inferenceHandler = null
     inferenceThread?.quitSafely()
     inferenceThread = null
-
-    // Wait for capture thread to finish (it checks isRunning).
-    captureThread?.join(500)
-    captureThread = null
-
-    audioRecord?.let { recorder ->
-      try {
-        recorder.stop()
-      } catch (_: IllegalStateException) {
-        // Ignore stop failures when the recorder is already stopping.
-      }
-      recorder.release()
-    }
-    audioRecord = null
 
     yamnetRunner?.close()
     yamnetRunner = null

@@ -5,8 +5,10 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../models/live_activity_snapshot.dart';
 import '../models/sound_caption.dart';
+import '../models/sound_filter.dart';
 import 'app_settings_service.dart';
 import 'audio_classification_service.dart';
+import 'sound_filter_service.dart';
 
 class LiveUpdateService {
   static final LiveUpdateService _instance = LiveUpdateService._internal();
@@ -18,6 +20,7 @@ class LiveUpdateService {
   static const MethodChannel _iosMethodChannel =
       MethodChannel('senscribe/ios_live_activities');
   final AppSettingsService _settingsService = AppSettingsService();
+  final SoundFilterService _filterService = SoundFilterService();
 
   bool _isEnabled = false;
   bool get isEnabled => _isEnabled;
@@ -27,8 +30,10 @@ class LiveUpdateService {
 
   AudioClassificationService? _audioService;
   StreamSubscription<List<SoundCaption>>? _audioHistorySubscription;
+  StreamSubscription<Set<SoundFilterId>>? _filterSelectionSubscription;
   Future<void>? _initializationFuture;
   LiveActivitySnapshot? _currentSnapshot;
+  SoundCaption? _currentSnapshotEvent;
   String? _lastProcessedEventSignature;
   bool _isIosPluginReady = false;
   bool _isInitializing = false;
@@ -44,9 +49,12 @@ class LiveUpdateService {
   Future<void> initialize({
     required AudioClassificationService audioService,
   }) async {
+    await _filterService.initialize();
     _audioService = audioService;
     _audioHistorySubscription ??=
         audioService.historyStream.listen(_handleAudioHistoryUpdate);
+    _filterSelectionSubscription ??=
+        _filterService.selectionStream.listen(_handleFilterSelectionChanged);
 
     if (_initializationFuture != null) {
       return _initializationFuture;
@@ -70,6 +78,7 @@ class LiveUpdateService {
       _isInitializing = false;
     }
 
+    await _syncAndroidFilterConfig();
     await _syncMonitoringStateInternal(isMonitoring: audioService.isMonitoring);
   }
 
@@ -179,6 +188,7 @@ class LiveUpdateService {
 
     if (resetSnapshot) {
       _currentSnapshot = null;
+      _currentSnapshotEvent = null;
       _lastProcessedEventSignature = null;
     }
 
@@ -189,9 +199,22 @@ class LiveUpdateService {
     if (!Platform.isIOS || !(_audioService?.isMonitoring ?? false)) {
       return;
     }
-    if (events.isEmpty) return;
+    if (events.isEmpty) {
+      return;
+    }
 
-    final latestEvent = events.first;
+    SoundCaption? latestEvent;
+    for (final event in events) {
+      if (_filterService.matchesCaption(event)) {
+        latestEvent = event;
+        break;
+      }
+    }
+
+    if (latestEvent == null) {
+      return;
+    }
+
     final eventSignature = [
       latestEvent.source.name,
       latestEvent.customSoundId ?? '',
@@ -204,6 +227,7 @@ class LiveUpdateService {
     }
 
     _lastProcessedEventSignature = eventSignature;
+    _currentSnapshotEvent = latestEvent;
     _currentSnapshot = (_currentSnapshot ??
             LiveActivitySnapshot(
               status: LiveActivityStatus.listening,
@@ -224,6 +248,71 @@ class LiveUpdateService {
     }
   }
 
+  void _handleFilterSelectionChanged(Set<SoundFilterId> selectedFilters) {
+    unawaited(_syncFilterSelectionChange(selectedFilters));
+  }
+
+  Future<void> _syncFilterSelectionChange(
+    Set<SoundFilterId> selectedFilters,
+  ) async {
+    await _syncAndroidFilterConfig(selectedFilters: selectedFilters);
+
+    if (!Platform.isIOS) {
+      return;
+    }
+
+    final currentEvent = _currentSnapshotEvent;
+    if (currentEvent == null) {
+      return;
+    }
+
+    if (_filterService.matchesCaption(
+      currentEvent,
+      selectedFilters: selectedFilters,
+    )) {
+      return;
+    }
+
+    _resetSnapshotToListening();
+    if (_audioService?.isMonitoring ?? false) {
+      try {
+        await syncMonitoringState(isMonitoring: true);
+      } catch (e) {
+        _log('Failed to sync iOS Live Activity after filter change: $e');
+      }
+    }
+  }
+
+  Future<void> _syncAndroidFilterConfig({
+    Set<SoundFilterId>? selectedFilters,
+  }) async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'setLiveUpdateFilterConfig',
+        _filterService.androidLiveUpdateFilterConfig(
+          selectedFilters: selectedFilters,
+        ),
+      );
+    } catch (e) {
+      _log('Failed to sync Android live update filters: $e');
+    }
+  }
+
+  void _resetSnapshotToListening() {
+    final startedAtMs =
+        _currentSnapshot?.startedAtMs ?? DateTime.now().millisecondsSinceEpoch;
+    _currentSnapshot = LiveActivitySnapshot(
+      status: LiveActivityStatus.listening,
+      startedAtMs: startedAtMs,
+    );
+    _currentSnapshotEvent = null;
+    _lastProcessedEventSignature = null;
+  }
+
   void _setEnabledState(bool enabled) {
     if (_isEnabled == enabled) return;
     _isEnabled = enabled;
@@ -232,7 +321,9 @@ class LiveUpdateService {
 
   void dispose() {
     unawaited(_audioHistorySubscription?.cancel());
+    unawaited(_filterSelectionSubscription?.cancel());
     _audioHistorySubscription = null;
+    _filterSelectionSubscription = null;
     _statusController.close();
   }
 }

@@ -7,7 +7,22 @@ import '../screens/settings_page.dart';
 import '../services/app_permission_service.dart';
 
 class MainNavigationPage extends StatefulWidget {
+  static final GlobalKey<_MainNavigationPageState> _navigationKey =
+      GlobalKey<_MainNavigationPageState>();
+
   const MainNavigationPage({super.key});
+
+  static Key get navigationKey => _navigationKey;
+
+  static void showAlertsTab({int selectedTabIndex = 0}) {
+    _navigationKey.currentState?._showAlertsTab(
+      selectedTabIndex: selectedTabIndex,
+    );
+  }
+
+  static void setTabBarHidden(bool hidden) {
+    _navigationKey.currentState?._setTabBarHidden(hidden);
+  }
 
   @override
   State<MainNavigationPage> createState() => _MainNavigationPageState();
@@ -16,10 +31,11 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> {
   final AppPermissionService _permissionService = AppPermissionService();
   int _selectedIndex = 0;
+  bool _tabBarHidden = false;
   final List<Widget> _pages = [
     HomeTab(key: HomeTab.navigationKey),
     const HistoryPage(),
-    const AlertsPage(),
+    AlertsPage(key: AlertsPage.navigationKey),
     const SettingsPage(),
   ];
 
@@ -39,11 +55,38 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     }
   }
 
+  void _showAlertsTab({int selectedTabIndex = 0}) {
+    if (mounted && _selectedIndex != 2) {
+      setState(() {
+        _selectedIndex = 2;
+      });
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (selectedTabIndex == 1) {
+        AlertsPage.showTriggerWords();
+      } else {
+        AlertsPage.showRecentAlerts();
+      }
+    });
+  }
+
+  void _setTabBarHidden(bool hidden) {
+    if (!mounted || _tabBarHidden == hidden) {
+      return;
+    }
+
+    setState(() {
+      _tabBarHidden = hidden;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final useNativeBar = PlatformInfo.isIOS26OrHigher();
 
     return AdaptiveScaffold(
+      tabBarHidden: _tabBarHidden,
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           return true; // Stop scroll notifications from reaching AdaptiveScaffold to prevent dock scaling

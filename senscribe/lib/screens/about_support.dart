@@ -136,6 +136,150 @@ class AboutSupportPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
+              _buildSection(
+                context,
+                'Speech & Audio Functions',
+                Icons.record_voice_over_rounded,
+                'SenScribe combines sound recognition, speech-to-text, text-to-speech, alert triggers, and custom sound alerts in one on-device workflow.\n\n'
+                    'The detailed sections below explain the speech and audio features that were previously split into a separate settings page.',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'Speech-to-Text (STT)',
+                Icons.mic_rounded,
+                'Convert spoken words into written text.\n\n'
+                    '• Real-time speech recognition\n'
+                    '• Processes audio as you speak\n'
+                    '• Displays confidence levels\n'
+                    '• Works with multiple languages\n'
+                    '• Local processing (no cloud upload)',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'STT Features',
+                Icons.check_circle_rounded,
+                '• Start or stop recording manually\n'
+                    '• Auto-stop on silence when supported\n'
+                    '• Display live transcription as you speak\n'
+                    '• Copy text to clipboard\n'
+                    '• Share transcription\n'
+                    '• Save text to Saved Texts',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'STT Configuration',
+                Icons.settings_voice_rounded,
+                '• Select the input language\n'
+                    '• Adjust silence timeout where supported\n'
+                    '• Toggle partial result display\n'
+                    '• Enable or disable sound effects\n'
+                    '• Use the device microphone or compatible headset microphone',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'Text-to-Speech (TTS)',
+                Icons.volume_up_rounded,
+                'Convert written text into spoken audio.\n\n'
+                    '• Synthesize text into speech locally when supported by the device\n'
+                    '• Multiple voice options\n'
+                    '• Adjustable speech rate\n'
+                    '• Adjustable pitch and volume\n'
+                    '• Support for multiple languages',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'TTS Features',
+                Icons.play_circle_rounded,
+                '• Type or paste text to speak\n'
+                    '• Play, pause, or stop speech playback\n'
+                    '• Speed control\n'
+                    '• Multiple voice options depending on the platform\n'
+                    '• Save generated text to Saved Texts for later review',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'TTS Configuration',
+                Icons.tune_rounded,
+                '• Select an available voice\n'
+                    '• Adjust speech rate\n'
+                    '• Adjust pitch\n'
+                    '• Adjust output volume\n'
+                    '• Select the output language supported by the platform TTS engine',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'Saved Texts & Management',
+                Icons.history_rounded,
+                'Keep track of your transcriptions and generated text.\n\n'
+                    '• View saved STT and TTS entries\n'
+                    '• Search by date or keyword\n'
+                    '• Delete individual items\n'
+                    '• Clear saved history when needed\n'
+                    '• All saved entries remain on this device',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'Accessibility Integration',
+                Icons.accessibility_rounded,
+                '• Compatible with screen readers\n'
+                    '• Works with Bluetooth and headset microphones\n'
+                    '• Large text and high-contrast themes are supported by the app theme system\n'
+                    '• Audio, speech, and alert tools are designed to stay usable across iOS and Android device sizes',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'Performance & Accuracy',
+                Icons.speed_rounded,
+                '• Fast on-device processing\n'
+                    '• Offline functionality for core speech and sound features\n'
+                    '• Accuracy depends on microphone quality and background noise\n'
+                    '• Battery usage increases during active monitoring\n'
+                    '• Recent detections and saved texts stay local on the device',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'Troubleshooting',
+                Icons.help_rounded,
+                '• No microphone input: check microphone permission and system privacy settings\n'
+                    '• Poor STT or sound accuracy: reduce background noise and keep the sound source clear\n'
+                    '• TTS not playing: check device volume and mute settings\n'
+                    '• A language is unavailable: install the language pack or voice in system settings if required\n'
+                    '• Monitoring feels delayed: close other heavy apps and keep the device unlocked during testing',
+              ),
+              const SizedBox(height: 16),
+
+              _buildSection(
+                context,
+                'Best Practices',
+                Icons.lightbulb_rounded,
+                '• Speak clearly for better STT accuracy\n'
+                    '• Keep the microphone at a practical distance from the sound source\n'
+                    '• Minimize background noise when testing recognition\n'
+                    '• Review important transcriptions and save them when needed\n'
+                    '• Use Sound Filters to reduce noise in the sound feed before monitoring',
+              ),
+              const SizedBox(height: 16),
+
               // Platform Support
               _buildSection(
                 context,

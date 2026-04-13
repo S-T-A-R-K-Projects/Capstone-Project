@@ -6,11 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import '../utils/themed_adaptive_alert_dialog.dart';
 import '../models/sound_caption.dart';
+import '../models/sound_filter.dart';
 import '../models/trigger_alert.dart';
 import '../utils/time_utils.dart';
 import '../widgets/sound_caption_card.dart';
 import '../services/audio_classification_service.dart';
+import '../services/sound_filter_service.dart';
 import '../services/trigger_word_service.dart';
 
 class HomePage extends StatefulWidget {
@@ -30,13 +33,16 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Critical', 'Custom', 'Speech'];
   final AudioClassificationService _audioService = AudioClassificationService();
+  final SoundFilterService _soundFilterService = SoundFilterService();
   final TriggerWordService _triggerWordService = TriggerWordService();
   List<SoundCaption> _captions = [];
   StreamSubscription<List<SoundCaption>>? _classificationSubscription;
+  StreamSubscription<Set<SoundFilterId>>? _filterSelectionSubscription;
   late bool _isMonitoring;
+  Set<SoundFilterId> _selectedFilters = Set<SoundFilterId>.from(
+    SoundFilterId.defaultSelection,
+  );
 
   // Cached filtered list — invalidated when _captions or _selectedFilter change.
   List<SoundCaption>? _filteredCaptionsCache;
@@ -44,9 +50,11 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    unawaited(_soundFilterService.initialize());
     _isMonitoring = widget.isMonitoring;
     // Sync initial state
     _captions = List.from(_audioService.history);
+    _selectedFilters = _soundFilterService.selectedFilters;
 
     // Subscribe to shared history
     _classificationSubscription = _audioService.historyStream.listen((events) {
@@ -56,6 +64,14 @@ class _HomePageState extends State<HomePage> {
           _filteredCaptionsCache = null; // invalidate
         });
       }
+    });
+    _filterSelectionSubscription =
+        _soundFilterService.selectionStream.listen((selectedFilters) {
+      if (!mounted) return;
+      setState(() {
+        _selectedFilters = selectedFilters;
+        _filteredCaptionsCache = null;
+      });
     });
 
     if (_isMonitoring) {
@@ -79,6 +95,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _classificationSubscription?.cancel();
+    _filterSelectionSubscription?.cancel();
     super.dispose();
   }
 
@@ -135,6 +152,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _saveCaptionToAlerts(SoundCaption caption) async {
+    final eventKey = [
+      caption.source == SoundCaptionSource.custom
+          ? TriggerAlert.sourceCustomSound
+          : TriggerAlert.sourceSoundRecognition,
+      caption.displaySound.trim().toLowerCase(),
+      caption.timestamp.millisecondsSinceEpoch.toString(),
+      if ((caption.customSoundId ?? '').trim().isNotEmpty)
+        caption.customSoundId!.trim().toLowerCase(),
+    ].join(':');
+
     final alert = TriggerAlert(
       triggerWord: caption.displaySound,
       detectedText: _buildCaptionSummary(caption),
@@ -142,7 +169,7 @@ class _HomePageState extends State<HomePage> {
       source: caption.source == SoundCaptionSource.custom
           ? TriggerAlert.sourceCustomSound
           : TriggerAlert.sourceSoundRecognition,
-      metadata: _buildCaptionMetadata(caption),
+      metadata: _buildCaptionMetadata(caption, eventKey: eventKey),
     );
 
     final inserted = await _triggerWordService.addAlert(alert);
@@ -159,7 +186,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showCaptionDetails(SoundCaption caption) async {
-    await AdaptiveAlertDialog.show(
+    await showThemedAdaptiveAlertDialog(
       context: context,
       title: caption.displaySound,
       message: _buildCaptionDetailsMessage(caption),
@@ -176,12 +203,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Map<String, dynamic> _buildCaptionMetadata(SoundCaption caption) {
+  Map<String, dynamic> _buildCaptionMetadata(
+    SoundCaption caption, {
+    String? eventKey,
+  }) {
     return {
       'detectorLabel': _captionDetectorLabel(caption),
       'confidencePercent': (caption.confidence * 100).round(),
       'priorityLabel': caption.isCritical ? 'Critical' : 'Standard',
       'isCritical': caption.isCritical,
+      if ((caption.customSoundId ?? '').trim().isNotEmpty)
+        'customSoundId': caption.customSoundId,
+      if ((eventKey ?? '').trim().isNotEmpty) 'soundEventKey': eventKey,
     };
   }
 
@@ -343,18 +376,73 @@ class _HomePageState extends State<HomePage> {
 
   List<SoundCaption> get _filteredCaptions {
     if (_filteredCaptionsCache != null) return _filteredCaptionsCache!;
-    final List<SoundCaption> result;
-    if (_selectedFilter == 'Critical') {
-      result = _captions.where((caption) => caption.isCritical).toList();
-    } else if (_selectedFilter == 'Custom') {
-      result = _captions
-          .where((caption) => caption.source == SoundCaptionSource.custom)
-          .toList();
-    } else {
-      result = List<SoundCaption>.from(_captions);
-    }
+    final result = _soundFilterService.visibleCaptions(
+      _captions,
+      selectedFilters: _selectedFilters,
+    );
     _filteredCaptionsCache = result;
     return result;
+  }
+
+  Future<void> _onFilterChipPressed(
+    SoundFilterId filterId,
+    bool selected,
+  ) async {
+    final result =
+        await _soundFilterService.setFilterSelected(filterId, selected);
+    if (!mounted) return;
+
+    if (result == SoundFilterSelectionResult.updated &&
+        !_soundFilterService.hasAnySelectedFilters) {
+      _showNoFiltersSelectedMessage();
+    }
+  }
+
+  Future<void> _onAllFilterPressed() async {
+    await _soundFilterService.selectAllFilters();
+    if (!mounted) return;
+    if (!_soundFilterService.hasAnySelectedFilters) {
+      _showNoFiltersSelectedMessage();
+    }
+  }
+
+  void _showNoFiltersSelectedMessage() {
+    const message = 'Please select a filter to show the sounds';
+
+    if (!Platform.isAndroid) {
+      AdaptiveSnackBar.show(
+        context,
+        message: message,
+        type: AdaptiveSnackBarType.info,
+      );
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    final snackBarTheme = Theme.of(context).snackBarTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: snackBarTheme.contentTextStyle ??
+                GoogleFonts.inter(
+                  color: colorScheme.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+          behavior: snackBarTheme.behavior ?? SnackBarBehavior.floating,
+          backgroundColor: snackBarTheme.backgroundColor ??
+              colorScheme.surfaceContainerHighest,
+          shape: snackBarTheme.shape,
+          margin: snackBarTheme.insetPadding,
+          duration: const Duration(seconds: 4),
+        ),
+      );
   }
 
   @override
@@ -376,7 +464,8 @@ class _HomePageState extends State<HomePage> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: AdaptiveCard(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 child: Row(
                   children: [
                     AnimatedBuilder(
@@ -455,13 +544,9 @@ class _HomePageState extends State<HomePage> {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: _filters.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final filter = entry.value;
-                    final isSelected = _selectedFilter == filter;
-
-                    return AnimationConfiguration.staggeredList(
-                      position: index,
+                  children: [
+                    AnimationConfiguration.staggeredList(
+                      position: 0,
                       duration: const Duration(milliseconds: 375),
                       child: SlideAnimation(
                         horizontalOffset: 50.0,
@@ -470,21 +555,18 @@ class _HomePageState extends State<HomePage> {
                             padding: const EdgeInsets.only(right: 8),
                             child: FilterChip(
                               label: Text(
-                                filter,
+                                'All',
                                 style: GoogleFonts.inter(
-                                  color: isSelected
-                                      ? scheme.onPrimary
-                                      : scheme.onSurface,
+                                  color:
+                                      _soundFilterService.areAllFiltersSelected
+                                          ? scheme.onPrimary
+                                          : scheme.onSurface,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setState(() {
-                                  _selectedFilter = filter;
-                                  _filteredCaptionsCache = null;
-                                });
-                              },
+                              selected:
+                                  _soundFilterService.areAllFiltersSelected,
+                              onSelected: (_) => _onAllFilterPressed(),
                               selectedColor: scheme.primary,
                               backgroundColor: scheme.surfaceContainerHighest,
                               elevation: 2,
@@ -493,8 +575,44 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    ...SoundFilterId.displayOrder.asMap().entries.map((entry) {
+                      final index = entry.key + 1;
+                      final filter = entry.value;
+                      final isSelected = _selectedFilters.contains(filter);
+
+                      return AnimationConfiguration.staggeredList(
+                        position: index,
+                        duration: const Duration(milliseconds: 375),
+                        child: SlideAnimation(
+                          horizontalOffset: 50.0,
+                          child: FadeInAnimation(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(
+                                  filter.label,
+                                  style: GoogleFonts.inter(
+                                    color: isSelected
+                                        ? scheme.onPrimary
+                                        : scheme.onSurface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                selected: isSelected,
+                                onSelected: (selected) =>
+                                    _onFilterChipPressed(filter, selected),
+                                selectedColor: scheme.primary,
+                                backgroundColor: scheme.surfaceContainerHighest,
+                                elevation: 2,
+                                pressElevation: 4,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                 ),
               ),
             ),
@@ -530,6 +648,7 @@ class _HomePageState extends State<HomePage> {
                       style: AdaptiveButtonStyle.plain,
                       color: scheme.error,
                       size: AdaptiveButtonSize.small,
+                      useNative: false,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -539,6 +658,7 @@ class _HomePageState extends State<HomePage> {
                       label: 'Latest: $_historyLimitLabel',
                       style: AdaptiveButtonStyle.plain,
                       size: AdaptiveButtonSize.small,
+                      useNative: false,
                     ),
                   ),
                 ],
@@ -563,7 +683,11 @@ class _HomePageState extends State<HomePage> {
                               .shimmer(duration: 1000.ms),
                           const SizedBox(height: 24),
                           Text(
-                            'No sounds detected yet',
+                            _selectedFilters.isEmpty
+                                ? 'No filters selected'
+                                : _captions.isEmpty
+                                    ? 'No sounds detected yet'
+                                    : 'No sounds match the selected filters',
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: scheme.onSurface.withValues(alpha: 0.8),
                               fontWeight: FontWeight.w600,
@@ -571,7 +695,11 @@ class _HomePageState extends State<HomePage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Start monitoring to see live captions',
+                            _selectedFilters.isEmpty
+                                ? 'Select a filter chip above to show matching sounds'
+                                : _captions.isEmpty
+                                    ? 'Start monitoring to see live captions'
+                                    : 'Adjust the filter chips above to show more sounds',
                             style: theme.textTheme.bodyMedium?.copyWith(
                                 color: scheme.onSurface.withValues(alpha: 0.7)),
                           ),

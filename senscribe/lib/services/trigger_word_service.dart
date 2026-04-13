@@ -25,6 +25,7 @@ class TriggerWordService {
   // In-memory caches — invalidated on every write operation.
   List<TriggerWord>? _triggerWordsCache;
   List<TriggerAlert>? _alertsCache;
+  final Set<String> _pendingSoundAlertKeys = <String>{};
 
   Future<List<TriggerWord>> loadTriggerWords() async {
     if (_triggerWordsCache != null) return _triggerWordsCache!;
@@ -127,16 +128,34 @@ class TriggerWordService {
   }
 
   Future<bool> addAlert(TriggerAlert alert) async {
-    final alerts = await loadAlerts();
     if (alert.isSoundAlert) {
-      final alreadySaved = alerts.any(
-        (existingAlert) =>
-            existingAlert.isSoundAlert &&
-            existingAlert.normalizedSoundKey == alert.normalizedSoundKey,
-      );
-      if (alreadySaved) return false;
+      final soundKey = alert.normalizedSoundKey;
+      if (!_pendingSoundAlertKeys.add(soundKey)) {
+        return false;
+      }
+
+      try {
+        final alerts = List<TriggerAlert>.from(await loadAlerts());
+        final alreadySaved = alerts.any(
+          (existingAlert) =>
+              existingAlert.isSoundAlert &&
+              existingAlert.normalizedSoundKey == soundKey,
+        );
+        if (alreadySaved) return false;
+
+        alerts.insert(0, alert);
+        if (alerts.length > AppConstants.alertHistoryMaxItems) {
+          alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
+        }
+        await saveAlerts(alerts);
+        // TODO: Add vibration/haptic feedback for alert trigger.
+        return true;
+      } finally {
+        _pendingSoundAlertKeys.remove(soundKey);
+      }
     }
 
+    final alerts = List<TriggerAlert>.from(await loadAlerts());
     alerts.insert(0, alert);
     if (alerts.length > AppConstants.alertHistoryMaxItems) {
       alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);

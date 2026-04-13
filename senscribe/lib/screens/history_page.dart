@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import '../navigation/adaptive_page_route.dart';
 import '../models/history_item.dart';
+import '../widgets/adaptive_input_sheet.dart';
 import '../services/history_service.dart';
 import '../services/summarization_service.dart';
 import '../utils/time_utils.dart';
@@ -15,26 +16,13 @@ Future<String?> _showRenameTranscriptionDialog(
   BuildContext context, {
   required String initialTitle,
 }) async {
-  final updatedTitle = await AdaptiveAlertDialog.inputShow(
+  final updatedTitle = await showAdaptiveTextEntrySheet(
     context: context,
     title: 'Rename transcription',
-    actions: [
-      AlertAction(
-        title: 'Cancel',
-        style: AlertActionStyle.cancel,
-        onPressed: () {},
-      ),
-      AlertAction(
-        title: 'Save',
-        style: AlertActionStyle.primary,
-        onPressed: () {},
-      ),
-    ],
-    input: AdaptiveAlertDialogInput(
-      placeholder: 'Name',
-      initialValue: initialTitle,
-      maxLength: 40,
-    ),
+    placeholder: 'Name',
+    primaryActionLabel: 'Save',
+    initialValue: initialTitle,
+    maxLength: 40,
   );
 
   return updatedTitle?.trim();
@@ -133,10 +121,9 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Future<void> _openDetail(HistoryItem item) async {
-    final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => HistoryDetailPage(itemId: item.id),
-      ),
+    final changed = await pushAdaptivePage<bool>(
+      context,
+      builder: (_) => HistoryDetailPage(itemId: item.id),
     );
 
     if (changed == true && mounted) {
@@ -463,9 +450,9 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
           title: 'Configure Now',
           style: AlertActionStyle.primary,
           onPressed: () {
-            Navigator.push(
+            pushAdaptivePage<void>(
               context,
-              MaterialPageRoute(builder: (_) => const ModelSettingsPage()),
+              builder: (_) => const ModelSettingsPage(),
             );
           },
         ),

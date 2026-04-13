@@ -257,15 +257,13 @@ class _CustomSoundEnrollmentPageState extends State<CustomSoundEnrollmentPage> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final topInset = PlatformInfo.isIOS26OrHigher()
+        ? MediaQuery.of(context).padding.top + kToolbarHeight
+        : 0.0;
 
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(
         title: _currentProfile.name,
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: 'Back',
-        ),
       ),
       body: Material(
         color: Colors.transparent,
@@ -275,229 +273,234 @@ class _CustomSoundEnrollmentPageState extends State<CustomSoundEnrollmentPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-              Text(
-                'Record 10 examples of the target sound, then record 3 background samples so the custom detector can reject unrelated noise more reliably.',
-                style: GoogleFonts.inter(
-                  color: scheme.onSurface.withValues(alpha: 0.72),
+                if (topInset > 0) SizedBox(height: topInset),
+                Text(
+                  'Record 10 examples of the target sound, then record 3 background samples so the custom detector can reject unrelated noise more reliably.',
+                  style: GoogleFonts.inter(
+                    color: scheme.onSurface.withValues(alpha: 0.72),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildProgressChip(
-                    'Samples ${_currentProfile.targetSampleCount}/$kRequiredCustomSoundSamples',
-                    _currentProfile.targetSampleCount >=
-                        kRequiredCustomSoundSamples,
-                  ),
-                  _buildProgressChip(
-                    'Background ${_currentProfile.backgroundSampleCount}/$kRequiredBackgroundSamples',
-                    _currentProfile.backgroundSampleCount >=
-                        kRequiredBackgroundSamples,
-                  ),
-                  _buildProgressChip(
-                    _customStatusLabel(_currentProfile),
-                    _currentProfile.status == CustomSoundProfileStatus.ready,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              AdaptiveCard(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Icon(
-                      _statusIcon,
-                      color: _statusColor,
-                      size: 22,
+                    _buildProgressChip(
+                      'Samples ${_currentProfile.targetSampleCount}/$kRequiredCustomSoundSamples',
+                      _currentProfile.targetSampleCount >=
+                          kRequiredCustomSoundSamples,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _statusTitle,
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _statusDetail,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: scheme.onSurface.withValues(alpha: 0.7),
-                            ),
-                          ),
-                          if (_isBusy) ...[
-                            const SizedBox(height: 10),
-                            LinearProgressIndicator(
-                              minHeight: 6,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _busyLabel,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: scheme.onSurface.withValues(alpha: 0.62),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                    _buildProgressChip(
+                      'Background ${_currentProfile.backgroundSampleCount}/$kRequiredBackgroundSamples',
+                      _currentProfile.backgroundSampleCount >=
+                          kRequiredBackgroundSamples,
+                    ),
+                    _buildProgressChip(
+                      _customStatusLabel(_currentProfile),
+                      _currentProfile.status == CustomSoundProfileStatus.ready,
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              AdaptiveCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Target Samples',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w700,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Capture 10 clips of the sound you want to detect. Try small variations in distance and angle, but keep the sound itself clear.',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: scheme.onSurface.withValues(alpha: 0.68),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    for (var index = 0;
-                        index < kRequiredCustomSoundSamples;
-                        index++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: AdaptiveButton(
-                          key: ValueKey(
-                            'custom-sample-${_currentProfile.id}-${index + 1}-${_currentProfile.targetSampleCount}-$_isBusy-$_activeSampleNumber',
-                          ),
-                          enabled: !_isBusy,
-                          onPressed: _isBusy
-                              ? null
-                              : () => _runCapture(
-                                    sampleNumber: index + 1,
-                                    label: 'Sample ${index + 1}',
-                                    action: () =>
-                                        _customSoundService.captureTargetSample(
-                                      _currentProfile,
-                                      index,
-                                    ),
-                                  ),
-                          label: _isBusy && _activeSampleNumber == index + 1
-                              ? 'Recording Sample ${index + 1}...'
-                              : index < _currentProfile.targetSampleCount
-                                  ? 'Re-record Sample ${index + 1}'
-                                  : 'Record Sample ${index + 1}',
-                          style: AdaptiveButtonStyle.filled,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              AdaptiveCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Background Samples',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w700,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Capture 3 clips of nearby environmental noise without the target sound. This improves false-positive rejection.',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: scheme.onSurface.withValues(alpha: 0.68),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    for (var index = 0;
-                        index < kRequiredBackgroundSamples;
-                        index++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: AdaptiveButton(
-                          key: ValueKey(
-                            'custom-background-${_currentProfile.id}-${index + 1}-${_currentProfile.backgroundSampleCount}-$_isBusy-$_activeSampleNumber',
-                          ),
-                          enabled: !_isBusy &&
-                              _currentProfile.targetSampleCount >=
-                                  kRequiredCustomSoundSamples,
-                          onPressed: _isBusy ||
-                                  _currentProfile.targetSampleCount <
-                                      kRequiredCustomSoundSamples
-                              ? null
-                              : () => _runCapture(
-                                    sampleNumber:
-                                        kRequiredCustomSoundSamples + index + 1,
-                                    label: 'Background Sample ${index + 1}',
-                                    action: () => _customSoundService
-                                        .captureBackgroundSample(
-                                      _currentProfile,
-                                      index,
-                                    ),
-                                  ),
-                          label: _isBusy &&
-                                  _activeSampleNumber ==
-                                      kRequiredCustomSoundSamples + index + 1
-                              ? 'Recording Background Sample ${index + 1}...'
-                              : index < _currentProfile.backgroundSampleCount
-                                  ? 'Re-record Background Sample ${index + 1}'
-                                  : 'Record Background Sample ${index + 1}',
-                          style: AdaptiveButtonStyle.filled,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: AdaptiveButton(
-                  key: ValueKey(
-                    'custom-train-${_currentProfile.id}-${_currentProfile.targetSampleCount}-${_currentProfile.backgroundSampleCount}-${_currentProfile.status.value}-$_isBusy',
-                  ),
-                  enabled: !_isBusy && _currentProfile.hasEnoughSamples,
-                  onPressed: _isBusy || !_currentProfile.hasEnoughSamples
-                      ? null
-                      : _runTraining,
-                  label: _isBusy && _isTraining
-                      ? 'Training Custom Model...'
-                      : _currentProfile.status == CustomSoundProfileStatus.ready
-                          ? 'Retrain Custom Model'
-                          : 'Train Custom Model',
-                  style: AdaptiveButtonStyle.filled,
-                ),
-              ),
-              if (_currentProfile.lastError != null &&
-                  _currentProfile.lastError!.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 AdaptiveCard(
-                  child: Text(
-                    _currentProfile.lastError!,
-                    style: GoogleFonts.inter(
-                      color: scheme.error,
-                      fontSize: 12,
-                    ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        _statusIcon,
+                        color: _statusColor,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _statusTitle,
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _statusDetail,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: scheme.onSurface.withValues(alpha: 0.7),
+                              ),
+                            ),
+                            if (_isBusy) ...[
+                              const SizedBox(height: 10),
+                              LinearProgressIndicator(
+                                minHeight: 6,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _busyLabel,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color:
+                                      scheme.onSurface.withValues(alpha: 0.62),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+                const SizedBox(height: 20),
+                AdaptiveCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Target Samples',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Capture 10 clips of the sound you want to detect. Try small variations in distance and angle, but keep the sound itself clear.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: scheme.onSurface.withValues(alpha: 0.68),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      for (var index = 0;
+                          index < kRequiredCustomSoundSamples;
+                          index++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AdaptiveButton(
+                            key: ValueKey(
+                              'custom-sample-${_currentProfile.id}-${index + 1}-${_currentProfile.targetSampleCount}-$_isBusy-$_activeSampleNumber',
+                            ),
+                            enabled: !_isBusy,
+                            onPressed: _isBusy
+                                ? null
+                                : () => _runCapture(
+                                      sampleNumber: index + 1,
+                                      label: 'Sample ${index + 1}',
+                                      action: () => _customSoundService
+                                          .captureTargetSample(
+                                        _currentProfile,
+                                        index,
+                                      ),
+                                    ),
+                            label: _isBusy && _activeSampleNumber == index + 1
+                                ? 'Recording Sample ${index + 1}...'
+                                : index < _currentProfile.targetSampleCount
+                                    ? 'Re-record Sample ${index + 1}'
+                                    : 'Record Sample ${index + 1}',
+                            style: AdaptiveButtonStyle.filled,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AdaptiveCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Background Samples',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Capture 3 clips of nearby environmental noise without the target sound. This improves false-positive rejection.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: scheme.onSurface.withValues(alpha: 0.68),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      for (var index = 0;
+                          index < kRequiredBackgroundSamples;
+                          index++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AdaptiveButton(
+                            key: ValueKey(
+                              'custom-background-${_currentProfile.id}-${index + 1}-${_currentProfile.backgroundSampleCount}-$_isBusy-$_activeSampleNumber',
+                            ),
+                            enabled: !_isBusy &&
+                                _currentProfile.targetSampleCount >=
+                                    kRequiredCustomSoundSamples,
+                            onPressed: _isBusy ||
+                                    _currentProfile.targetSampleCount <
+                                        kRequiredCustomSoundSamples
+                                ? null
+                                : () => _runCapture(
+                                      sampleNumber:
+                                          kRequiredCustomSoundSamples +
+                                              index +
+                                              1,
+                                      label: 'Background Sample ${index + 1}',
+                                      action: () => _customSoundService
+                                          .captureBackgroundSample(
+                                        _currentProfile,
+                                        index,
+                                      ),
+                                    ),
+                            label: _isBusy &&
+                                    _activeSampleNumber ==
+                                        kRequiredCustomSoundSamples + index + 1
+                                ? 'Recording Background Sample ${index + 1}...'
+                                : index < _currentProfile.backgroundSampleCount
+                                    ? 'Re-record Background Sample ${index + 1}'
+                                    : 'Record Background Sample ${index + 1}',
+                            style: AdaptiveButtonStyle.filled,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: AdaptiveButton(
+                    key: ValueKey(
+                      'custom-train-${_currentProfile.id}-${_currentProfile.targetSampleCount}-${_currentProfile.backgroundSampleCount}-${_currentProfile.status.value}-$_isBusy',
+                    ),
+                    enabled: !_isBusy && _currentProfile.hasEnoughSamples,
+                    onPressed: _isBusy || !_currentProfile.hasEnoughSamples
+                        ? null
+                        : _runTraining,
+                    label: _isBusy && _isTraining
+                        ? 'Training Custom Model...'
+                        : _currentProfile.status ==
+                                CustomSoundProfileStatus.ready
+                            ? 'Retrain Custom Model'
+                            : 'Train Custom Model',
+                    style: AdaptiveButtonStyle.filled,
+                  ),
+                ),
+                if (_currentProfile.lastError != null &&
+                    _currentProfile.lastError!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  AdaptiveCard(
+                    child: Text(
+                      _currentProfile.lastError!,
+                      style: GoogleFonts.inter(
+                        color: scheme.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -18,7 +19,6 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
-import android.widget.RemoteViews
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -234,11 +234,7 @@ class AudioClassificationPlugin private constructor(
       )
 
       val muteStateText = if (isLiveUpdateMuted) "Muted - no content updates" else "Tap Stop to end monitoring"
-      val remoteViews = RemoteViews(context.packageName, R.layout.live_update_notification).apply {
-        setTextViewText(R.id.notification_title, title)
-        setTextViewText(R.id.notification_content, content)
-        setTextViewText(R.id.notification_subtitle, muteStateText)
-      }
+      val largeIcon = BitmapFactory.decodeResource(context.resources, R.mipmap.senscribe_logo_round)
 
       val stopIntent = Intent(context, LiveUpdateForegroundService::class.java).apply {
         action = LiveUpdateForegroundService.ACTION_STOP
@@ -265,12 +261,20 @@ class AudioClassificationPlugin private constructor(
 
       return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-        .setCustomContentView(remoteViews)
-        .setCustomBigContentView(remoteViews)
-        .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        .setLargeIcon(largeIcon)
+        .setContentTitle(title)
+        .setContentText(content)
+        .setSubText(muteStateText)
+        .setStyle(
+          NotificationCompat.BigTextStyle()
+            .setBigContentTitle(title)
+            .bigText(content)
+            .setSummaryText(muteStateText)
+        )
         .setOngoing(true)
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setContentIntent(pendingIntent)
+        .setOnlyAlertOnce(true)
         .addAction(
           NotificationCompat.Action.Builder(
             android.R.drawable.ic_menu_view,
@@ -336,6 +340,12 @@ class AudioClassificationPlugin private constructor(
   private var isLiveUpdateEnabled = false
   private var lastNotificationUpdateMs = 0L
   private var currentNotificationContent = ""
+  private var currentLiveUpdateLabel: String? = null
+  private var currentLiveUpdateSource: String? = null
+  private var hasLiveUpdateFilterConfig = false
+  private var allowUnknownBuiltInLiveUpdates = true
+  private var customSoundsEnabledInLiveUpdates = true
+  private var allowedBuiltInLiveUpdateLabels = emptySet<String>()
   private var notificationManager: NotificationManagerCompat? = null
 
   private val customSoundsRootDir: File by lazy {
@@ -403,6 +413,7 @@ class AudioClassificationPlugin private constructor(
       }
       "startLiveUpdates" -> handleStartLiveUpdates(result)
       "stopLiveUpdates" -> handleStopLiveUpdates(result)
+      "setLiveUpdateFilterConfig" -> handleSetLiveUpdateFilterConfig(call, result)
       "loadCustomSounds" -> result.success(loadProfiles().map { it.toMap() })
       "captureSample" -> captureSample(call, result)
       "trainOrRebuildCustomModel" -> trainOrRebuildCustomModel(result)
@@ -458,6 +469,8 @@ class AudioClassificationPlugin private constructor(
     }
 
     isLiveUpdateEnabled = true
+    currentLiveUpdateLabel = null
+    currentLiveUpdateSource = null
     currentNotificationContent = "Listening for sounds..."
     if (isRunning.get()) {
       ensureForegroundMonitoringService()
@@ -473,12 +486,43 @@ class AudioClassificationPlugin private constructor(
     }
 
     isLiveUpdateEnabled = false
+    currentLiveUpdateLabel = null
+    currentLiveUpdateSource = null
     currentNotificationContent = "Listening for sounds..."
     if (isRunning.get()) {
       showLiveUpdateNotification()
     } else {
       hideLiveUpdateNotification()
     }
+    result.success(null)
+  }
+
+  private fun handleSetLiveUpdateFilterConfig(
+    call: MethodCall,
+    result: MethodChannel.Result,
+  ) {
+    val labelsArgument = call.argument<List<String>>("allowedBuiltInLabels")
+    allowedBuiltInLiveUpdateLabels = labelsArgument?.toSet() ?: emptySet()
+    allowUnknownBuiltInLiveUpdates =
+      call.argument<Boolean>("allowUnknownBuiltInLabels") ?: true
+    customSoundsEnabledInLiveUpdates =
+      call.argument<Boolean>("customSoundsEnabled") ?: true
+    hasLiveUpdateFilterConfig = true
+
+    if (currentLiveUpdateLabel != null &&
+      currentLiveUpdateSource != null &&
+      !isDetectionAllowedForLiveUpdates(
+        label = currentLiveUpdateLabel!!,
+        source = currentLiveUpdateSource!!,
+      )
+    ) {
+      resetCurrentLiveUpdateNotification()
+    }
+
+    if (isLiveUpdateEnabled && isRunning.get()) {
+      showLiveUpdateNotification()
+    }
+
     result.success(null)
   }
 
@@ -871,6 +915,9 @@ class AudioClassificationPlugin private constructor(
     resetEmissionThrottleState()
     resetBuiltInCandidate()
     resetCustomCandidate()
+    currentLiveUpdateLabel = null
+    currentLiveUpdateSource = null
+    currentNotificationContent = "Listening for sounds..."
 
     if (shouldSendStatus) {
       sendStatus("stopped")
@@ -1525,8 +1572,34 @@ class AudioClassificationPlugin private constructor(
 
     if (isLiveUpdateEnabled && !isLiveUpdateMuted) {
       val label = payload["label"] as? String ?: "Unknown"
+      val source = payload["source"] as? String ?: "builtIn"
+      if (!isDetectionAllowedForLiveUpdates(label = label, source = source)) {
+        return
+      }
       val confidence = ((payload["confidence"] as? Number)?.toDouble() ?: 0.0) * 100
+      currentLiveUpdateLabel = label
+      currentLiveUpdateSource = source
       updateLiveUpdateNotification("Detected: $label (${confidence.toInt()}%)")
+    }
+  }
+
+  private fun isDetectionAllowedForLiveUpdates(label: String, source: String): Boolean {
+    if (!hasLiveUpdateFilterConfig) {
+      return true
+    }
+
+    return when (source) {
+      "custom" -> customSoundsEnabledInLiveUpdates
+      else -> allowedBuiltInLiveUpdateLabels.contains(label) || allowUnknownBuiltInLiveUpdates
+    }
+  }
+
+  private fun resetCurrentLiveUpdateNotification() {
+    currentLiveUpdateLabel = null
+    currentLiveUpdateSource = null
+    currentNotificationContent = "Listening for sounds..."
+    if (isLiveUpdateEnabled && isRunning.get()) {
+      updateLiveUpdateNotification(currentNotificationContent)
     }
   }
 
@@ -1651,6 +1724,8 @@ class AudioClassificationPlugin private constructor(
   private fun hideLiveUpdateNotification() {
     notificationManager?.cancel(NOTIFICATION_ID)
     currentNotificationContent = ""
+    currentLiveUpdateLabel = null
+    currentLiveUpdateSource = null
   }
 
   private fun ensureForegroundMonitoringService() {

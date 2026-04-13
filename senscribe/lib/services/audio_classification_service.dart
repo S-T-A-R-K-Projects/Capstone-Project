@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
 import '../models/sound_caption.dart';
+import 'sound_filter_service.dart';
 import '../utils/app_constants.dart';
 
 class AudioClassificationService {
@@ -21,10 +24,13 @@ class AudioClassificationService {
 
   final _historyController = StreamController<List<SoundCaption>>.broadcast();
   Stream<List<SoundCaption>> get historyStream => _historyController.stream;
+  final _monitoringStateController = StreamController<bool>.broadcast();
+  Stream<bool> get monitoringStateStream => _monitoringStateController.stream;
 
   StreamSubscription? _nativeSubscription;
   bool _isMonitoring = false;
   bool get isMonitoring => _isMonitoring;
+  final SoundFilterService _soundFilterService = SoundFilterService();
 
   void _log(String message) {
     assert(() {
@@ -36,9 +42,11 @@ class AudioClassificationService {
 
   Future<void> start() async {
     if (_isMonitoring) return;
+    await _soundFilterService.initialize();
     try {
       await _methodChannel.invokeMethod('start');
       _isMonitoring = true;
+      _monitoringStateController.add(true);
       _nativeSubscription =
           _eventChannel.receiveBroadcastStream().listen((event) {
         if (event is Map) {
@@ -58,6 +66,7 @@ class AudioClassificationService {
     try {
       await _methodChannel.invokeMethod('stop');
       _isMonitoring = false;
+      _monitoringStateController.add(false);
       await _nativeSubscription?.cancel();
       _nativeSubscription = null;
     } catch (e) {
@@ -87,6 +96,10 @@ class AudioClassificationService {
       source: isCustom ? SoundCaptionSource.custom : SoundCaptionSource.builtIn,
       customSoundId: customSoundId,
     );
+
+    if (!_soundFilterService.matchesCaption(caption)) {
+      return;
+    }
 
     _history.insert(0, caption);
     _broadcastHistory();
@@ -124,5 +137,24 @@ class AudioClassificationService {
 
   void _broadcastHistory() {
     _historyController.add(_visibleHistorySnapshot());
+  }
+
+  @visibleForTesting
+  void debugReplaceHistory(List<SoundCaption> captions) {
+    _history
+      ..clear()
+      ..addAll(captions);
+    _broadcastHistory();
+  }
+
+  @visibleForTesting
+  void debugSetMonitoring(bool isMonitoring) {
+    _isMonitoring = isMonitoring;
+    _monitoringStateController.add(isMonitoring);
+  }
+
+  @visibleForTesting
+  void debugHandleNativeResult(Map<String, dynamic> data) {
+    _handleEvent(data);
   }
 }

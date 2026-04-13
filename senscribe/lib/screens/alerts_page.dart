@@ -1232,6 +1232,20 @@ class _TriggerWordDialogState extends State<_TriggerWordDialog> {
     return AdaptiveInputSheet(
       title: widget.title,
       maxWidth: 520,
+      actions: [
+        AdaptiveSheetAction<_TriggerWordDialogResult?>(
+          label: 'Cancel',
+          style: AdaptiveButtonStyle.plain,
+          onPressed: (closeSheet) => closeSheet(null),
+        ),
+        AdaptiveSheetAction<_TriggerWordDialogResult?>(
+          label: widget.primaryActionLabel,
+          style: PlatformInfo.isIOS26OrHigher()
+              ? AdaptiveButtonStyle.glass
+              : AdaptiveButtonStyle.filled,
+          onPressed: (closeSheet) => _submit(),
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1290,20 +1304,6 @@ class _TriggerWordDialogState extends State<_TriggerWordDialog> {
                 ),
         ],
       ),
-      actions: [
-        AdaptiveSheetAction<_TriggerWordDialogResult?>(
-          label: 'Cancel',
-          style: AdaptiveButtonStyle.plain,
-          onPressed: (closeSheet) => closeSheet(null),
-        ),
-        AdaptiveSheetAction<_TriggerWordDialogResult?>(
-          label: widget.primaryActionLabel,
-          style: PlatformInfo.isIOS26OrHigher()
-              ? AdaptiveButtonStyle.glass
-              : AdaptiveButtonStyle.filled,
-          onPressed: (closeSheet) => _submit(),
-        ),
-      ],
     );
   }
 }
@@ -1350,6 +1350,20 @@ class _NameEntryDialogState extends State<_NameEntryDialog> {
     return AdaptiveInputSheet(
       title: widget.title,
       maxWidth: 520,
+      actions: [
+        AdaptiveSheetAction<String?>(
+          label: 'Cancel',
+          style: AdaptiveButtonStyle.plain,
+          onPressed: (closeSheet) => closeSheet(null),
+        ),
+        AdaptiveSheetAction<String?>(
+          label: widget.primaryActionLabel,
+          style: PlatformInfo.isIOS26OrHigher()
+              ? AdaptiveButtonStyle.glass
+              : AdaptiveButtonStyle.filled,
+          onPressed: (closeSheet) => _submit(),
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1370,20 +1384,6 @@ class _NameEntryDialogState extends State<_NameEntryDialog> {
           ),
         ],
       ),
-      actions: [
-        AdaptiveSheetAction<String?>(
-          label: 'Cancel',
-          style: AdaptiveButtonStyle.plain,
-          onPressed: (closeSheet) => closeSheet(null),
-        ),
-        AdaptiveSheetAction<String?>(
-          label: widget.primaryActionLabel,
-          style: PlatformInfo.isIOS26OrHigher()
-              ? AdaptiveButtonStyle.glass
-              : AdaptiveButtonStyle.filled,
-          onPressed: (closeSheet) => _submit(),
-        ),
-      ],
     );
   }
 }

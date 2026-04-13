@@ -79,8 +79,8 @@ The built-in path is implemented in `processBuiltInResult(...)`.
 - Sample rate: `16_000 Hz`
 - Channels: mono
 - Encoding: PCM 16-bit
-- Inference window: `15_600` samples, about `0.975 s`
-- Hop size: `3_200` samples, about `0.2 s`
+- Inference window: `31_200` samples, about `1.95 s`
+- Hop size: `4_800` samples, about `0.3 s`
 
 ### Model loading
 
@@ -88,7 +88,7 @@ The built-in path is implemented in `processBuiltInResult(...)`.
 
 - loads `android/app/src/main/assets/yamnet/yamnet.tflite`
 - loads labels from `android/app/src/main/assets/yamnet/yamnet_class_map.csv`
-- uses the LiteRT/TensorFlow Lite `Interpreter`
+- uses the LiteRT/TensorFlow Lite `Interpreter` with XNNPACK enabled and optimized thread utilization
 - scans outputs to find the score tensor whose width matches the class map
 - aggregates frame scores by taking the maximum score per class across returned frames
 - returns the top 3 categories
@@ -97,11 +97,11 @@ The built-in path is implemented in `processBuiltInResult(...)`.
 
 The plugin does not emit every top category immediately. It applies the following guards:
 
-- minimum score: `0.4`
-- minimum signal RMS: `0.006`
-- minimum signal peak: `0.018`
-- minimum margin over the runner-up class: `0.06`
-- required consecutive matches: `2`
+- minimum score: `0.44`
+- minimum signal RMS: `0.002`
+- minimum signal peak: `0.008`
+- minimum margin over the runner-up class: `0.035`
+- required consecutive matches: `1`
 - throttle per built-in label: `5_000 ms`
 
 ## Android Live Updates
@@ -171,3 +171,7 @@ The app minimum is Android API 31 and above. That matches the project configurat
 - `senscribe/android/app/src/main/kotlin/com/example/senscribe/YamnetLiteRtRunner.kt`
 - `senscribe/lib/services/audio_classification_service.dart`
 - `senscribe/lib/services/live_update_service.dart`
+
+## Offline Speech Recognition (Vosk)
+
+In addition to audio classification, Android utilizes a custom `AndroidOfflineSpeechService` backed by `vosk-android` for offline on-device speech-to-text (STT). This bypasses the default cloud-based STT mechanisms to ensure privacy and offline reliability.

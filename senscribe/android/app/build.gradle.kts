@@ -35,6 +35,10 @@ android {
             isMinifyEnabled = false
         }
     }
+
+    aaptOptions {
+        noCompress += "tflite"
+    }
 }
 
 kotlin {
@@ -50,6 +54,7 @@ flutter {
 dependencies {
     // Audio classification
     implementation("com.google.ai.edge.litert:litert:2.1.3")
+    implementation("com.alphacephei:vosk-android:0.3.75")
     implementation("ai.liquid.leap:leap-sdk:0.9.6")
 
     // Coroutines for async operations

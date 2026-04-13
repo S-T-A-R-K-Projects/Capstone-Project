@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
@@ -22,6 +23,7 @@ import '../models/history_item.dart';
 import '../services/trigger_word_service.dart';
 import '../models/trigger_alert.dart';
 import '../models/trigger_word.dart';
+import '../services/android_offline_speech_service.dart';
 import '../services/stt_transcript_service.dart';
 import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
@@ -40,6 +42,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   // Services
   final AudioClassificationService _audioService = AudioClassificationService();
   final SpeechToText _speech = SpeechToText();
+  final AndroidOfflineSpeechService _androidSpeechService =
+      AndroidOfflineSpeechService();
   final TextToSpeechService _ttsService = TextToSpeechService();
   final LiveUpdateService _liveUpdateService = LiveUpdateService();
   final SoundFilterService _soundFilterService = SoundFilterService();
@@ -61,6 +65,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   StreamSubscription? _audioSubscription;
   StreamSubscription<Set<SoundFilterId>>? _filterSelectionSubscription;
+  StreamSubscription<AndroidOfflineSpeechEvent>? _androidSpeechSubscription;
   StreamSubscription<SttTranscriptSnapshot>? _transcriptSubscription;
   String _currentSpeechBuffer = '';
   final List<String> _speechTranscript = [];
@@ -145,6 +150,19 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   Future<void> _initSpeech() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      _androidSpeechSubscription ??= _androidSpeechService.events.listen(
+        _handleAndroidSpeechEvent,
+      );
+      _isSpeechAvailable = await _androidSpeechService.initialize();
+      if (mounted) setState(() {});
+
+      if (_isSpeechAvailable && _isSpeechMonitoring) {
+        await _startSpeechListening();
+      }
+      return;
+    }
+
     try {
       _isSpeechAvailable = await _speech.initialize(
         onError: _onSpeechError,
@@ -161,6 +179,13 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   void _onSpeechStatus(String status) {
+    if (!mounted || !_isSpeechMonitoring) return;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      if (status == 'stopped') {
+        _scheduleSpeechRestart(Delays.speechRestart);
+      }
+      return;
+    }
     if (!_isSpeechMonitoring) return;
     if (status == 'done' || status == 'notListening') {
       _scheduleSpeechRestart(Delays.speechRestart);
@@ -171,10 +196,44 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     debugPrint('STT Error: $error');
     if (!_isSpeechMonitoring || error.errorMsg == 'error_permission') return;
 
+    if (error.errorMsg == 'error_audio_error' ||
+        error.errorMsg == 'error_client') {
+      return;
+    }
+
     final restartDelay = error.errorMsg == 'error_listen_failed'
         ? Delays.speechRestartAfterFailed
         : Delays.speechRestartAfterError;
     _scheduleSpeechRestart(restartDelay);
+  }
+
+  void _handleAndroidSpeechEvent(AndroidOfflineSpeechEvent event) {
+    switch (event.type) {
+      case AndroidOfflineSpeechEventType.partial:
+        _sttTranscriptService.setPartialWords(event.text);
+        if (event.text.isNotEmpty) {
+          unawaited(_checkAndNotifyPartialTriggers(event.text));
+        }
+        break;
+      case AndroidOfflineSpeechEventType.finalResult:
+        if (event.text.isNotEmpty) {
+          _sttTranscriptService.commitFinalWords(event.text);
+          _scrollToBottom();
+        }
+        break;
+      case AndroidOfflineSpeechEventType.status:
+        _onSpeechStatus(event.status);
+        break;
+      case AndroidOfflineSpeechEventType.error:
+        debugPrint(
+          'Android Offline STT Error: ${event.errorCode} ${event.errorMessage}',
+        );
+        if (!_isSpeechMonitoring) {
+          return;
+        }
+        _scheduleSpeechRestart(Delays.speechRestartAfterError);
+        break;
+    }
   }
 
   void _scheduleSpeechRestart(Duration delay) {
@@ -190,10 +249,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   void dispose() {
     _audioSubscription?.cancel();
     _filterSelectionSubscription?.cancel();
+    _androidSpeechSubscription?.cancel();
     _transcriptSubscription?.cancel();
     _speechRestartTimer?.cancel();
 
-    _speech.stop();
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(_androidSpeechService.stopListening());
+    } else {
+      _speech.stop();
+    }
     _soundPulseController.dispose();
     _speechPulseController.dispose();
     _ttsController.dispose();
@@ -266,32 +330,43 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   Future<void> _startSpeechListening() async {
-    if (!_isSpeechAvailable || _speech.isListening || _isSpeechStarting) {
+    final usesAndroidOfflineSpeech =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final speechAlreadyListening = usesAndroidOfflineSpeech
+        ? _androidSpeechService.isListening
+        : _speech.isListening;
+
+    if (!_isSpeechAvailable || speechAlreadyListening || _isSpeechStarting) {
       return;
     }
     _isSpeechStarting = true;
     try {
-      await _speech.listen(
-        onResult: (result) {
-          _sttTranscriptService.setPartialWords(result.recognizedWords);
+      if (usesAndroidOfflineSpeech) {
+        await _androidSpeechService.startListening();
+      } else {
+        await _speech.cancel();
+        await _speech.listen(
+          onResult: (result) {
+            _sttTranscriptService.setPartialWords(result.recognizedWords);
 
-          if (!result.finalResult && result.recognizedWords.isNotEmpty) {
-            _checkAndNotifyPartialTriggers(result.recognizedWords);
-          }
+            if (!result.finalResult && result.recognizedWords.isNotEmpty) {
+              _checkAndNotifyPartialTriggers(result.recognizedWords);
+            }
 
-          if (result.finalResult && result.recognizedWords.isNotEmpty) {
-            _sttTranscriptService.commitFinalWords(result.recognizedWords);
-            _scrollToBottom();
-          }
-        },
-        listenFor: const Duration(minutes: 10),
-        pauseFor: const Duration(seconds: 45),
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          cancelOnError: false,
-          listenMode: ListenMode.dictation,
-        ),
-      );
+            if (result.finalResult && result.recognizedWords.isNotEmpty) {
+              _sttTranscriptService.commitFinalWords(result.recognizedWords);
+              _scrollToBottom();
+            }
+          },
+          listenFor: const Duration(minutes: 10),
+          pauseFor: const Duration(seconds: 45),
+          listenOptions: SpeechListenOptions(
+            partialResults: true,
+            cancelOnError: false,
+            listenMode: ListenMode.dictation,
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('STT Listen Error: $e');
       if (_isSpeechMonitoring) {
@@ -380,6 +455,10 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   Future<void> _stopSpeechException() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      await _androidSpeechService.stopListening();
+      return;
+    }
     await _speech.stop();
   }
 

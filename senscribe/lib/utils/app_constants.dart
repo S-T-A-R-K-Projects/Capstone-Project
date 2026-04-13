@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 class AppConstants {
@@ -5,7 +7,8 @@ class AppConstants {
 
   static const int soundHistoryMaxItems = 50;
   static const int alertHistoryMaxItems = 100;
-  static const double audioConfidenceThreshold = 0.6;
+  static final double audioConfidenceThreshold =
+      Platform.isIOS ? 0.6 : 0.5;
   static const int historyPreviewMaxLength = 64;
   static const Duration repeatingSoundRefreshWindow = Duration(seconds: 10);
 

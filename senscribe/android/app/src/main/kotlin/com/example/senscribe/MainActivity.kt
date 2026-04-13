@@ -5,8 +5,6 @@ import android.os.Bundle
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.MethodChannel
-
 class MainActivity : FlutterActivity() {
     companion object {
         private const val TAG = "MainActivity"
@@ -14,6 +12,7 @@ class MainActivity : FlutterActivity() {
 
     // Audio classification plugin
     private var audioClassificationPlugin: AudioClassificationPlugin? = null
+    private var androidOfflineSpeechPlugin: AndroidOfflineSpeechPlugin? = null
     private var modelDownloadBridge: ModelDownloadBridge? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +41,10 @@ class MainActivity : FlutterActivity() {
             applicationContext,
             this,
         )
+        androidOfflineSpeechPlugin = AndroidOfflineSpeechPlugin.register(
+            flutterEngine.dartExecutor.binaryMessenger,
+            applicationContext,
+        )
         modelDownloadBridge = ModelDownloadBridge.register(
             flutterEngine.dartExecutor.binaryMessenger,
             applicationContext,
@@ -55,6 +58,11 @@ class MainActivity : FlutterActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         audioClassificationPlugin?.onRequestPermissionsResult(requestCode, grantResults)
+    }
+
+    override fun onDestroy() {
+        androidOfflineSpeechPlugin?.dispose()
+        super.onDestroy()
     }
 
 }

@@ -277,6 +277,20 @@ class _AdaptiveTextEntrySheetState extends State<AdaptiveTextEntrySheet> {
 
     return AdaptiveInputSheet(
       title: widget.title,
+      actions: [
+        AdaptiveSheetAction<String?>(
+          label: 'Cancel',
+          style: AdaptiveButtonStyle.plain,
+          onPressed: (closeSheet) => closeSheet(null),
+        ),
+        AdaptiveSheetAction<String?>(
+          label: widget.primaryActionLabel,
+          style: PlatformInfo.isIOS26OrHigher()
+              ? AdaptiveButtonStyle.glass
+              : AdaptiveButtonStyle.filled,
+          onPressed: (closeSheet) => _submit(),
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -297,20 +311,6 @@ class _AdaptiveTextEntrySheetState extends State<AdaptiveTextEntrySheet> {
           ),
         ],
       ),
-      actions: [
-        AdaptiveSheetAction<String?>(
-          label: 'Cancel',
-          style: AdaptiveButtonStyle.plain,
-          onPressed: (closeSheet) => closeSheet(null),
-        ),
-        AdaptiveSheetAction<String?>(
-          label: widget.primaryActionLabel,
-          style: PlatformInfo.isIOS26OrHigher()
-              ? AdaptiveButtonStyle.glass
-              : AdaptiveButtonStyle.filled,
-          onPressed: (closeSheet) => _submit(),
-        ),
-      ],
     );
   }
 }

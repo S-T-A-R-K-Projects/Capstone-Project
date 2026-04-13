@@ -23,21 +23,21 @@ internal data class YamnetInferenceResult(
 internal class YamnetLiteRtRunner private constructor(
   private val interpreter: Interpreter,
   private val labels: List<String>,
-  private val inputElementCount: Int,
+  private val inputSampleCount: Int,
   private val scoreOutputIndex: Int,
   private val scoreOutputBuffer: Any,
 ) : Closeable {
   private val inputBuffer =
-    ByteBuffer.allocateDirect(inputElementCount * Float.SIZE_BYTES).order(ByteOrder.nativeOrder())
+    ByteBuffer.allocateDirect(inputSampleCount * Float.SIZE_BYTES).order(ByteOrder.nativeOrder())
 
   fun analyze(samples: FloatArray): YamnetInferenceResult {
     inputBuffer.clear()
 
-    val sampleCount = min(samples.size, inputElementCount)
+    val sampleCount = min(samples.size, inputSampleCount)
     for (index in 0 until sampleCount) {
       inputBuffer.putFloat(samples[index])
     }
-    for (index in sampleCount until inputElementCount) {
+    for (index in sampleCount until inputSampleCount) {
       inputBuffer.putFloat(0f)
     }
     inputBuffer.rewind()
@@ -60,28 +60,34 @@ internal class YamnetLiteRtRunner private constructor(
 
   private fun extractTopCategories(
     values: Any,
-    topK: Int = 3,
+    topK: Int = 5,
   ): List<YamnetCategory> {
     val frames = flattenFrames(values)
     val classCount = frames.firstOrNull()?.size ?: return emptyList()
     if (classCount <= 0) return emptyList()
-    val classScores = DoubleArray(classCount)
+    val summedScores = DoubleArray(classCount)
+    val observationCounts = IntArray(classCount)
 
     frames.forEach { frame ->
       if (frame.size < classCount) return@forEach
       for (classIndex in 0 until classCount) {
-        val score = frame[classIndex].toDouble()
-        if (score > classScores[classIndex]) {
-          classScores[classIndex] = score
-        }
+        val score = frame[classIndex].toDouble().coerceAtLeast(0.0)
+        observationCounts[classIndex] += 1
+        summedScores[classIndex] += score
       }
     }
 
-    return classScores
+    return summedScores
       .mapIndexed { index, score ->
+        val averagedScore =
+          if (observationCounts[index] > 0) {
+            score / observationCounts[index].toDouble()
+          } else {
+            0.0
+          }
         YamnetCategory(
           label = labels.getOrElse(index) { "Class $index" },
-          score = score,
+          score = averagedScore,
         )
       }
       .sortedByDescending { it.score }
@@ -104,21 +110,35 @@ internal class YamnetLiteRtRunner private constructor(
     fun create(
       context: Context,
       modelAssetPath: String,
+      inputSampleCount: Int,
     ): YamnetLiteRtRunner {
       val labels = loadLabels(context.assets, CLASS_MAP_ASSET_PATH)
       check(labels.isNotEmpty()) { "YAMNet class map is empty." }
 
       val options = Interpreter.Options().apply {
-        setNumThreads(Runtime.getRuntime().availableProcessors().coerceIn(1, 4))
+        setNumThreads(2)
+        setUseXNNPACK(true)
       }
 
       val interpreter = Interpreter(loadModel(context.assets, modelAssetPath), options)
+
+      // The full YAMNet model has a dynamic input shape [-1].
+      // We must resize it to our fixed window size before allocating.
       val inputTensor = interpreter.getInputTensor(0)
-      val inputElementCount = inputTensor.numBytes() / Float.SIZE_BYTES
-      check(inputElementCount > 0) { "YAMNet input tensor has no float capacity." }
+      val inputShape = inputTensor.shape()
+      val needsResize = inputShape.size == 1 && inputShape[0] != inputSampleCount
+      if (needsResize) {
+        Log.d(TAG, "Resizing YAMNet input from ${inputShape.contentToString()} to [$inputSampleCount]")
+        interpreter.resizeInput(0, intArrayOf(inputSampleCount))
+      }
+      interpreter.allocateTensors()
+
+      val resizedInputTensor = interpreter.getInputTensor(0)
+      val resolvedInputSampleCount = resizedInputTensor.numBytes() / Float.SIZE_BYTES
+      check(resolvedInputSampleCount > 0) { "YAMNet input tensor has no float capacity after resize." }
+      Log.d(TAG, "YAMNet input: shape=${resizedInputTensor.shape().contentToString()} samples=$resolvedInputSampleCount")
 
       var scoreOutputIndex = -1
-      var scoreOutputShape: IntArray? = null
 
       for (index in 0 until interpreter.outputTensorCount) {
         val tensor = interpreter.getOutputTensor(index)
@@ -127,23 +147,22 @@ internal class YamnetLiteRtRunner private constructor(
         val width = shape.lastOrNull() ?: 0
         if (width == labels.size) {
           scoreOutputIndex = index
-          scoreOutputShape = shape
         }
       }
 
       check(scoreOutputIndex >= 0) {
         "YAMNet score output was not found for ${labels.size} labels."
       }
-      val outputBuffer =
-        createTensorOutput(scoreOutputShape ?: error("Missing YAMNet score output shape."))
-      Log.d(TAG, "YAMNet model exposes classification scores only.")
+      val scoreOutputBuffer = createTensorOutput(interpreter.getOutputTensor(scoreOutputIndex).shape())
+
+      Log.d(TAG, "YAMNet ready: inputSamples=$inputSampleCount, scoreOutputIdx=$scoreOutputIndex")
 
       return YamnetLiteRtRunner(
         interpreter = interpreter,
         labels = labels,
-        inputElementCount = inputElementCount,
+        inputSampleCount = resolvedInputSampleCount,
         scoreOutputIndex = scoreOutputIndex,
-        scoreOutputBuffer = outputBuffer,
+        scoreOutputBuffer = scoreOutputBuffer,
       )
     }
 
@@ -192,10 +211,12 @@ internal class YamnetLiteRtRunner private constructor(
     }
 
     private fun createTensorOutput(shape: IntArray): Any {
-      check(shape.isNotEmpty() && shape.all { it > 0 }) {
-        "Unexpected output tensor shape: ${shape.contentToString()}"
+      // Replace any dynamic (-1) dimensions with 1 for buffer allocation.
+      val resolvedShape = IntArray(shape.size) { index ->
+        val dim = shape[index]
+        if (dim <= 0) 1 else dim
       }
-      return java.lang.reflect.Array.newInstance(Float::class.javaPrimitiveType, *shape)
+      return java.lang.reflect.Array.newInstance(Float::class.javaPrimitiveType, *resolvedShape)
     }
   }
 }

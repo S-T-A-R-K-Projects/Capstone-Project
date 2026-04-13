@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
@@ -171,6 +172,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     debugPrint('STT Error: $error');
     if (!_isSpeechMonitoring || error.errorMsg == 'error_permission') return;
 
+    if (error.errorMsg == 'error_audio_error' ||
+        error.errorMsg == 'error_client') {
+      return;
+    }
+
     final restartDelay = error.errorMsg == 'error_listen_failed'
         ? Delays.speechRestartAfterFailed
         : Delays.speechRestartAfterError;
@@ -214,6 +220,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   Future<void> _startSoundMonitoring() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      await _audioService.setSpeechRecognitionActive(_isSpeechMonitoring);
+    }
     await _audioService.start();
     if (!_audioService.isMonitoring) {
       if (!mounted) return;
@@ -249,11 +258,17 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     setState(() {
       _isSpeechMonitoring = !_isSpeechMonitoring;
       if (_isSpeechMonitoring) {
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          unawaited(_audioService.setSpeechRecognitionActive(true));
+        }
         _startSpeechListening();
         _speechPulseController.repeat(reverse: true);
       } else {
         _speechRestartTimer?.cancel();
         _lastAlertedTriggerCount.clear();
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          unawaited(_audioService.setSpeechRecognitionActive(false));
+        }
         _stopSpeechException();
         _speechPulseController.stop();
         _speechPulseController.reset();
@@ -271,6 +286,12 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     }
     _isSpeechStarting = true;
     try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        await _audioService.setSpeechRecognitionActive(true);
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+
+      await _speech.cancel();
       await _speech.listen(
         onResult: (result) {
           _sttTranscriptService.setPartialWords(result.recognizedWords);
@@ -294,6 +315,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       );
     } catch (e) {
       debugPrint('STT Listen Error: $e');
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        await _audioService.setSpeechRecognitionActive(_isSpeechMonitoring);
+      }
       if (_isSpeechMonitoring) {
         _scheduleSpeechRestart(const Duration(milliseconds: 350));
       }

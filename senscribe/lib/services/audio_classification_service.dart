@@ -74,6 +74,17 @@ class AudioClassificationService {
     }
   }
 
+  Future<void> setSpeechRecognitionActive(bool active) async {
+    try {
+      await _methodChannel.invokeMethod(
+        'setSpeechRecognitionActive',
+        <String, dynamic>{'active': active},
+      );
+    } catch (e) {
+      _log('Audio classification speech sync error: $e');
+    }
+  }
+
   void _handleEvent(Map<String, dynamic> data) {
     final label = data['label'] as String? ?? 'Unknown';
     final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;

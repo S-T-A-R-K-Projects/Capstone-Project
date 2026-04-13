@@ -10,9 +10,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.media.AudioManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
@@ -168,9 +172,10 @@ class AudioClassificationPlugin private constructor(
 
     private const val SAMPLE_RATE = 16000
     private const val CHANNEL_COUNT = 1
-    private const val CLASSIFICATION_SAMPLE_COUNT = 15600
-    private const val INFERENCE_HOP_SAMPLE_COUNT = 3200
-    private const val EMBEDDING_STEP_SAMPLE_COUNT = CLASSIFICATION_SAMPLE_COUNT / 2
+    private const val BUILT_IN_CLASSIFICATION_SAMPLE_COUNT = 31200
+    private const val CUSTOM_CLASSIFICATION_SAMPLE_COUNT = 15600
+    private const val INFERENCE_HOP_SAMPLE_COUNT = 4800
+    private const val EMBEDDING_STEP_SAMPLE_COUNT = CUSTOM_CLASSIFICATION_SAMPLE_COUNT / 2
     private const val CAPTURE_DURATION_SECONDS = 5
     private const val CAPTURE_SAMPLE_COUNT = SAMPLE_RATE * CAPTURE_DURATION_SECONDS
 
@@ -179,11 +184,14 @@ class AudioClassificationPlugin private constructor(
 
     private const val MODEL_ASSET_PATH = "yamnet/yamnet.tflite"
 
-    private const val BUILT_IN_SCORE_THRESHOLD = 0.4f
-    private const val BUILT_IN_MIN_SIGNAL_RMS = 0.006f
-    private const val BUILT_IN_MIN_SIGNAL_PEAK = 0.018f
-    private const val BUILT_IN_MIN_WIN_MARGIN = 0.06
-    private const val BUILT_IN_REQUIRED_CONSECUTIVE_MATCHES = 2
+    private const val BUILT_IN_SCORE_THRESHOLD = 0.44f
+    private const val BUILT_IN_TEMPORAL_SCORE_THRESHOLD = 0.62
+    private const val BUILT_IN_MIN_SIGNAL_RMS = 0.002f
+    private const val BUILT_IN_MIN_SIGNAL_PEAK = 0.008f
+    private const val BUILT_IN_MIN_WIN_MARGIN = 0.035
+    private const val BUILT_IN_REQUIRED_CONSECUTIVE_MATCHES = 1
+    private const val BUILT_IN_TEMPORAL_DECAY = 0.55
+    private const val BUILT_IN_TEMPORAL_PRUNE_THRESHOLD = 0.08
     private const val BUILT_IN_THROTTLE_MS = 5_000L
 
     private const val CUSTOM_MIN_SIGNAL_RMS = 0.008f
@@ -314,27 +322,39 @@ class AudioClassificationPlugin private constructor(
 
   private var yamnetRunner: YamnetLiteRtRunner? = null
   private var audioRecord: AudioRecord? = null
-  private var handlerThread: HandlerThread? = null
-  private var workHandler: Handler? = null
+  private var captureThread: Thread? = null
+  private var inferenceThread: HandlerThread? = null
+  private var inferenceHandler: Handler? = null
   private var wakeLock: PowerManager.WakeLock? = null
 
   private val isRunning = AtomicBoolean(false)
   private val isCapturingSample = AtomicBoolean(false)
   private var resumeMonitoringAfterCapture = false
 
-  private val classifierReadBuffer = ShortArray(INFERENCE_HOP_SAMPLE_COUNT)
-  private val classifierReadFloatBuffer = FloatArray(INFERENCE_HOP_SAMPLE_COUNT)
-  private val classifierRollingWindow = FloatArray(CLASSIFICATION_SAMPLE_COUNT)
-  private var classifierWindowFillCount = 0
+  // Decoupled pipeline buffers: capture thread writes into staging,
+  // inference thread consumes from rolling window.
+  private val captureReadBuffer = ShortArray(INFERENCE_HOP_SAMPLE_COUNT)
+  private val inferenceReadBuffer = FloatArray(INFERENCE_HOP_SAMPLE_COUNT)
+  private val stagingLock = Object()
+  private var stagingBuffer = FloatArray(BUILT_IN_CLASSIFICATION_SAMPLE_COUNT * 2)
+  private var stagingWriteOffset = 0
+  private var stagingReadOffset = 0
+  private val builtInRollingWindow = FloatArray(BUILT_IN_CLASSIFICATION_SAMPLE_COUNT)
+  private var builtInWindowFillCount = 0
+  private val customRollingWindow = FloatArray(CUSTOM_CLASSIFICATION_SAMPLE_COUNT)
+  private var customWindowFillCount = 0
 
   private val lastEmittedAtByKey = mutableMapOf<String, Long>()
   private var lastBuiltInThrottleKey: String? = null
   private var lastCustomThrottleKey: String? = null
   private var lastBuiltInCandidateLabel: String? = null
   private var lastBuiltInCandidateCount = 0
+  private val builtInTemporalScoreByLabel = mutableMapOf<String, Double>()
   private var lastCustomCandidateId: String? = null
   private var lastCustomCandidateCount = 0
   private var activeCustomMatchers: List<CustomSoundMatcher> = emptyList()
+  private var shouldConfigureMonitoringAudioEffects = true
+  private var speechRecognitionActive = false
 
   // Notification state
   private var isLiveUpdateEnabled = false
@@ -419,6 +439,7 @@ class AudioClassificationPlugin private constructor(
       "trainOrRebuildCustomModel" -> trainOrRebuildCustomModel(result)
       "deleteCustomSound" -> deleteCustomSound(call, result)
       "setCustomSoundEnabled" -> setCustomSoundEnabled(call, result)
+      "setSpeechRecognitionActive" -> handleSetSpeechRecognitionActive(call, result)
       else -> result.notImplemented()
     }
   }
@@ -526,6 +547,21 @@ class AudioClassificationPlugin private constructor(
     result.success(null)
   }
 
+  private fun handleSetSpeechRecognitionActive(
+    call: MethodCall,
+    result: MethodChannel.Result,
+  ) {
+    val isActive = call.argument<Boolean>("active") ?: false
+    if (speechRecognitionActive == isActive) {
+      result.success(null)
+      return
+    }
+
+    speechRecognitionActive = isActive
+    Log.d(TAG, "Speech recognition active=$speechRecognitionActive")
+    result.success(null)
+  }
+
   private fun runWithMicrophonePermission(
     result: MethodChannel.Result,
     onGranted: () -> Unit,
@@ -565,15 +601,9 @@ class AudioClassificationPlugin private constructor(
 
     val minBufferSize =
       AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-    val bufferSizeInBytes = max(minBufferSize, CLASSIFICATION_SAMPLE_COUNT * 2)
-
-    val recorder = AudioRecord(
-      MediaRecorder.AudioSource.VOICE_RECOGNITION,
-      SAMPLE_RATE,
-      AudioFormat.CHANNEL_IN_MONO,
-      AudioFormat.ENCODING_PCM_16BIT,
-      bufferSizeInBytes,
-    )
+    val bufferSizeInBytes = max(minBufferSize, BUILT_IN_CLASSIFICATION_SAMPLE_COUNT * 2)
+    val (recorder, monitoringAudioSource) =
+      createMonitoringAudioRecord(bufferSizeInBytes)
 
     if (recorder.state != AudioRecord.STATE_INITIALIZED) {
       runner.close()
@@ -584,75 +614,139 @@ class AudioClassificationPlugin private constructor(
     yamnetRunner = runner
     audioRecord = recorder
 
-    classifierWindowFillCount = 0
-    classifierRollingWindow.fill(0f)
+    builtInWindowFillCount = 0
+    builtInRollingWindow.fill(0f)
+    customWindowFillCount = 0
+    customRollingWindow.fill(0f)
+    synchronized(stagingLock) {
+      stagingWriteOffset = 0
+      stagingReadOffset = 0
+    }
     resetEmissionThrottleState()
-    resetBuiltInCandidate()
+    resetBuiltInCandidate(clearTemporalScores = true)
     resetCustomCandidate()
     isRunning.set(true)
 
     acquireWakeLock()
     recorder.startRecording()
+    configureMonitoringAudioEffects(recorder.audioSessionId)
+    logMonitoringCaptureState(recorder)
 
-    handlerThread = HandlerThread("senscribe-audio-classifier").also { it.start() }
-    workHandler = Handler(handlerThread!!.looper).also { handler ->
-      handler.post(classificationRunnable)
+    // Drain stale audio from the mic init phase.
+    val drainBuffer = ShortArray(INFERENCE_HOP_SAMPLE_COUNT)
+    recorder.read(drainBuffer, 0, drainBuffer.size, AudioRecord.READ_NON_BLOCKING)
+
+    // Start capture thread: reads audio continuously, writes to staging buffer.
+    captureThread = Thread({
+      android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
+      captureLoop()
+    }, "senscribe-audio-capture").also { it.start() }
+
+    // Start inference thread: consumes staging buffer, runs YAMNet.
+    inferenceThread = HandlerThread("senscribe-audio-inference").also { it.start() }
+    inferenceHandler = Handler(inferenceThread!!.looper).also { handler ->
+      handler.post(inferenceRunnable)
     }
 
     sendStatus("started")
   }
 
-  private val classificationRunnable = object : Runnable {
-    override fun run() {
-      if (!isRunning.get()) return
-
-      val runner = yamnetRunner
-      val recorder = audioRecord
-
-      if (runner == null || recorder == null) {
-        stopClassification()
-        return
-      }
+  /** Capture thread: continuously reads PCM from mic into the staging buffer. */
+  private fun captureLoop() {
+    val readBuffer = captureReadBuffer
+    while (isRunning.get()) {
+      val recorder = audioRecord ?: break
 
       var totalRead = 0
       while (totalRead < INFERENCE_HOP_SAMPLE_COUNT && isRunning.get()) {
         val read = recorder.read(
-          classifierReadBuffer,
+          readBuffer,
           totalRead,
           INFERENCE_HOP_SAMPLE_COUNT - totalRead,
           AudioRecord.READ_BLOCKING,
         )
         if (read < 0) {
           postError("stream_failed", "Audio recorder read failure: $read")
-          stopClassification()
+          mainHandler.post { stopClassification() }
           return
         }
         totalRead += read
       }
 
+      if (!isRunning.get() || totalRead <= 0) break
+
+      // Convert to float and write into the staging ring buffer.
+      synchronized(stagingLock) {
+        for (i in 0 until totalRead) {
+          val writeIndex = stagingWriteOffset % stagingBuffer.size
+          stagingBuffer[writeIndex] = readBuffer[i] / 32768f
+          stagingWriteOffset++
+        }
+        val overflow = (stagingWriteOffset - stagingReadOffset) - stagingBuffer.size
+        if (overflow > 0) {
+          stagingReadOffset += overflow
+        }
+      }
+    }
+  }
+
+  /** Inference thread: consumes staged audio, runs YAMNet and custom matching. */
+  private val inferenceRunnable = object : Runnable {
+    override fun run() {
       if (!isRunning.get()) return
 
-      for (i in 0 until totalRead) {
-        classifierReadFloatBuffer[i] = classifierReadBuffer[i] / 32768f
+      val runner = yamnetRunner
+      if (runner == null) {
+        stopClassification()
+        return
       }
 
-      classifierWindowFillCount = appendToRollingWindow(
-        destination = classifierRollingWindow,
-        currentFillCount = classifierWindowFillCount,
-        source = classifierReadFloatBuffer,
-        count = totalRead,
+      // Consume available samples from the staging buffer.
+      val consumedCount: Int
+      synchronized(stagingLock) {
+        val available = stagingWriteOffset - stagingReadOffset
+        if (available < INFERENCE_HOP_SAMPLE_COUNT) {
+          // Not enough audio yet — reschedule quickly.
+          if (isRunning.get()) {
+            inferenceHandler?.postDelayed(this, 20)
+          }
+          return
+        }
+        consumedCount = INFERENCE_HOP_SAMPLE_COUNT
+        for (i in 0 until consumedCount) {
+          inferenceReadBuffer[i] = stagingBuffer[stagingReadOffset % stagingBuffer.size]
+          stagingReadOffset++
+        }
+        if (stagingReadOffset >= stagingBuffer.size) {
+          val shift = (stagingReadOffset / stagingBuffer.size) * stagingBuffer.size
+          stagingWriteOffset -= shift
+          stagingReadOffset -= shift
+        }
+      }
+
+      builtInWindowFillCount = appendToRollingWindow(
+        destination = builtInRollingWindow,
+        currentFillCount = builtInWindowFillCount,
+        source = inferenceReadBuffer,
+        count = consumedCount,
+      )
+      customWindowFillCount = appendToRollingWindow(
+        destination = customRollingWindow,
+        currentFillCount = customWindowFillCount,
+        source = inferenceReadBuffer,
+        count = consumedCount,
       )
 
-      if (classifierWindowFillCount < CLASSIFICATION_SAMPLE_COUNT) {
+      if (builtInWindowFillCount < BUILT_IN_CLASSIFICATION_SAMPLE_COUNT) {
         if (isRunning.get()) {
-          workHandler?.post(this)
+          inferenceHandler?.post(this)
         }
         return
       }
 
-      val recentSignalLevels = calculateSignalLevels(classifierReadFloatBuffer, totalRead)
+      val recentSignalLevels = calculateSignalLevels(inferenceReadBuffer, consumedCount)
       val inferenceResult = try {
-        runner.analyze(classifierRollingWindow)
+        runner.analyze(builtInRollingWindow)
       } catch (error: Exception) {
         postError("analysis_failed", error.message ?: "Audio classification failed.")
         stopClassification()
@@ -661,8 +755,8 @@ class AudioClassificationPlugin private constructor(
       val builtInPayload = processBuiltInResult(inferenceResult, recentSignalLevels)
 
       var customPayload: Map<String, Any>? = null
-      if (activeCustomMatchers.isNotEmpty()) {
-        val featureVector = CustomAudioFeatureExtractor.extract(classifierRollingWindow)
+      if (activeCustomMatchers.isNotEmpty() && customWindowFillCount >= CUSTOM_CLASSIFICATION_SAMPLE_COUNT) {
+        val featureVector = CustomAudioFeatureExtractor.extract(customRollingWindow)
         if (featureVector != null) {
           customPayload = processCustomEmbedding(
             featureVector,
@@ -677,7 +771,7 @@ class AudioClassificationPlugin private constructor(
       builtInPayload?.let(::emitDetectionPayload)
 
       if (isRunning.get()) {
-        workHandler?.post(this)
+        inferenceHandler?.post(this)
       }
     }
   }
@@ -687,13 +781,16 @@ class AudioClassificationPlugin private constructor(
     signalLevels: SignalLevels,
   ): Map<String, Any>? {
     if (signalLevels.rms < BUILT_IN_MIN_SIGNAL_RMS && signalLevels.peak < BUILT_IN_MIN_SIGNAL_PEAK) {
-      resetBuiltInCandidate()
+      resetBuiltInCandidate(clearTemporalScores = true)
       return null
     }
 
     val audioResult = result.categories.firstOrNull() ?: return null
     val categories = result.categories
     val runnerUp = categories.getOrNull(1)
+    val topCategories = categories.take(5)
+    val normalizedLabel = audioResult.label.trim().lowercase()
+    val temporalScore = updateBuiltInTemporalScores(topCategories)[normalizedLabel] ?: 0.0
 
     if (audioResult.score < BUILT_IN_SCORE_THRESHOLD) {
       resetBuiltInCandidate()
@@ -703,9 +800,12 @@ class AudioClassificationPlugin private constructor(
       resetBuiltInCandidate()
       return null
     }
+    if (temporalScore < BUILT_IN_TEMPORAL_SCORE_THRESHOLD) {
+      resetBuiltInCandidate()
+      return null
+    }
 
     val label = audioResult.label
-    val normalizedLabel = label.trim().lowercase()
     if (lastBuiltInCandidateLabel == normalizedLabel) {
       lastBuiltInCandidateCount += 1
     } else {
@@ -732,7 +832,7 @@ class AudioClassificationPlugin private constructor(
     return mapOf(
       "type" to "result",
       "label" to label,
-      "confidence" to audioResult.score,
+      "confidence" to min(1.0, max(audioResult.score, temporalScore)),
       "source" to "builtIn",
       "timestampMs" to now,
     )
@@ -890,11 +990,15 @@ class AudioClassificationPlugin private constructor(
       return
     }
 
-    workHandler?.removeCallbacksAndMessages(null)
-    workHandler = null
+    // Stop inference thread first.
+    inferenceHandler?.removeCallbacksAndMessages(null)
+    inferenceHandler = null
+    inferenceThread?.quitSafely()
+    inferenceThread = null
 
-    handlerThread?.quitSafely()
-    handlerThread = null
+    // Wait for capture thread to finish (it checks isRunning).
+    captureThread?.join(500)
+    captureThread = null
 
     audioRecord?.let { recorder ->
       try {
@@ -910,10 +1014,16 @@ class AudioClassificationPlugin private constructor(
     yamnetRunner = null
     releaseWakeLock()
 
-    classifierWindowFillCount = 0
-    classifierRollingWindow.fill(0f)
+    builtInWindowFillCount = 0
+    builtInRollingWindow.fill(0f)
+    customWindowFillCount = 0
+    customRollingWindow.fill(0f)
+    synchronized(stagingLock) {
+      stagingWriteOffset = 0
+      stagingReadOffset = 0
+    }
     resetEmissionThrottleState()
-    resetBuiltInCandidate()
+    resetBuiltInCandidate(clearTemporalScores = true)
     resetCustomCandidate()
     currentLiveUpdateLabel = null
     currentLiveUpdateSource = null
@@ -1366,18 +1476,18 @@ class AudioClassificationPlugin private constructor(
     }
 
     val windows = mutableListOf<FloatArray>()
-    if (samples.size <= CLASSIFICATION_SAMPLE_COUNT) {
-      val padded = FloatArray(CLASSIFICATION_SAMPLE_COUNT)
+    if (samples.size <= CUSTOM_CLASSIFICATION_SAMPLE_COUNT) {
+      val padded = FloatArray(CUSTOM_CLASSIFICATION_SAMPLE_COUNT)
       samples.copyInto(padded, endIndex = samples.size)
       windows.add(padded)
     } else {
       var start = 0
       while (start < samples.size) {
-        val window = FloatArray(CLASSIFICATION_SAMPLE_COUNT)
-        val count = min(CLASSIFICATION_SAMPLE_COUNT, samples.size - start)
+        val window = FloatArray(CUSTOM_CLASSIFICATION_SAMPLE_COUNT)
+        val count = min(CUSTOM_CLASSIFICATION_SAMPLE_COUNT, samples.size - start)
         samples.copyInto(window, destinationOffset = 0, startIndex = start, endIndex = start + count)
         windows.add(window)
-        if (start + CLASSIFICATION_SAMPLE_COUNT >= samples.size) {
+        if (start + CUSTOM_CLASSIFICATION_SAMPLE_COUNT >= samples.size) {
           break
         }
         start += EMBEDDING_STEP_SAMPLE_COUNT
@@ -1465,6 +1575,7 @@ class AudioClassificationPlugin private constructor(
     return YamnetLiteRtRunner.create(
       context = context,
       modelAssetPath = MODEL_ASSET_PATH,
+      inputSampleCount = BUILT_IN_CLASSIFICATION_SAMPLE_COUNT,
     )
   }
 
@@ -1603,9 +1714,12 @@ class AudioClassificationPlugin private constructor(
     }
   }
 
-  private fun resetBuiltInCandidate() {
+  private fun resetBuiltInCandidate(clearTemporalScores: Boolean = false) {
     lastBuiltInCandidateLabel = null
     lastBuiltInCandidateCount = 0
+    if (clearTemporalScores) {
+      builtInTemporalScoreByLabel.clear()
+    }
   }
 
   private fun resetCustomCandidate() {
@@ -1617,6 +1731,193 @@ class AudioClassificationPlugin private constructor(
     lastEmittedAtByKey.clear()
     lastBuiltInThrottleKey = null
     lastCustomThrottleKey = null
+  }
+
+  private fun updateBuiltInTemporalScores(
+    categories: List<YamnetCategory>,
+  ): Map<String, Double> {
+    if (builtInTemporalScoreByLabel.isNotEmpty()) {
+      val iterator = builtInTemporalScoreByLabel.entries.iterator()
+      while (iterator.hasNext()) {
+        val entry = iterator.next()
+        val decayedScore = entry.value * BUILT_IN_TEMPORAL_DECAY
+        if (decayedScore < BUILT_IN_TEMPORAL_PRUNE_THRESHOLD) {
+          iterator.remove()
+        } else {
+          entry.setValue(decayedScore)
+        }
+      }
+    }
+
+    categories.forEachIndexed { index, category ->
+      val normalizedLabel = category.label.trim().lowercase()
+      if (normalizedLabel.isEmpty()) return@forEachIndexed
+      val rankWeight =
+        when (index) {
+          0 -> 1.0
+          1 -> 0.75
+          2 -> 0.5
+          else -> 0.3
+        }
+      val updatedScore =
+        (builtInTemporalScoreByLabel[normalizedLabel] ?: 0.0) + (category.score * rankWeight)
+      builtInTemporalScoreByLabel[normalizedLabel] = updatedScore
+    }
+
+    return builtInTemporalScoreByLabel
+  }
+
+  private fun selectMonitoringAudioSource(): Int {
+    return MediaRecorder.AudioSource.MIC
+  }
+
+  private fun fallbackMonitoringAudioSource(): Int {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+      MediaRecorder.AudioSource.UNPROCESSED
+    } else {
+      MediaRecorder.AudioSource.MIC
+    }
+  }
+
+  private fun createMonitoringAudioRecord(
+    bufferSizeInBytes: Int,
+  ): Pair<AudioRecord, Int> {
+    val preferredSource = selectMonitoringAudioSource()
+    val preferredRecorder = buildMonitoringAudioRecord(preferredSource, bufferSizeInBytes)
+    if (preferredRecorder.state == AudioRecord.STATE_INITIALIZED) {
+      logMonitoringAudioConfiguration(preferredSource, fallbackUsed = false)
+      return preferredRecorder to preferredSource
+    }
+
+    preferredRecorder.release()
+    val fallbackSource = fallbackMonitoringAudioSource()
+    val fallbackRecorder = buildMonitoringAudioRecord(fallbackSource, bufferSizeInBytes)
+    logMonitoringAudioConfiguration(fallbackSource, fallbackUsed = fallbackSource != preferredSource)
+    return fallbackRecorder to fallbackSource
+  }
+
+  private fun buildMonitoringAudioRecord(
+    audioSource: Int,
+    bufferSizeInBytes: Int,
+  ): AudioRecord {
+    val format =
+      AudioFormat.Builder()
+        .setSampleRate(SAMPLE_RATE)
+        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+        .build()
+    return AudioRecord.Builder()
+      .setAudioSource(audioSource)
+      .setAudioFormat(format)
+      .setBufferSizeInBytes(bufferSizeInBytes)
+      .apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          setPrivacySensitive(false)
+        }
+      }
+      .build()
+  }
+
+  private fun logMonitoringAudioConfiguration(
+    audioSource: Int,
+    fallbackUsed: Boolean,
+  ) {
+    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    val unprocessedSupport =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        audioManager?.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED)
+      } else {
+        null
+      }
+    Log.d(
+      TAG,
+      "Monitoring audio source=${audioSourceName(audioSource)} " +
+        "($audioSource) fallbackUsed=$fallbackUsed " +
+        "unprocessedSupport=${unprocessedSupport ?: "unknown"}",
+    )
+  }
+
+  private fun logMonitoringCaptureState(recorder: AudioRecord) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+      return
+    }
+    val config = runCatching { recorder.activeRecordingConfiguration }.getOrNull()
+    Log.d(
+      TAG,
+      "Monitoring capture state silenced=${config?.isClientSilenced ?: "unknown"} " +
+        "session=${recorder.audioSessionId} source=${audioSourceName(recorder.audioSource)}",
+    )
+  }
+
+  private fun configureMonitoringAudioEffects(audioSessionId: Int) {
+    if (audioSessionId <= 0 || !shouldConfigureMonitoringAudioEffects) {
+      return
+    }
+    runCatching {
+      val agcState =
+        if (AutomaticGainControl.isAvailable()) {
+          AutomaticGainControl.create(audioSessionId)?.let { effect ->
+            effect.enabled = false
+            effect.enabled
+          } ?: run {
+            shouldConfigureMonitoringAudioEffects = false
+            false
+          }
+        } else {
+          null
+        }
+      val noiseSuppressorState =
+        if (NoiseSuppressor.isAvailable()) {
+          NoiseSuppressor.create(audioSessionId)?.let { effect ->
+            effect.enabled = false
+            effect.enabled
+          } ?: run {
+            shouldConfigureMonitoringAudioEffects = false
+            false
+          }
+        } else {
+          null
+        }
+      val echoCancelerState =
+        if (AcousticEchoCanceler.isAvailable()) {
+          AcousticEchoCanceler.create(audioSessionId)?.let { effect ->
+            effect.enabled = false
+            effect.enabled
+          } ?: run {
+            shouldConfigureMonitoringAudioEffects = false
+            false
+          }
+        } else {
+          null
+        }
+      Log.d(
+        TAG,
+        "Monitoring audio effects session=$audioSessionId " +
+          "agc=${audioEffectStateLabel(agcState)} " +
+          "ns=${audioEffectStateLabel(noiseSuppressorState)} " +
+          "aec=${audioEffectStateLabel(echoCancelerState)}",
+      )
+    }.onFailure { error ->
+      shouldConfigureMonitoringAudioEffects = false
+      Log.w(TAG, "Unable to configure monitoring audio effects.", error)
+    }
+  }
+
+  private fun audioSourceName(audioSource: Int): String {
+    return when (audioSource) {
+      MediaRecorder.AudioSource.UNPROCESSED -> "UNPROCESSED"
+      MediaRecorder.AudioSource.MIC -> "MIC"
+      MediaRecorder.AudioSource.VOICE_RECOGNITION -> "VOICE_RECOGNITION"
+      else -> "SOURCE_$audioSource"
+    }
+  }
+
+  private fun audioEffectStateLabel(state: Boolean?): String {
+    return when (state) {
+      null -> "unavailable"
+      true -> "enabled"
+      false -> "disabled"
+    }
   }
 
   private fun calculateSignalLevels(buffer: FloatArray): SignalLevels {

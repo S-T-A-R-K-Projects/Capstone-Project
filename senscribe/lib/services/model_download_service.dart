@@ -87,6 +87,16 @@ class ModelDownloadService {
           updatedAtMs: DateTime.now().millisecondsSinceEpoch,
         ),
       );
+    } else if (!_current.isRunning && _current.modelId == model.name) {
+      _applySnapshot(
+        _current.copyWith(
+          modelId: model.name,
+          progress: 0.0,
+          statusMessage: _current.hasError ? _current.statusMessage : '',
+          platformCanContinueInBackground: false,
+          updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
     } else {
       try {
         if (Platform.isIOS &&
@@ -107,16 +117,6 @@ class ModelDownloadService {
       } catch (e) {
         // Platform check failed, likely on web
       }
-    } else if (!_current.isRunning && _current.modelId == model.name) {
-      _applySnapshot(
-        _current.copyWith(
-          modelId: model.name,
-          progress: 0.0,
-          statusMessage: _current.hasError ? _current.statusMessage : '',
-          platformCanContinueInBackground: false,
-          updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-        ),
-      );
     }
 
     return _current;

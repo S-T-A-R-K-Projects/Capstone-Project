@@ -27,7 +27,12 @@ class CustomSoundService {
     final prefs = await SharedPreferences.getInstance();
     final persisted = _decodeProfiles(prefs.getString(_kProfilesKey));
 
-    if (!Platform.isIOS && !Platform.isAndroid) {
+    try {
+      if (!Platform.isIOS && !Platform.isAndroid) {
+        return persisted;
+      }
+    } catch (e) {
+      // Platform check failed, likely on web
       return persisted;
     }
 
@@ -106,7 +111,12 @@ class CustomSoundService {
   }
 
   Future<List<CustomSoundProfile>> trainOrRebuildModel() async {
-    if (!Platform.isIOS && !Platform.isAndroid) {
+    try {
+      if (!Platform.isIOS && !Platform.isAndroid) {
+        return loadProfiles();
+      }
+    } catch (e) {
+      // Platform check failed, likely on web
       return loadProfiles();
     }
 
@@ -120,7 +130,15 @@ class CustomSoundService {
   }
 
   Future<CustomSoundProfile> setEnabled(String profileId, bool enabled) async {
-    if (!Platform.isIOS && !Platform.isAndroid) {
+    bool isNativePlatform = false;
+    try {
+      isNativePlatform = Platform.isIOS || Platform.isAndroid;
+    } catch (e) {
+      // Platform check failed, likely on web
+      isNativePlatform = false;
+    }
+
+    if (!isNativePlatform) {
       final profiles = await loadProfiles();
       final index = profiles.indexWhere((profile) => profile.id == profileId);
       if (index == -1) {
@@ -155,7 +173,12 @@ class CustomSoundService {
     final next = profiles.where((profile) => profile.id != profileId).toList();
     await saveProfiles(next);
 
-    if (!Platform.isIOS && !Platform.isAndroid) {
+    try {
+      if (!Platform.isIOS && !Platform.isAndroid) {
+        return;
+      }
+    } catch (e) {
+      // Platform check failed, likely on web
       return;
     }
 
@@ -192,7 +215,14 @@ class CustomSoundService {
     required String sampleKind,
     required int sampleIndex,
   }) async {
-    if (!Platform.isIOS && !Platform.isAndroid) {
+    try {
+      if (!Platform.isIOS && !Platform.isAndroid) {
+        throw UnsupportedError(
+          'Custom sound enrollment is currently supported on iOS and Android only.',
+        );
+      }
+    } catch (e) {
+      // Platform check failed, likely on web
       throw UnsupportedError(
         'Custom sound enrollment is currently supported on iOS and Android only.',
       );

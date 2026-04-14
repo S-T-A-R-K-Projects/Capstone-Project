@@ -83,7 +83,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _toggleMonitoring() async {
-    if (!(Platform.isIOS || Platform.isAndroid)) {
+    try {
+      if (!(Platform.isIOS || Platform.isAndroid)) {
+        if (!mounted) return;
+        AdaptiveSnackBar.show(
+          context,
+          message: 'Audio classification is not supported on this platform yet.',
+        type: AdaptiveSnackBarType.warning,
+      );
+      return;
+    }
+    } catch (e) {
+      // Platform check failed, likely on web
       if (!mounted) return;
       AdaptiveSnackBar.show(
         context,

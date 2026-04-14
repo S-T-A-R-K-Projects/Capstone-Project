@@ -10,6 +10,7 @@ class AppPermissionSnapshot {
     required this.microphone,
     required this.notifications,
     this.speechRecognition,
+    this.location,
     this.ignoreBatteryOptimizations,
   });
 
@@ -31,21 +32,35 @@ class AppPermissionService {
   final AppSettingsService _settingsService = AppSettingsService();
 
   Future<AppPermissionSnapshot> loadStatuses() async {
-    if (Platform.isIOS) {
-      final nativeSnapshot = await _loadIosStatuses();
-      if (nativeSnapshot != null) {
-        return nativeSnapshot;
+    try {
+      if (Platform.isIOS) {
+        final nativeSnapshot = await _loadIosStatuses();
+        if (nativeSnapshot != null) {
+          return nativeSnapshot;
+        }
       }
+    } catch (e) {
+      // Platform check failed, likely on web
     }
 
     final microphone = await Permission.microphone.status;
     final notifications = await Permission.notification.status;
     final location = await Permission.locationWhenInUse.status;
-    final speechRecognition =
-        Platform.isIOS ? await Permission.speech.status : null;
-    final ignoreBatteryOptimizations = Platform.isAndroid
-        ? await Permission.ignoreBatteryOptimizations.status
-        : null;
+    PermissionStatus? speechRecognition;
+    try {
+      speechRecognition =
+          Platform.isIOS ? await Permission.speech.status : null;
+    } catch (e) {
+      // Platform check failed
+    }
+    PermissionStatus? ignoreBatteryOptimizations;
+    try {
+      ignoreBatteryOptimizations = Platform.isAndroid
+          ? await Permission.ignoreBatteryOptimizations.status
+          : null;
+    } catch (e) {
+      // Platform check failed
+    }
 
     return AppPermissionSnapshot(
       microphone: microphone,
@@ -104,15 +119,23 @@ class AppPermissionService {
 
     await requestMicrophone();
 
-    if (Platform.isIOS) {
-      await requestSpeechRecognition();
+    try {
+      if (Platform.isIOS) {
+        await requestSpeechRecognition();
+      }
+    } catch (e) {
+      // Platform check failed
     }
 
     await requestNotifications();
     await requestLocation();
 
-    if (Platform.isAndroid) {
-      await requestIgnoreBatteryOptimizations();
+    try {
+      if (Platform.isAndroid) {
+        await requestIgnoreBatteryOptimizations();
+      }
+    } catch (e) {
+      // Platform check failed
     }
   }
 

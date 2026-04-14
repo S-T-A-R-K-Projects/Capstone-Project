@@ -89,13 +89,21 @@ class LiveUpdateService {
       return;
     }
 
-    if (Platform.isAndroid) {
-      await _startAndroidLiveUpdates();
-      return;
+    try {
+      if (Platform.isAndroid) {
+        await _startAndroidLiveUpdates();
+        return;
+      }
+    } catch (e) {
+      _log('Android platform check failed: $e');
     }
 
-    if (Platform.isIOS) {
-      await _startOrRefreshIosLiveActivity();
+    try {
+      if (Platform.isIOS) {
+        await _startOrRefreshIosLiveActivity();
+      }
+    } catch (e) {
+      _log('iOS platform check failed: $e');
     }
   }
 
@@ -145,13 +153,21 @@ class LiveUpdateService {
   }
 
   Future<void> _disableLiveUpdates() async {
-    if (Platform.isAndroid) {
-      await _stopAndroidLiveUpdates();
-      return;
+    try {
+      if (Platform.isAndroid) {
+        await _stopAndroidLiveUpdates();
+        return;
+      }
+    } catch (e) {
+      _log('Android platform check failed in disable: $e');
     }
 
-    if (Platform.isIOS) {
-      await _endIosActivities();
+    try {
+      if (Platform.isIOS) {
+        await _endIosActivities();
+      }
+    } catch (e) {
+      _log('iOS platform check failed in disable: $e');
     }
   }
 
@@ -186,7 +202,12 @@ class LiveUpdateService {
   }
 
   Future<void> _handleAudioHistoryUpdate(List<SoundCaption> events) async {
-    if (!Platform.isIOS || !(_audioService?.isMonitoring ?? false)) {
+    try {
+      if (!Platform.isIOS || !(_audioService?.isMonitoring ?? false)) {
+        return;
+      }
+    } catch (e) {
+      // Platform check failed, likely on web
       return;
     }
     if (events.isEmpty) return;

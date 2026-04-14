@@ -42,28 +42,36 @@ class ModelDownloadService {
   Future<void> _ensureInitialized() async {
     _restoreFuture ??= _restorePersistedSnapshot();
     await _restoreFuture;
-    if (Platform.isAndroid && _androidEventSubscription == null) {
-      _androidEventSubscription = _eventChannel.receiveBroadcastStream().listen(
-            _handleAndroidEvent,
-            onError: (_) {},
-          );
+    try {
+      if (Platform.isAndroid && _androidEventSubscription == null) {
+        _androidEventSubscription = _eventChannel.receiveBroadcastStream().listen(
+              _handleAndroidEvent,
+              onError: (_) {},
+            );
+      }
+    } catch (e) {
+      // Platform check failed, likely on web
     }
   }
 
   Future<ModelDownloadSnapshot> refreshSnapshot(LLMModel model) async {
     await _ensureInitialized();
 
-    if (Platform.isAndroid) {
-      try {
-        final status = await _methodChannel.invokeMapMethod<Object?, Object?>(
-          'getStatus',
-        );
-        if (status != null) {
-          _applySnapshot(ModelDownloadSnapshot.fromMap(status));
+    try {
+      if (Platform.isAndroid) {
+        try {
+          final status = await _methodChannel.invokeMapMethod<Object?, Object?>(
+            'getStatus',
+          );
+          if (status != null) {
+            _applySnapshot(ModelDownloadSnapshot.fromMap(status));
+          }
+        } catch (_) {
+          // Keep the last-known snapshot when the native side is unavailable.
         }
-      } catch (_) {
-        // Keep the last-known snapshot when the native side is unavailable.
       }
+    } catch (e) {
+      // Platform check failed, likely on web
     }
 
     final isConfigured = await _leapService.isModelCached(model.name);
@@ -79,20 +87,26 @@ class ModelDownloadService {
           updatedAtMs: DateTime.now().millisecondsSinceEpoch,
         ),
       );
-    } else if (Platform.isIOS &&
-        _current.isRunning &&
-        _current.modelId == model.name &&
-        _activeIosDownload == null) {
-      _applySnapshot(
-        _current.copyWith(
-          modelId: model.name,
-          isRunning: false,
-          statusMessage:
-              'Download needs to be resumed. Stay on this screen for the most stable transfer.',
-          platformCanContinueInBackground: false,
-          updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-        ),
-      );
+    } else {
+      try {
+        if (Platform.isIOS &&
+            _current.isRunning &&
+            _current.modelId == model.name &&
+            _activeIosDownload == null) {
+          _applySnapshot(
+            _current.copyWith(
+              modelId: model.name,
+              isRunning: false,
+              statusMessage:
+                  'Download needs to be resumed. Stay on this screen for the most stable transfer.',
+              platformCanContinueInBackground: false,
+              updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
+        }
+      } catch (e) {
+        // Platform check failed, likely on web
+      }
     } else if (!_current.isRunning && _current.modelId == model.name) {
       _applySnapshot(
         _current.copyWith(
@@ -113,40 +127,50 @@ class ModelDownloadService {
     if (_current.isRunning) return;
 
     final startedAtMs = DateTime.now().millisecondsSinceEpoch;
+    bool canContinueInBackground = false;
+    try {
+      canContinueInBackground = Platform.isAndroid;
+    } catch (e) {
+      // Platform check failed, likely on web
+    }
     _applySnapshot(
       ModelDownloadSnapshot(
         modelId: model.name,
         isRunning: true,
         progress: 0.0,
         statusMessage: 'Initializing download...',
-        platformCanContinueInBackground: Platform.isAndroid,
+        platformCanContinueInBackground: canContinueInBackground,
         updatedAtMs: startedAtMs,
       ),
     );
 
-    if (Platform.isAndroid) {
-      try {
-        await _methodChannel.invokeMethod<void>('startDownload', {
-          'modelId': model.name,
-          'modelSlug': model.modelSlug,
-          'quantizationSlug': model.quantizationSlug,
-          'displayName': model.displayName,
-          'estimatedSizeMB': model.estimatedSizeMB,
-        });
-      } catch (error) {
-        _applySnapshot(
-          _current.copyWith(
-            modelId: model.name,
-            isRunning: false,
-            statusMessage: 'Download failed to start.',
-            platformCanContinueInBackground: false,
-            lastError: '$error',
-            updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-        rethrow;
+    try {
+      if (Platform.isAndroid) {
+        try {
+          await _methodChannel.invokeMethod<void>('startDownload', {
+            'modelId': model.name,
+            'modelSlug': model.modelSlug,
+            'quantizationSlug': model.quantizationSlug,
+            'displayName': model.displayName,
+            'estimatedSizeMB': model.estimatedSizeMB,
+          });
+        } catch (error) {
+          _applySnapshot(
+            _current.copyWith(
+              modelId: model.name,
+              isRunning: false,
+              statusMessage: 'Download failed to start.',
+              platformCanContinueInBackground: false,
+              lastError: '$error',
+              updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
+          rethrow;
+        }
+        return;
       }
-      return;
+    } catch (e) {
+      // Platform check failed, likely on web
     }
 
     _activeIosDownload ??= _runIosDownload(model);

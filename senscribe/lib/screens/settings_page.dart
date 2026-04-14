@@ -358,9 +358,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    Platform.isIOS
-                        ? 'Microphone, speech recognition, local alerts, Live Activities, and background audio behavior.'
-                        : 'Microphone, notifications, battery optimization, and background monitoring behavior.',
+                    _getPlatformDescription(),
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color,
@@ -492,5 +490,16 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     ));
+  }
+
+  String _getPlatformDescription() {
+    try {
+      return Platform.isIOS
+          ? 'Microphone, speech recognition, local alerts, Live Activities, and background audio behavior.'
+          : 'Microphone, notifications, battery optimization, and background monitoring behavior.';
+    } catch (e) {
+      // Platform check failed, likely on web
+      return 'Microphone, notifications, and background monitoring behavior.';
+    }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
@@ -7,6 +8,9 @@ import '../utils/app_constants.dart';
 class TriggerWordService {
   static const _kTriggerWordsKey = 'trigger_words_v1';
   static const _kTriggerAlertsKey = 'trigger_alerts_v1';
+  static const MethodChannel _feedbackChannel = MethodChannel(
+    'senscribe/alert_feedback',
+  );
 
   // Singleton pattern
   static final TriggerWordService _instance = TriggerWordService._internal();
@@ -90,25 +94,24 @@ class TriggerWordService {
 
     final correctedTokens = List<String>.from(transcriptTokens);
     final reserved = List<bool>.filled(correctedTokens.length, false);
-    final candidates =
-        words
-            .where((word) => word.enabled && word.exactMatch)
-            .map(
-              (word) => _PhraseCandidate(
-                displayText: word.word.trim(),
-                normalizedTokens: _tokenize(word.word),
-              ),
-            )
-            .where((candidate) => candidate.normalizedTokens.isNotEmpty)
-            .toList()
-          ..sort((a, b) {
-            final tokenCompare =
-                b.normalizedTokens.length.compareTo(a.normalizedTokens.length);
-            if (tokenCompare != 0) {
-              return tokenCompare;
-            }
-            return b.displayText.length.compareTo(a.displayText.length);
-          });
+    final candidates = words
+        .where((word) => word.enabled && word.exactMatch)
+        .map(
+          (word) => _PhraseCandidate(
+            displayText: word.word.trim(),
+            normalizedTokens: _tokenize(word.word),
+          ),
+        )
+        .where((candidate) => candidate.normalizedTokens.isNotEmpty)
+        .toList()
+      ..sort((a, b) {
+        final tokenCompare =
+            b.normalizedTokens.length.compareTo(a.normalizedTokens.length);
+        if (tokenCompare != 0) {
+          return tokenCompare;
+        }
+        return b.displayText.length.compareTo(a.displayText.length);
+      });
 
     for (final candidate in candidates) {
       final phraseLength = candidate.normalizedTokens.length;
@@ -116,7 +119,9 @@ class TriggerWordService {
         continue;
       }
 
-      for (var start = 0; start <= correctedTokens.length - phraseLength; start++) {
+      for (var start = 0;
+          start <= correctedTokens.length - phraseLength;
+          start++) {
         if (_windowContainsReserved(reserved, start, phraseLength)) {
           continue;
         }
@@ -218,7 +223,6 @@ class TriggerWordService {
           alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
         }
         await saveAlerts(alerts);
-        // TODO: Add vibration/haptic feedback for alert trigger.
         return true;
       } finally {
         _pendingSoundAlertKeys.remove(soundKey);
@@ -231,7 +235,6 @@ class TriggerWordService {
       alerts.removeRange(AppConstants.alertHistoryMaxItems, alerts.length);
     }
     await saveAlerts(alerts);
-    // TODO: Add vibration/haptic feedback for alert trigger.
     return true;
   }
 
@@ -288,7 +291,8 @@ class TriggerWordService {
   }
 
   bool _isPhraseMatch(List<String> observedTokens, List<String> targetTokens) {
-    if (observedTokens.length != targetTokens.length || observedTokens.isEmpty) {
+    if (observedTokens.length != targetTokens.length ||
+        observedTokens.isEmpty) {
       return false;
     }
 
@@ -401,6 +405,24 @@ class TriggerWordService {
     }
 
     return previous.last;
+  }
+
+  Future<void> playTriggerDetectedFeedback() async {
+    try {
+      await _feedbackChannel.invokeMethod<void>('playTriggerAlertFeedback');
+    } on MissingPluginException {
+      await _fallbackFeedback();
+    } catch (_) {
+      await _fallbackFeedback();
+    }
+  }
+
+  Future<void> _fallbackFeedback() async {
+    try {
+      await HapticFeedback.mediumImpact();
+    } catch (_) {
+      // Ignore unsupported-platform or platform-channel failures.
+    }
   }
 }
 

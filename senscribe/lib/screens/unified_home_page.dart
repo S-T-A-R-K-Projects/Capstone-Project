@@ -39,7 +39,7 @@ class UnifiedHomePage extends StatefulWidget {
 }
 
 class _UnifiedHomePageState extends State<UnifiedHomePage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // Services
   final AudioClassificationService _audioService = AudioClassificationService();
   final SpeechToText _speech = SpeechToText();
@@ -80,6 +80,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   final Map<String, int> _lastAlertedTriggerCount = {};
   Timer? _speechRestartTimer;
   bool _isSpeechStarting = false;
+  AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
 
   // Animations
   late final AnimationController _soundPulseController;
@@ -88,6 +89,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appLifecycleState =
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     unawaited(_soundFilterService.initialize());
     unawaited(_triggerWordService.warmCache());
     // Sync initial state
@@ -239,6 +243,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         );
         if (refinedText.isNotEmpty) {
           _sttTranscriptService.commitFinalWords(refinedText);
+          _resetTriggerDetectionTracking();
         }
         break;
       case AndroidOfflineSpeechEventType.status:
@@ -267,6 +272,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _audioSubscription?.cancel();
     _filterSelectionSubscription?.cancel();
     _androidSpeechSubscription?.cancel();
@@ -283,6 +289,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     _ttsController.dispose();
     _sttScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appLifecycleState = state;
   }
 
   // --- Sound Monitoring ---
@@ -337,7 +348,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         _speechPulseController.repeat(reverse: true);
       } else {
         _speechRestartTimer?.cancel();
-        _lastAlertedTriggerCount.clear();
+        _resetTriggerDetectionTracking();
         _stopSpeechException();
         _speechPulseController.stop();
         _speechPulseController.reset();
@@ -407,6 +418,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
             if (result.finalResult && refinedText.isNotEmpty) {
               _sttTranscriptService.commitFinalWords(refinedText);
+              _resetTriggerDetectionTracking();
             }
           },
           listenFor: const Duration(minutes: 10),
@@ -434,6 +446,32 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
     try {
       final triggerConfigs = await _triggerWordService.loadTriggerWords();
+      final enabledTriggerConfigs =
+          triggerConfigs.where((word) => word.enabled).toList();
+      if (enabledTriggerConfigs.isEmpty) return;
+
+      final currentCounts = <String, int>{};
+      for (final config in enabledTriggerConfigs) {
+        currentCounts[config.word.toLowerCase()] = _countTriggerOccurrences(
+          text,
+          config,
+        );
+      }
+
+      final trackedKeys = _lastAlertedTriggerCount.keys.toList(growable: false);
+      for (final key in trackedKeys) {
+        final currentCount = currentCounts[key] ?? 0;
+        if (currentCount <= 0) {
+          _lastAlertedTriggerCount.remove(key);
+          continue;
+        }
+
+        final lastCount = _lastAlertedTriggerCount[key] ?? 0;
+        if (currentCount < lastCount) {
+          _lastAlertedTriggerCount[key] = currentCount;
+        }
+      }
+
       final detected = await _triggerWordService.checkForTriggers(text);
       if (detected.isEmpty || !mounted) return;
 
@@ -441,7 +479,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
       for (final trigger in detected) {
         TriggerWord? config;
-        for (final word in triggerConfigs) {
+        for (final word in enabledTriggerConfigs) {
           if (word.word.toLowerCase() == trigger.toLowerCase()) {
             config = word;
             break;
@@ -449,11 +487,12 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         }
         if (config == null) continue;
 
-        final currentCount = _countTriggerOccurrences(text, config);
-        final lastCount = _lastAlertedTriggerCount[trigger.toLowerCase()] ?? 0;
+        final triggerKey = trigger.toLowerCase();
+        final currentCount = currentCounts[triggerKey] ?? 0;
+        final lastCount = _lastAlertedTriggerCount[triggerKey] ?? 0;
         if (currentCount <= lastCount) continue;
 
-        _lastAlertedTriggerCount[trigger.toLowerCase()] = currentCount;
+        _lastAlertedTriggerCount[triggerKey] = currentCount;
         newlyNotified.add(trigger);
 
         await _triggerWordService.addAlert(
@@ -466,6 +505,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       }
 
       if (newlyNotified.isNotEmpty && mounted) {
+        await _triggerWordService.playTriggerDetectedFeedback();
+        if (!mounted) return;
+        if (_appLifecycleState != AppLifecycleState.resumed) {
+          return;
+        }
         AdaptiveSnackBar.show(
           context,
           message: 'Trigger detected: ${newlyNotified.join(', ')}',
@@ -475,6 +519,10 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     } catch (_) {
       // Ignore trigger-check errors silently
     }
+  }
+
+  void _resetTriggerDetectionTracking() {
+    _lastAlertedTriggerCount.clear();
   }
 
   int _countTriggerOccurrences(String text, TriggerWord triggerWord) {

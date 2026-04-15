@@ -24,6 +24,7 @@ import '../services/trigger_word_service.dart';
 import '../models/trigger_alert.dart';
 import '../models/trigger_word.dart';
 import '../services/android_offline_speech_service.dart';
+import '../services/stt_transcript_refinement_service.dart';
 import '../services/stt_transcript_service.dart';
 import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
@@ -73,6 +74,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   String _currentSpeechBuffer = '';
   final List<String> _speechTranscript = [];
   final TriggerWordService _triggerWordService = TriggerWordService();
+  final SttTranscriptRefinementService _sttRefinementService =
+      SttTranscriptRefinementService();
   final SttTranscriptService _sttTranscriptService = SttTranscriptService();
   final Map<String, int> _lastAlertedTriggerCount = {};
   Timer? _speechRestartTimer;
@@ -218,16 +221,22 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   void _handleAndroidSpeechEvent(AndroidOfflineSpeechEvent event) {
     switch (event.type) {
       case AndroidOfflineSpeechEventType.partial:
-        final refinedText =
-            _triggerWordService.refineRecognizedText(event.text);
+        final refinedText = _refineTranscript(
+          event.text,
+          isFinal: false,
+          backend: SttBackend.androidOfflineVosk,
+        );
         _sttTranscriptService.setPartialWords(refinedText);
         if (refinedText.isNotEmpty) {
           unawaited(_checkAndNotifyPartialTriggers(refinedText));
         }
         break;
       case AndroidOfflineSpeechEventType.finalResult:
-        final refinedText =
-            _triggerWordService.refineRecognizedText(event.text);
+        final refinedText = _refineTranscript(
+          event.text,
+          isFinal: true,
+          backend: SttBackend.androidOfflineVosk,
+        );
         if (refinedText.isNotEmpty) {
           _sttTranscriptService.commitFinalWords(refinedText);
         }
@@ -340,6 +349,24 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     _toggleSpeechMonitoring();
   }
 
+  String _refineTranscript(
+    String text, {
+    required bool isFinal,
+    required SttBackend backend,
+    List<String> alternates = const [],
+    List<String> recognizedPhrases = const [],
+  }) {
+    return _sttRefinementService.refine(
+      SttRefinementRequest(
+        text: text,
+        isFinal: isFinal,
+        backend: backend,
+        alternates: alternates,
+        recognizedPhrases: recognizedPhrases,
+      ),
+    );
+  }
+
   Future<void> _startSpeechListening() async {
     final usesAndroidOfflineSpeech =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -358,13 +385,24 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         await _speech.cancel();
         await _speech.listen(
           onResult: (result) {
-            final refinedText = _triggerWordService.refineRecognizedText(
+            final refinedText = _refineTranscript(
               result.recognizedWords,
+              isFinal: result.finalResult,
+              backend: SttBackend.iosSpeechToText,
+              alternates: result.alternates
+                  .map((alternate) => alternate.recognizedWords)
+                  .toList(),
+              recognizedPhrases: result.alternates
+                  .expand(
+                    (alternate) =>
+                        alternate.recognizedPhrases ?? const <String>[],
+                  )
+                  .toList(),
             );
             _sttTranscriptService.setPartialWords(refinedText);
 
             if (!result.finalResult && refinedText.isNotEmpty) {
-              _checkAndNotifyPartialTriggers(refinedText);
+              unawaited(_checkAndNotifyPartialTriggers(refinedText));
             }
 
             if (result.finalResult && refinedText.isNotEmpty) {

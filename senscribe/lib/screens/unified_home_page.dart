@@ -629,8 +629,18 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   // --- Navigation Helpers ---
-  void _navigateToExpanded(Widget page) {
-    pushAdaptivePage<void>(context, builder: (_) => page);
+  void _navigateToExpanded(
+    Widget page, {
+    required String pageName,
+    required String sectionName,
+  }) {
+    pushAdaptivePage<void>(
+      context,
+      builder: (_) => page,
+      pageName: pageName,
+      openedLabel: sectionName,
+      returnPageName: 'Unified Home',
+    );
   }
 
   Future<void> _openExpandedSpeechPage() async {
@@ -642,7 +652,12 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         isMonitoring: _isSpeechMonitoring,
         pulseController: _speechPulseController,
         onToggleMonitoring: _toggleSpeechMonitoringFromDetail,
+        appBarTitle: 'Speech to Text',
+        showSectionHeader: false,
       ),
+      pageName: 'Speech to Text',
+      openedLabel: 'Speech to Text',
+      returnPageName: 'Unified Home',
     );
   }
 
@@ -706,11 +721,16 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                             () => _isSoundExpanded = !_isSoundExpanded),
                         onExpand: () {
                           // Navigate to detailed Sound page (HomePage)
-                          _navigateToExpanded(HomePage(
-                            isMonitoring: _isSoundMonitoring,
-                            pulseController: _soundPulseController,
-                            onToggleMonitoring: _toggleSoundMonitoring,
-                          ));
+                          _navigateToExpanded(
+                            HomePage(
+                              isMonitoring: _isSoundMonitoring,
+                              pulseController: _soundPulseController,
+                              onToggleMonitoring: _toggleSoundMonitoring,
+                              appBarTitle: 'Sound Recognition',
+                            ),
+                            pageName: 'Sound Recognition',
+                            sectionName: 'Sound Recognition',
+                          );
                         },
                         child: _buildSoundContent(),
                       ),
@@ -758,10 +778,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                         scrollableBody: false,
                         onCollapseToggle: () =>
                             setState(() => _isTTSExpanded = !_isTTSExpanded),
-                        onExpand: () => _navigateToExpanded(TextToSpeechPage(
+                        onExpand: () => _navigateToExpanded(
+                          TextToSpeechPage(
                             isMonitoring: false,
                             pulseController: _speechPulseController,
-                            onToggleMonitoring: () {})),
+                            onToggleMonitoring: () {},
+                          ),
+                          pageName: 'Text to Speech',
+                          sectionName: 'Text to Speech',
+                        ),
                         child: _buildTTSContent(),
                       ),
                     ),

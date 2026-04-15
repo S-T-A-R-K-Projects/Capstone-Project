@@ -12,12 +12,16 @@ class SpeechToTextPage extends StatefulWidget {
   final bool isMonitoring;
   final AnimationController pulseController;
   final VoidCallback onToggleMonitoring;
+  final String appBarTitle;
+  final bool showSectionHeader;
 
   const SpeechToTextPage({
     super.key,
     required this.isMonitoring,
     required this.pulseController,
     required this.onToggleMonitoring,
+    this.appBarTitle = 'SenScribe',
+    this.showSectionHeader = true,
   });
 
   @override
@@ -283,7 +287,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
         : 0.0;
 
     return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(title: 'SenScribe'),
+      appBar: AdaptiveAppBar(title: widget.appBarTitle),
       body: Material(
         color: Colors.transparent,
         child: SingleChildScrollView(
@@ -371,23 +375,26 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                     const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.mic_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Speech to Text',
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
+                    if (widget.showSectionHeader) ...[
+                      Icon(
+                        Icons.mic_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Speech to Text',
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
+                      const SizedBox(width: 8),
+                    ] else
+                      const Spacer(),
                     AdaptiveButton(
                       onPressed: !_hasTranscript || _isListening || _isSaving
                           ? null

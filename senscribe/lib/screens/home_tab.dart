@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/app_logger.dart';
 import 'start_page.dart';
 import 'unified_home_page.dart';
 
@@ -14,6 +15,9 @@ class HomeTab extends StatefulWidget {
 
   static Key get navigationKey => _homeTabKey;
 
+  static String get currentVisiblePageName =>
+      _homeTabKey.currentState?.currentPageName ?? 'Home';
+
   static Future<void> restartOnboarding() async =>
       _homeTabKey.currentState?.showOnboarding();
 
@@ -22,6 +26,8 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
+  String? _lastLoggedPageName;
+
   Future<void> showOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasLaunched', false);
@@ -65,8 +71,20 @@ class _HomeTabState extends State<HomeTab> {
     }
   }
 
+  String get currentPageName {
+    if (_isLoading) return 'Home Loading';
+    if (_isFirstLaunch) return 'Welcome to SenScribe';
+    return 'Unified Home';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pageName = currentPageName;
+    if (_lastLoggedPageName != pageName) {
+      _lastLoggedPageName = pageName;
+      AppLogger.logPageVisit(pageName);
+    }
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(

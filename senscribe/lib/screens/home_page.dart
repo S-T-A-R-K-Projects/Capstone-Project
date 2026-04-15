@@ -20,12 +20,14 @@ class HomePage extends StatefulWidget {
   final bool isMonitoring;
   final AnimationController pulseController;
   final VoidCallback onToggleMonitoring;
+  final String appBarTitle;
 
   const HomePage({
     super.key,
     required this.isMonitoring,
     required this.pulseController,
     required this.onToggleMonitoring,
+    this.appBarTitle = 'SenScribe',
   });
 
   @override
@@ -455,7 +457,7 @@ class _HomePageState extends State<HomePage> {
         : 0.0;
 
     return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(title: 'SenScribe'),
+      appBar: AdaptiveAppBar(title: widget.appBarTitle),
       body: Material(
         color: Colors.transparent,
         child: Column(

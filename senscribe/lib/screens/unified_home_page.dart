@@ -52,6 +52,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   List<SoundCaption> _soundEvents = [];
   final TextEditingController _ttsController = TextEditingController();
   final ScrollController _sttScrollController = ScrollController();
+  bool _shouldAutoScrollStt = true;
+  bool _isUserInteractingWithSttScroll = false;
+  static const double _sttAutoScrollThreshold = 24;
 
   // Expansion State
   bool _isSoundExpanded = true;
@@ -117,6 +120,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     });
 
     _syncFromSharedTranscript(_sttTranscriptService.current, notify: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom(animated: false);
+    });
     _transcriptSubscription = _sttTranscriptService.stream.listen((snapshot) {
       if (!mounted) return;
       _syncFromSharedTranscript(snapshot);
@@ -144,6 +150,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         ..addAll(snapshot.finalizedSegments);
       _currentSpeechBuffer = snapshot.partialWords;
     });
+    _scheduleSttAutoScroll();
   }
 
   Future<void> _initTTS() async {
@@ -211,17 +218,18 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   void _handleAndroidSpeechEvent(AndroidOfflineSpeechEvent event) {
     switch (event.type) {
       case AndroidOfflineSpeechEventType.partial:
-        final refinedText = _triggerWordService.refineRecognizedText(event.text);
+        final refinedText =
+            _triggerWordService.refineRecognizedText(event.text);
         _sttTranscriptService.setPartialWords(refinedText);
         if (refinedText.isNotEmpty) {
           unawaited(_checkAndNotifyPartialTriggers(refinedText));
         }
         break;
       case AndroidOfflineSpeechEventType.finalResult:
-        final refinedText = _triggerWordService.refineRecognizedText(event.text);
+        final refinedText =
+            _triggerWordService.refineRecognizedText(event.text);
         if (refinedText.isNotEmpty) {
           _sttTranscriptService.commitFinalWords(refinedText);
-          _scrollToBottom();
         }
         break;
       case AndroidOfflineSpeechEventType.status:
@@ -361,7 +369,6 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
             if (result.finalResult && refinedText.isNotEmpty) {
               _sttTranscriptService.commitFinalWords(refinedText);
-              _scrollToBottom();
             }
           },
           listenFor: const Duration(minutes: 10),
@@ -468,16 +475,71 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     await _speech.stop();
   }
 
-  void _scrollToBottom() {
-    if (_sttScrollController.hasClients) {
-      Future.delayed(Delays.scrollDelay, () {
-        _sttScrollController.animateTo(
-          _sttScrollController.position.maxScrollExtent,
-          duration: Delays.scrollAnimation,
-          curve: Curves.easeOut,
-        );
-      });
+  bool _isNearSttBottom(ScrollMetrics metrics) {
+    return metrics.maxScrollExtent - metrics.pixels <= _sttAutoScrollThreshold;
+  }
+
+  void _handleSttScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _isUserInteractingWithSttScroll = true;
+      return;
     }
+
+    if (notification is ScrollUpdateNotification) {
+      if (notification.dragDetails != null) {
+        _isUserInteractingWithSttScroll = true;
+      }
+      final nearBottom = _isNearSttBottom(notification.metrics);
+      if (_isUserInteractingWithSttScroll && !nearBottom) {
+        _shouldAutoScrollStt = false;
+      }
+      return;
+    }
+
+    if (notification is OverscrollNotification &&
+        notification.dragDetails != null) {
+      _isUserInteractingWithSttScroll = true;
+      if (!_isNearSttBottom(notification.metrics)) {
+        _shouldAutoScrollStt = false;
+      }
+      return;
+    }
+
+    if (notification is ScrollEndNotification) {
+      final nearBottom = _isNearSttBottom(notification.metrics);
+      _isUserInteractingWithSttScroll = false;
+      _shouldAutoScrollStt = nearBottom;
+      if (nearBottom) {
+        _scrollToBottom(animated: false);
+      }
+    }
+  }
+
+  void _scheduleSttAutoScroll() {
+    if (!_shouldAutoScrollStt || _isUserInteractingWithSttScroll) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom(animated: false);
+    });
+  }
+
+  void _scrollToBottom({bool animated = true}) {
+    if (!_sttScrollController.hasClients) return;
+    if (_isUserInteractingWithSttScroll) return;
+    final position = _sttScrollController.position;
+    final target = position.maxScrollExtent;
+    if ((target - position.pixels).abs() < 1) return;
+    if (!animated) {
+      _sttScrollController.jumpTo(target);
+      return;
+    }
+    unawaited(
+      _sttScrollController.animateTo(
+        target,
+        duration: Delays.scrollAnimation,
+        curve: Curves.easeOut,
+      ),
+    );
   }
 
   // --- TTS ---
@@ -519,6 +581,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   void _clearSTT() {
+    _shouldAutoScrollStt = true;
+    _isUserInteractingWithSttScroll = false;
     _sttTranscriptService.clear();
   }
 
@@ -630,6 +694,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                         isExpanded: _isSTTExpanded,
                         isMonitoring: _isSpeechMonitoring,
                         onToggle: _toggleSpeechMonitoring,
+                        scrollableBody: false,
                         onCollapseToggle: () =>
                             setState(() => _isSTTExpanded = !_isSTTExpanded),
                         onExpand: _openExpandedSpeechPage,
@@ -910,59 +975,92 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       );
     }
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         // Action Bar for STT
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            children: [
-              SizedBox(
-                width: 70,
-                child: AdaptiveButton(
-                  onPressed: _saveSTTTranscript,
-                  label: "Save",
-                  style: AdaptiveButtonStyle.plain,
-                  size: AdaptiveButtonSize.small,
-                  useNative: false,
-                ),
-              ),
-              SizedBox(
-                width: 70,
-                child: AdaptiveButton(
-                  onPressed: _clearSTT,
-                  label: "Clear",
-                  style: AdaptiveButtonStyle.plain,
-                  color: scheme.error,
-                  size: AdaptiveButtonSize.small,
-                  useNative: false,
-                ),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final alignment = constraints.maxWidth < 220
+                  ? WrapAlignment.center
+                  : WrapAlignment.end;
+              return Wrap(
+                alignment: alignment,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildSTTActionButton(
+                    onPressed: _saveSTTTranscript,
+                    label: 'Save',
+                  ),
+                  _buildSTTActionButton(
+                    onPressed: _clearSTT,
+                    label: 'Clear',
+                    color: scheme.error,
+                  ),
+                ],
+              );
+            },
           ),
         ),
-
-        Column(
-          children: [
-            ..._speechTranscript.map((t) => Padding(
-                  padding:
-                      const EdgeInsets.only(bottom: 8.0, left: 8.0, right: 8.0),
-                  child: Text(t, style: GoogleFonts.inter(fontSize: 16)),
-                )),
-            if (_currentSpeechBuffer.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(_currentSpeechBuffer,
-                    style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: scheme.onSurface.withValues(alpha: 0.72),
-                        fontStyle: FontStyle.italic)),
+        const SizedBox(height: 8),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              _handleSttScrollNotification(notification);
+              return false;
+            },
+            child: Scrollbar(
+              controller: _sttScrollController,
+              child: SingleChildScrollView(
+                controller: _sttScrollController,
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    ..._speechTranscript.map((t) => Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: 8.0,
+                            left: 8.0,
+                            right: 8.0,
+                          ),
+                          child:
+                              Text(t, style: GoogleFonts.inter(fontSize: 16)),
+                        )),
+                    if (_currentSpeechBuffer.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          _currentSpeechBuffer,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            color: scheme.onSurface.withValues(alpha: 0.72),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-          ],
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSTTActionButton({
+    required VoidCallback? onPressed,
+    required String label,
+    Color? color,
+  }) {
+    return AdaptiveButton(
+      onPressed: onPressed,
+      label: label,
+      style: AdaptiveButtonStyle.plain,
+      color: color,
+      size: AdaptiveButtonSize.small,
+      minSize: const Size(88, 32),
+      useNative: false,
     );
   }
 

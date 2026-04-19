@@ -152,8 +152,9 @@ class SoundCaptionCard extends StatelessWidget {
                         if (caption.locationLabel != null)
                           _buildInfoChip(
                             Icons.location_on_rounded,
-                            caption.locationLabel!,
+                            'Location: ${caption.locationLabel!}',
                             context,
+                            isLocation: true,
                           ),
                         _buildInfoChip(
                           Icons.graphic_eq_rounded,
@@ -178,27 +179,46 @@ class SoundCaptionCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoChip(IconData icon, String label, BuildContext context) {
+  Widget _buildInfoChip(
+    IconData icon,
+    String label,
+    BuildContext context, {
+    bool isLocation = false,
+  }) {
     final scheme = Theme.of(context).colorScheme;
+    final iconColor =
+        isLocation ? scheme.primary : scheme.onSurface.withValues(alpha: 0.75);
+    final textColor =
+        isLocation ? scheme.primary : scheme.onSurface.withValues(alpha: 0.78);
+    final backgroundColor = isLocation
+        ? scheme.primary.withOpacity(0.14)
+        : scheme.surfaceVariant.withOpacity(0.12);
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: scheme.onSurface.withValues(alpha: 0.75),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: scheme.onSurface.withValues(alpha: 0.78),
-            fontWeight: FontWeight.w500,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: iconColor,
           ),
-        ),
-      ],
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: textColor,
+              fontWeight: isLocation ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -225,7 +245,8 @@ class _SoundCaptionMenuButton extends StatefulWidget {
   final VoidCallback? onDelete;
 
   @override
-  State<_SoundCaptionMenuButton> createState() => _SoundCaptionMenuButtonState();
+  State<_SoundCaptionMenuButton> createState() =>
+      _SoundCaptionMenuButtonState();
 }
 
 class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
@@ -246,9 +267,15 @@ class _SoundCaptionMenuButtonState extends State<_SoundCaptionMenuButton> {
         (action) => AdaptivePopupMenuItem<String>(
           label: action.label,
           icon: switch (action.value) {
-            'details' => PlatformInfo.isIOS26OrHigher() ? 'info.circle' : Icons.info_outline_rounded,
-            'save_to_alerts' => PlatformInfo.isIOS26OrHigher() ? 'bookmark' : Icons.bookmark_border_rounded,
-            'delete' => PlatformInfo.isIOS26OrHigher() ? 'trash' : Icons.delete_outline_rounded,
+            'details' => PlatformInfo.isIOS26OrHigher()
+                ? 'info.circle'
+                : Icons.info_outline_rounded,
+            'save_to_alerts' => PlatformInfo.isIOS26OrHigher()
+                ? 'bookmark'
+                : Icons.bookmark_border_rounded,
+            'delete' => PlatformInfo.isIOS26OrHigher()
+                ? 'trash'
+                : Icons.delete_outline_rounded,
             _ => null,
           },
           value: action.value,

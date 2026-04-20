@@ -1,17 +1,17 @@
-import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import '../main.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
-import 'home_tab.dart';
-import 'name_recognition_page.dart';
-import 'sound_direction_page.dart';
-import 'privacy_data_page.dart';
-import 'permissions_background_page.dart';
+import 'introduction_page.dart';
 import 'model_settings_page.dart';
+import 'name_recognition_page.dart';
+import 'permissions_background_page.dart';
+import 'privacy_data_page.dart';
+import 'sound_direction_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -450,17 +450,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: AdaptiveButton(
-                      onPressed: () async {
-                        await HomeTab.homeTabKey.currentState?.showOnboarding();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Onboarding restarted. Go back to Home to continue.'),
-                            duration: Duration(seconds: 2),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => IntroductionPage(
+                              onDone: () => Navigator.of(context).pop(),
+                            ),
                           ),
                         );
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
                       },
                       label: 'Run Onboarding',
                       style: AdaptiveButtonStyle.filled,

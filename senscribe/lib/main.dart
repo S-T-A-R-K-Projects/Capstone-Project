@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'theme/app_theme.dart';
+
 import 'navigation/main_navigation.dart';
 import 'screens/introduction_page.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   GoogleFonts.config.allowRuntimeFetching = true;
@@ -50,7 +51,8 @@ class SenScribeApp extends StatefulWidget {
 
 class _SenScribeAppState extends State<SenScribeApp> {
   final ThemeProvider _themeProvider = ThemeProvider();
-  bool _introCompleted = false;
+  // null = still loading, false = show intro, true = show home
+  bool? _introCompleted;
 
   @override
   void initState() {
@@ -85,6 +87,20 @@ class _SenScribeAppState extends State<SenScribeApp> {
     setState(() {});
   }
 
+  Widget _buildHome() {
+    if (_introCompleted == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F1724),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_introCompleted == true) {
+      return const MainNavigationPage();
+    }
+    // Full-screen standalone intro — no bottom nav
+    return IntroductionPage(onDone: _markIntroCompleted);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdaptiveApp(
@@ -94,9 +110,7 @@ class _SenScribeAppState extends State<SenScribeApp> {
       cupertinoLightTheme: AppTheme.cupertinoLightTheme,
       cupertinoDarkTheme: AppTheme.cupertinoDarkTheme,
       themeMode: _themeProvider.themeMode,
-      home: _introCompleted 
-        ? const MainNavigationPage()
-        : IntroductionPage(onDone: _markIntroCompleted),
+      home: _buildHome(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

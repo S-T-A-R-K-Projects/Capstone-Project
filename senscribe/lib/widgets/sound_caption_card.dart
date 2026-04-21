@@ -130,6 +130,13 @@ class SoundCaptionCard extends StatelessWidget {
                               .shimmer(duration: 1000.ms),
                       ],
                     ),
+                    const SizedBox(height: 4),
+                    // Location display
+                    _buildInfoChip(
+                      Icons.location_on_rounded,
+                      caption.displayLocation,
+                      context,
+                    ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 16,

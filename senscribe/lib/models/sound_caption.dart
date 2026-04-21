@@ -10,6 +10,9 @@ class SoundCaption {
   final double confidence;
   final SoundCaptionSource source;
   final String? customSoundId;
+  final double? latitude;
+  final double? longitude;
+  final String? locationName;
 
   SoundCaption({
     required this.sound,
@@ -18,6 +21,9 @@ class SoundCaption {
     required this.confidence,
     this.source = SoundCaptionSource.builtIn,
     this.customSoundId,
+    this.latitude,
+    this.longitude,
+    this.locationName,
   });
 
   static final RegExp _displaySoundPattern = RegExp(r'[_\-\s]+');
@@ -28,6 +34,24 @@ class SoundCaption {
     final normalized = sound.trim().replaceAll(_displaySoundPattern, ' ');
     return normalized.isEmpty ? 'Unknown' : normalized;
   }
+
+  /// Returns formatted location string for display
+  /// If locationName is available, returns that; otherwise formats coordinates
+  /// Returns "Location Unknown" if no location data is available
+  String get displayLocation {
+    if (locationName != null && locationName!.isNotEmpty) {
+      return locationName!;
+    }
+    
+    if (latitude != null && longitude != null) {
+      return '${latitude!.toStringAsFixed(4)}, ${longitude!.toStringAsFixed(4)}';
+    }
+    
+    return 'Location Unknown';
+  }
+
+  /// Checks if location data is available
+  bool get hasLocation => latitude != null && longitude != null;
 }
 
 extension SoundCaptionIcon on SoundCaption {

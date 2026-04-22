@@ -5,18 +5,20 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'app_settings_service.dart';
 
-class AppPermissionSnapshot {
-  const AppPermissionSnapshot({
+class AppPermissionSnapshot \{`n  const AppPermissionSnapshot({`n    this.location,`n    required this.microphone,`n    required this.notifications,`n    this.speechRecognition,`n    this.ignoreBatteryOptimizations,`n    this.location,`n  });`n`n  final PermissionStatus microphone;`n  final PermissionStatus notifications;`n  final PermissionStatus? speechRecognition;`n  final PermissionStatus? ignoreBatteryOptimizations;`n  final PermissionStatus? location;
+  const AppPermissionSnapshot({`n    this.location,
     required this.microphone,
     required this.notifications,
     this.speechRecognition,
     this.ignoreBatteryOptimizations,
+    this.location,
   });
 
   final PermissionStatus microphone;
   final PermissionStatus notifications;
   final PermissionStatus? speechRecognition;
   final PermissionStatus? ignoreBatteryOptimizations;
+  final PermissionStatus? location;
 }
 
 class AppPermissionService {

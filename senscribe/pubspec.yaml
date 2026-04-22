@@ -52,6 +52,8 @@ dependencies:
   uuid: ^4.0.0
   adaptive_platform_ui: ^0.1.104
   flutter_tts: ^4.2.5
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
   flutter_localizations:
     sdk: flutter
   live_activities: ^2.4.7

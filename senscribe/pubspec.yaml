@@ -51,6 +51,7 @@ dependencies:
   path_provider: ^2.1.5
   uuid: ^4.0.0
   adaptive_platform_ui: ^0.1.104
+  introduction_screen: ^4.0.0
   flutter_tts: ^4.2.5
   flutter_localizations:
     sdk: flutter

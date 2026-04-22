@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import '../screens/home_tab.dart';
-import '../screens/history_page.dart';
+import 'package:flutter/material.dart';
+
 import '../screens/alerts_page.dart';
+import '../screens/history_page.dart';
+import '../screens/home_tab.dart';
 import '../screens/settings_page.dart';
 import '../services/app_permission_service.dart';
 
@@ -33,7 +34,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   int _selectedIndex = 0;
   bool _tabBarHidden = false;
   final List<Widget> _pages = [
-    HomeTab(key: HomeTab.navigationKey),
+    const HomeTab(),
     const HistoryPage(),
     AlertsPage(key: AlertsPage.navigationKey),
     const SettingsPage(),

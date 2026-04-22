@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../models/sound_caption.dart';
 import 'sound_filter_service.dart';
 import '../utils/app_constants.dart';
+import 'location_service.dart';
 
 class AudioClassificationService {
   static final AudioClassificationService _instance =
@@ -27,6 +28,9 @@ class AudioClassificationService {
   final _monitoringStateController = StreamController<bool>.broadcast();
   Stream<bool> get monitoringStateStream => _monitoringStateController.stream;
 
+  Position? _lastPosition;
+  String? _lastLocationName;
+
   StreamSubscription? _nativeSubscription;
   bool _isMonitoring = false;
   bool get isMonitoring => _isMonitoring;
@@ -43,6 +47,13 @@ class AudioClassificationService {
   Future<void> start() async {
     if (_isMonitoring) return;
     await _soundFilterService.initialize();
+        _lastPosition = await LocationService().getCurrentPosition();
+    if (_lastPosition != null) {
+      _lastLocationName = await LocationService().getLocationName(
+        _lastPosition!.latitude,
+        _lastPosition!.longitude,
+      );
+    }
     try {
       await _methodChannel.invokeMethod('start');
       _isMonitoring = true;
@@ -97,7 +108,7 @@ class AudioClassificationService {
       return;
     }
 
-    final caption = SoundCaption(
+        final caption = SoundCaption(
       sound: label,
       timestamp: timestampMs == null
           ? DateTime.now()
@@ -106,6 +117,9 @@ class AudioClassificationService {
       confidence: confidence,
       source: isCustom ? SoundCaptionSource.custom : SoundCaptionSource.builtIn,
       customSoundId: customSoundId,
+      latitude: _lastPosition?.latitude,
+      longitude: _lastPosition?.longitude,
+      locationName: _lastLocationName,
     );
 
     if (!_soundFilterService.matchesCaption(caption)) {

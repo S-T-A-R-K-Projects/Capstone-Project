@@ -5,20 +5,20 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'app_settings_service.dart';
 
-class AppPermissionSnapshot \{`n  const AppPermissionSnapshot({`n    this.location,`n    required this.microphone,`n    required this.notifications,`n    this.speechRecognition,`n    this.ignoreBatteryOptimizations,`n    this.location,`n  });`n`n  final PermissionStatus microphone;`n  final PermissionStatus notifications;`n  final PermissionStatus? speechRecognition;`n  final PermissionStatus? ignoreBatteryOptimizations;`n  final PermissionStatus? location;
-  const AppPermissionSnapshot({`n    this.location,
+class AppPermissionSnapshot {
+  const AppPermissionSnapshot({
     required this.microphone,
     required this.notifications,
     this.speechRecognition,
     this.ignoreBatteryOptimizations,
-    this.location,
+    required this.location,
   });
 
   final PermissionStatus microphone;
   final PermissionStatus notifications;
   final PermissionStatus? speechRecognition;
   final PermissionStatus? ignoreBatteryOptimizations;
-  final PermissionStatus? location;
+  final PermissionStatus location;
 }
 
 class AppPermissionService {
@@ -46,12 +46,14 @@ class AppPermissionService {
     final ignoreBatteryOptimizations = Platform.isAndroid
         ? await Permission.ignoreBatteryOptimizations.status
         : null;
+        final location = await Permission.location.status;
 
     return AppPermissionSnapshot(
       microphone: microphone,
       notifications: notifications,
       speechRecognition: speechRecognition,
       ignoreBatteryOptimizations: ignoreBatteryOptimizations,
+      location: location,
     );
   }
 
@@ -107,6 +109,8 @@ class AppPermissionService {
     }
 
     await requestNotifications();
+    await requestLocation();
+    
 
     if (Platform.isAndroid) {
       await requestIgnoreBatteryOptimizations();
@@ -129,3 +133,7 @@ class AppPermissionService {
     return Permission.ignoreBatteryOptimizations.request();
   }
 }
+
+  Future<PermissionStatus> requestLocation() {
+    return Permission.location.request();
+  }

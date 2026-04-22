@@ -1,20 +1,21 @@
 import 'dart:io';
 
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart';
 import '../navigation/adaptive_page_route.dart';
 import '../navigation/main_navigation.dart';
 import '../services/app_logger.dart';
 import 'about_support.dart';
-import 'experimental_page.dart';
 import 'home_tab.dart';
-import 'privacy_data_page.dart';
-import 'permissions_background_page.dart';
+import 'experimental_page.dart';
 import 'model_settings_page.dart';
+import 'permissions_background_page.dart';
+import 'privacy_data_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -137,22 +138,22 @@ class _SettingsPageState extends State<SettingsPage> {
                             size: 24,
                           ),
                           const SizedBox(width: 12),
-                      Text(
-                        'Sound Filters',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                          Text(
+                            'Sound Filters',
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ],
                       ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Choose which sound categories appear in the app and customize individual labels inside each filter.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
+                      const SizedBox(height: 12),
+                      Text(
+                        'Choose which sound categories appear in the app and customize individual labels inside each filter.',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -399,7 +400,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
                 const SizedBox(height: 8),
 
-                // Re-launch onboarding tour
+                // Onboarding
                 AdaptiveCard(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -408,7 +409,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Row(
                         children: [
                           Icon(
-                            Icons.refresh_rounded,
+                            Icons.auto_awesome_rounded,
                             color: Theme.of(context).colorScheme.primary,
                             size: 24,
                           ),
@@ -425,7 +426,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Restart the step-by-step introduction whenever you want to revisit key features.',
+                        'Replay the step-by-step introduction to SenScribe whenever you want.',
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: Theme.of(context).textTheme.bodySmall?.color,
@@ -440,19 +441,13 @@ class _SettingsPageState extends State<SettingsPage> {
                               'Onboarding',
                               targetPageName: 'Welcome to SenScribe',
                             );
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('intro_completed', false);
                             await HomeTab.restartOnboarding();
                             if (!context.mounted) return;
-                            AdaptiveSnackBar.show(
-                              context,
-                              message:
-                                  'Onboarding restarted. Go back to Home to continue.',
-                              type: AdaptiveSnackBarType.success,
-                            );
-                            if (Navigator.of(context).canPop()) {
-                              Navigator.of(context).pop();
-                            }
+                            SenScribeApp.restartIntro();
                           },
-                          label: 'Run Onboarding',
+                          label: 'View Intro',
                           style: AdaptiveButtonStyle.filled,
                           useNative: false,
                         ),

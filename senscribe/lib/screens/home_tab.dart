@@ -4,22 +4,20 @@ import '../services/app_logger.dart';
 import 'start_page.dart';
 import 'unified_home_page.dart';
 
-/// HomeTab wraps the home page logic and shows StartPage only on first launch.
-/// After the user completes the start screen, it shows UnifiedHomePage.
-/// This design keeps the bottom navigation visible at all times.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
   static final GlobalKey<_HomeTabState> _homeTabKey =
       GlobalKey<_HomeTabState>();
+  static _HomeTabState? _currentState;
 
   static Key get navigationKey => _homeTabKey;
 
   static String get currentVisiblePageName =>
-      _homeTabKey.currentState?.currentPageName ?? 'Home';
+      (_homeTabKey.currentState ?? _currentState)?.currentPageName ?? 'Home';
 
   static Future<void> restartOnboarding() async =>
-      _homeTabKey.currentState?.showOnboarding();
+      (_homeTabKey.currentState ?? _currentState)?.showOnboarding();
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -27,6 +25,21 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   String? _lastLoggedPageName;
+
+  @override
+  void initState() {
+    super.initState();
+    HomeTab._currentState = this;
+    _checkFirstLaunch();
+  }
+
+  @override
+  void dispose() {
+    if (HomeTab._currentState == this) {
+      HomeTab._currentState = null;
+    }
+    super.dispose();
+  }
 
   Future<void> showOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
@@ -41,12 +54,6 @@ class _HomeTabState extends State<HomeTab> {
 
   bool _isFirstLaunch = true;
   bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkFirstLaunch();
-  }
 
   Future<void> _checkFirstLaunch() async {
     final prefs = await SharedPreferences.getInstance();
@@ -96,7 +103,6 @@ class _HomeTabState extends State<HomeTab> {
     if (_isFirstLaunch) {
       return StartPage(onGetStarted: _markFirstLaunchComplete);
     }
-
     return const UnifiedHomePage();
   }
 }

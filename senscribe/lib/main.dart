@@ -1,15 +1,18 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'services/audio_classification_service.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'navigation/main_navigation.dart';
+import 'screens/introduction_page.dart';
 import 'services/app_settings_service.dart';
+import 'services/audio_classification_service.dart';
 import 'services/live_update_service.dart';
 import 'services/sound_filter_service.dart';
 import 'theme/app_theme.dart';
-import 'navigation/main_navigation.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +22,7 @@ Future<void> main() async {
   await LiveUpdateService().initialize(
     audioService: AudioClassificationService(),
   );
-  runApp(const SenScribeApp());
+  runApp(SenScribeApp(key: SenScribeApp._appKey));
 }
 
 class ThemeProvider extends ChangeNotifier {
@@ -62,17 +65,48 @@ class ThemeProvider extends ChangeNotifier {
 class SenScribeApp extends StatefulWidget {
   const SenScribeApp({super.key});
 
+  static final GlobalKey<_SenScribeAppState> _appKey =
+      GlobalKey<_SenScribeAppState>();
+
+  static void restartIntro() {
+    _appKey.currentState?._showIntro();
+  }
+
   @override
   State<SenScribeApp> createState() => _SenScribeAppState();
 }
 
 class _SenScribeAppState extends State<SenScribeApp> {
   final ThemeProvider _themeProvider = ThemeProvider();
+  bool? _introCompleted;
 
   @override
   void initState() {
     super.initState();
     _themeProvider.addListener(_onThemeChanged);
+    _checkIntroCompleted();
+  }
+
+  void _showIntro() {
+    setState(() {
+      _introCompleted = false;
+    });
+  }
+
+  Future<void> _checkIntroCompleted() async {
+    final prefs = await SharedPreferences.getInstance();
+    final completed = prefs.getBool('intro_completed') ?? false;
+    setState(() {
+      _introCompleted = completed;
+    });
+  }
+
+  Future<void> _markIntroCompleted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_completed', true);
+    setState(() {
+      _introCompleted = true;
+    });
   }
 
   @override
@@ -83,6 +117,19 @@ class _SenScribeAppState extends State<SenScribeApp> {
 
   void _onThemeChanged() {
     setState(() {});
+  }
+
+  Widget _buildHome() {
+    if (_introCompleted == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F1724),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_introCompleted == true) {
+      return MainNavigationPage(key: MainNavigationPage.navigationKey);
+    }
+    return IntroductionPage(onDone: _markIntroCompleted);
   }
 
   @override
@@ -108,7 +155,7 @@ class _SenScribeAppState extends State<SenScribeApp> {
           child: child,
         );
       },
-      home: MainNavigationPage(key: MainNavigationPage.navigationKey),
+      home: _buildHome(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

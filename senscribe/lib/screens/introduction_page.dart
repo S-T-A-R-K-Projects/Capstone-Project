@@ -8,62 +8,84 @@ class IntroductionPage extends StatelessWidget {
   const IntroductionPage({super.key, this.onDone});
 
   // ── Design tokens ──────────────────────────────────────────────────────────
-  static const Color _bg            = Color(0xFF0F1724);
-  static const Color _primary       = Color(0xFF8AB4FF);
-  static const Color _textPrimary   = Color(0xFFE7EDF8);
+  static const Color _bg = Color(0xFF0F1724);
+  static const Color _primary = Color(0xFF8AB4FF);
+  static const Color _textPrimary = Color(0xFFE7EDF8);
   static const Color _textSecondary = Color(0xFFB0BEC5);
 
   // ── Shared decoration ──────────────────────────────────────────────────────
-  PageDecoration _pageDecoration() => PageDecoration(
-        pageColor: _bg,
-        titlePadding: const EdgeInsets.only(top: 20, bottom: 8),
-        contentMargin: const EdgeInsets.symmetric(horizontal: 28, vertical: 4),
-        bodyAlignment: Alignment.center,
-        imageAlignment: Alignment.center,
-        imageFlex: 2,
-        bodyFlex: 3,
-        titleTextStyle: GoogleFonts.inter(
-          fontSize: 27,
-          fontWeight: FontWeight.bold,
-          color: _textPrimary,
-          letterSpacing: 0.2,
-        ),
-        bodyTextStyle: GoogleFonts.inter(
-          fontSize: 15.5,
-          color: _textSecondary,
-          height: 1.65,
-        ),
-      );
+  PageDecoration _pageDecoration(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isCompactHeight = screenHeight < 760;
+
+    return PageDecoration(
+      pageColor: _bg,
+      titlePadding: EdgeInsets.only(
+        top: isCompactHeight ? 10 : 16,
+        bottom: 8,
+      ),
+      contentMargin: EdgeInsets.symmetric(
+        horizontal: 28,
+        vertical: isCompactHeight ? 6 : 10,
+      ),
+      bodyAlignment: Alignment.center,
+      imageAlignment: Alignment.center,
+      imageFlex: isCompactHeight ? 3 : 4,
+      bodyFlex: isCompactHeight ? 4 : 5,
+      titleTextStyle: GoogleFonts.inter(
+        fontSize: 27,
+        fontWeight: FontWeight.bold,
+        color: _textPrimary,
+        letterSpacing: 0.2,
+      ),
+      bodyTextStyle: GoogleFonts.inter(
+        fontSize: 15.5,
+        color: _textSecondary,
+        height: 1.65,
+      ),
+    );
+  }
 
   // ── Reusable widgets ───────────────────────────────────────────────────────
   Widget _iconBubble(
+    BuildContext context,
     IconData icon, {
     required Color gradientStart,
     required Color gradientEnd,
   }) {
+    final size = MediaQuery.of(context).size;
+    final shortestSide = size.shortestSide;
+    final bubbleSize = shortestSide < 380 ? 140.0 : 160.0;
+    final iconSize = shortestSide < 380 ? 64.0 : 72.0;
+
+    final imageOffset = size.height < 760 ? 28.0 : 36.0;
+
     return Center(
-      child: Container(
-        width: 160,
-        height: 160,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              gradientStart.withValues(alpha: 0.90),
-              gradientEnd.withValues(alpha: 0.90),
+      child: Transform.translate(
+        offset: Offset(0, imageOffset),
+        child: Container(
+          width: bubbleSize,
+          height: bubbleSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                gradientStart.withValues(alpha: 0.90),
+                gradientEnd.withValues(alpha: 0.90),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: gradientStart.withValues(alpha: 0.35),
+                blurRadius: 28,
+                offset: const Offset(0, 12),
+              ),
             ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: gradientStart.withValues(alpha: 0.35),
-              blurRadius: 28,
-              offset: const Offset(0, 12),
-            ),
-          ],
+          child: Icon(icon, size: iconSize, color: Colors.white),
         ),
-        child: Icon(icon, size: 72, color: Colors.white),
       ),
     );
   }
@@ -169,7 +191,7 @@ class IntroductionPage extends StatelessWidget {
   }
 
   // ── Pages ──────────────────────────────────────────────────────────────────
-  List<PageViewModel> _buildPages() => [
+  List<PageViewModel> _buildPages(BuildContext context) => [
         // 1. Project Identity
         PageViewModel(
           titleWidget: _title('SenScribe'),
@@ -179,11 +201,12 @@ class IntroductionPage extends StatelessWidget {
             'in high-noise environments who need real-time audio awareness.',
           ),
           image: _iconBubble(
+            context,
             Icons.hearing_rounded,
             gradientStart: const Color(0xFF8AB4FF),
             gradientEnd: const Color(0xFF0B57D0),
           ),
-          decoration: _pageDecoration(),
+          decoration: _pageDecoration(context),
         ),
 
         // 2. Problem Statement
@@ -197,11 +220,12 @@ class IntroductionPage extends StatelessWidget {
             'hardware that limits everyday independence.',
           ),
           image: _iconBubble(
+            context,
             Icons.warning_amber_rounded,
             gradientStart: const Color(0xFFFF6B6B),
             gradientEnd: const Color(0xFFFF8E53),
           ),
-          decoration: _pageDecoration(),
+          decoration: _pageDecoration(context),
         ),
 
         // 3. Core Solution
@@ -214,11 +238,12 @@ class IntroductionPage extends StatelessWidget {
             'work together to keep you informed and safe.',
           ),
           image: _iconBubble(
+            context,
             Icons.auto_awesome_rounded,
             gradientStart: const Color(0xFF66BB6A),
             gradientEnd: const Color(0xFF00ACC1),
           ),
-          decoration: _pageDecoration(),
+          decoration: _pageDecoration(context),
         ),
 
         // 4. Key Features
@@ -226,11 +251,12 @@ class IntroductionPage extends StatelessWidget {
           titleWidget: _title('Key Features'),
           bodyWidget: _featureList(),
           image: _iconBubble(
+            context,
             Icons.dashboard_rounded,
             gradientStart: const Color(0xFFAB47BC),
             gradientEnd: const Color(0xFF7E57C2),
           ),
-          decoration: _pageDecoration(),
+          decoration: _pageDecoration(context),
         ),
 
         // 5. Technical Foundation
@@ -244,11 +270,12 @@ class IntroductionPage extends StatelessWidget {
             'responses with no internet required.',
           ),
           image: _iconBubble(
+            context,
             Icons.shield_rounded,
             gradientStart: const Color(0xFF29B6F6),
             gradientEnd: const Color(0xFF0288D1),
           ),
-          decoration: _pageDecoration(),
+          decoration: _pageDecoration(context),
         ),
       ];
 
@@ -257,12 +284,10 @@ class IntroductionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return IntroductionScreen(
       globalBackgroundColor: _bg,
-      pages: _buildPages(),
-
+      pages: _buildPages(context),
       showSkipButton: true,
       showBackButton: true,
       showNextButton: true,
-
       skip: Text(
         'Skip',
         style: GoogleFonts.inter(
@@ -295,10 +320,8 @@ class IntroductionPage extends StatelessWidget {
           fontSize: 14,
         ),
       ),
-
       onDone: onDone,
       onSkip: onDone,
-
       dotsDecorator: DotsDecorator(
         size: const Size(8, 8),
         activeSize: const Size(26, 8),
@@ -309,12 +332,10 @@ class IntroductionPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
       ),
-
       controlsMargin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       controlsPadding: const EdgeInsets.all(12),
       curve: Curves.easeInOut,
       animationDuration: 350,
-
       skipSemantic: 'Skip introduction',
       nextSemantic: 'Go to next page',
       doneSemantic: 'Finish and open SenScribe',

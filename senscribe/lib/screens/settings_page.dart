@@ -11,7 +11,6 @@ import '../navigation/adaptive_page_route.dart';
 import '../navigation/main_navigation.dart';
 import '../services/app_logger.dart';
 import 'about_support.dart';
-import 'home_tab.dart';
 import 'experimental_page.dart';
 import 'model_settings_page.dart';
 import 'permissions_background_page.dart';
@@ -439,11 +438,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () async {
                             AppLogger.logSectionOpened(
                               'Onboarding',
-                              targetPageName: 'Welcome to SenScribe',
+                              targetPageName: 'Introduction',
                             );
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('intro_completed', false);
-                            await HomeTab.restartOnboarding();
                             if (!context.mounted) return;
                             SenScribeApp.restartIntro();
                           },

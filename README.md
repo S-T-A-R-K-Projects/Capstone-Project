@@ -1,5 +1,7 @@
 # SenScribe - Accessibility-First Sound Detection App
 
+[![SenScribe Presentation](https://img.youtube.com/vi/z16rOocf61Q/0.jpg)](https://youtu.be/z16rOocf61Q)
+
 SenScribe is a Flutter-based mobile application designed for individuals with hearing impairments. It provides real-time audio captioning, critical sound alerts, and an accessible user interface with high contrast themes.
 
 ## Prerequisites
@@ -104,10 +106,12 @@ flutter run --release
 - **Real-time Audio Classification**: Detects and identifies sounds in the environment.
 - **Custom Sound Recognition**: Train your device to recognize specific custom sounds natively on Android.
 - **Speech-to-Text (STT)**: Converts spoken language into text using Vosk Offline STT.
+- **Transcript Refinement**: Refines real-time STT transcripts for readability.
 - **Text-to-Speech (TTS)**: Converts typed text into audible speech locally when supported.
-- **Trigger Word Alerts**: Get alerted when specific words or phrases are spoken.
+- **Trigger Word Alerts**: Get alerted when specific words or phrases are spoken, featuring native haptic feedback.
+- **Sound Location Capture**: Optionally capture the location of detected sounds.
 - **AI-Powered Summarization**: Summarizes conversations using on-device AI models.
-- **Accessible UI**: Platform-adaptive UI and high contrast themes.
+- **Accessible UI**: Platform-adaptive UI and high contrast themes with intuitive navigation.
 
 ## Project Structure
 
@@ -123,6 +127,7 @@ senscribe/
 │   │   ├── model_download_snapshot.dart# Download state for models
 │   │   ├── sound_caption.dart          # Sound detection payload model
 │   │   ├── sound_filter.dart           # Sound filtering configurations
+│   │   ├── sound_location_snapshot.dart# Data for captured sound locations
 │   │   ├── trigger_alert.dart          # Alert notification model
 │   │   └── trigger_word.dart           # Trigger phrase model
 │   ├── screens/                        # Application screens
@@ -133,16 +138,17 @@ senscribe/
 │   │   ├── history_page.dart           # Event logs & saved texts
 │   │   ├── home_page.dart              # Old home screen
 │   │   ├── home_tab.dart               # Bottom navigation tab content
+│   │   ├── introduction_page.dart      # Splash & welcome screen
 │   │   ├── model_settings_page.dart    # LLM & AI model configuration
 │   │   ├── permissions_background_page.dart # Permissions onboarding
 │   │   ├── privacy_data_page.dart      # Privacy policy and local data
 │   │   ├── settings_page.dart          # General app configuration
 │   │   ├── speech_to_text_page.dart    # Dedicated STT interface
-│   │   ├── start_page.dart             # Splash & welcome screen
 │   │   ├── text_to_speech_page.dart    # Dedicated TTS interface
 │   │   └── unified_home_page.dart      # Main dashboard and feed
 │   ├── services/                       # Background services & Logic
 │   │   ├── android_offline_speech_service.dart # Vosk STT implementation
+│   │   ├── app_logger.dart             # Application logging service
 │   │   ├── app_permission_service.dart # Permission request logic
 │   │   ├── app_settings_service.dart   # Shared preferences wrapper
 │   │   ├── audio_classification_service.dart # YAMNet sound recognition
@@ -152,6 +158,8 @@ senscribe/
 │   │   ├── live_update_service.dart    # Background notification updates
 │   │   ├── model_download_service.dart # Model downloader logic
 │   │   ├── sound_filter_service.dart   # Throttling and filtering sound
+│   │   ├── sound_location_service.dart # Captured sound geocoding
+│   │   ├── stt_transcript_refinement_service.dart # AI-powered transcript refinement
 │   │   ├── stt_transcript_service.dart # Cross-platform STT service
 │   │   ├── summarization_service.dart  # AI Summarization logic
 │   │   ├── text_to_speech_service.dart # Cross-platform TTS service
@@ -168,6 +176,8 @@ senscribe/
 │   └── utils/                          # Helper functions & constants
 │       ├── app_constants.dart          # App-wide constants
 │       ├── sound_filter_catalog.dart   # Default sound map definitions
+│       ├── sound_location_formatter.dart # Format location strings
+│       ├── sound_location_map_launcher.dart # Native map intent launcher
 │       ├── themed_adaptive_alert_dialog.dart # Custom dialog styling
 │       ├── time_utils.dart             # Date formatting functions
 │       └── utils.dart                  # General helper methods

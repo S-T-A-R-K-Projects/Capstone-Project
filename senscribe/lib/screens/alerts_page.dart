@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -10,7 +12,10 @@ import '../services/custom_sound_service.dart';
 import '../services/app_logger.dart';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
+import '../models/sound_location_snapshot.dart';
 import '../utils/time_utils.dart';
+import '../utils/sound_location_formatter.dart';
+import '../utils/sound_location_map_launcher.dart';
 import '../utils/themed_adaptive_alert_dialog.dart';
 import '../widgets/adaptive_input_sheet.dart';
 
@@ -110,6 +115,7 @@ class _AlertsPageState extends State<AlertsPage> {
 
   Future<void> _showAlertDetails(TriggerAlert alert) async {
     final isSoundAlert = _isSoundAlert(alert);
+    final location = SoundLocationSnapshot.fromMetadata(alert.metadata);
     await showThemedAdaptiveAlertDialog(
       context: context,
       title: alert.triggerWord,
@@ -122,6 +128,14 @@ class _AlertsPageState extends State<AlertsPage> {
       iconSize: 36,
       iconColor: Theme.of(context).colorScheme.primary,
       actions: [
+        if (isSoundAlert && location.hasCoordinates)
+          AlertAction(
+            title: 'Open Map',
+            style: AlertActionStyle.info,
+            onPressed: () {
+              unawaited(_openLocationInMap(location));
+            },
+          ),
         AlertAction(
           title: 'Close',
           style: AlertActionStyle.primary,
@@ -143,7 +157,20 @@ class _AlertsPageState extends State<AlertsPage> {
     return 'Detector: ${alert.soundDetectorLabel}\n'
         'Confidence: $confidenceLabel\n'
         'Priority: ${alert.soundPriorityLabel}\n'
-        'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}';
+        'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}\n'
+        '${SoundLocationFormatter.detailsText(
+      SoundLocationSnapshot.fromMetadata(alert.metadata),
+    )}';
+  }
+
+  Future<void> _openLocationInMap(SoundLocationSnapshot location) async {
+    final opened = await SoundLocationMapLauncher.open(location);
+    if (!mounted || opened) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Unable to open this location in Maps',
+      type: AdaptiveSnackBarType.warning,
+    );
   }
 
   Widget _buildAlertSubtitle(TriggerAlert alert, ColorScheme scheme) {

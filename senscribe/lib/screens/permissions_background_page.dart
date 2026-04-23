@@ -9,6 +9,7 @@ import '../services/app_settings_service.dart';
 import '../services/app_permission_service.dart';
 import '../services/audio_classification_service.dart';
 import '../services/live_update_service.dart';
+import '../services/sound_location_service.dart';
 
 class PermissionsBackgroundPage extends StatefulWidget {
   const PermissionsBackgroundPage({super.key});
@@ -24,6 +25,7 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
   final AppPermissionService _permissionService = AppPermissionService();
   final AudioClassificationService _audioService = AudioClassificationService();
   final LiveUpdateService _liveUpdateService = LiveUpdateService();
+  final SoundLocationService _locationService = SoundLocationService();
   AppPermissionSnapshot? _snapshot;
   bool _isLoading = true;
   bool _isLiveUpdateEnabled = false;
@@ -101,6 +103,9 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
     required String permanentlyDeniedMessage,
   }) async {
     final status = await request();
+    if (status.isGranted && _audioService.isMonitoring) {
+      await _locationService.start();
+    }
     await _refreshStatuses();
 
     if (!mounted) return;
@@ -172,10 +177,13 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
     required PermissionStatus status,
     required VoidCallback onEnable,
     required String disableMessage,
+    String? statusLabelOverride,
+    Color? statusColorOverride,
   }) {
-    final color = _statusColor(status);
-    final label = _statusLabel(status);
-    final canRequest = !(status.isGranted || status.isLimited);
+    final color = statusColorOverride ?? _statusColor(status);
+    final label = statusLabelOverride ?? _statusLabel(status);
+    final canRequest =
+        !(status.isGranted || status.isLimited) || statusLabelOverride != null;
 
     return AdaptiveCard(
       padding: const EdgeInsets.all(16),
@@ -284,8 +292,8 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
                     const SizedBox(height: 8),
                     Text(
                       Platform.isIOS
-                          ? 'Monitor microphone, speech recognition, local alerts, Live Activities, and background audio readiness.'
-                          : 'Monitor microphone, notifications, battery optimization, and background monitoring readiness.',
+                          ? 'Monitor microphone, speech recognition, local alerts, optional location, Live Activities, and background audio readiness.'
+                          : 'Monitor microphone, notifications, optional location, battery optimization, and background monitoring readiness.',
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         color: Theme.of(context).textTheme.bodySmall?.color,
@@ -325,6 +333,29 @@ class _PermissionsBackgroundPageState extends State<PermissionsBackgroundPage>
                       ),
                       disableMessage:
                           'Use system settings if you want to revoke notification access for SenScribe.',
+                    ),
+                    const SizedBox(height: 16),
+                    _buildPermissionCard(
+                      title: 'Location',
+                      description:
+                          'Optional. Saves the phone location with new detected sounds and saved sound alerts for offline review.',
+                      icon: Icons.location_on_rounded,
+                      status: _snapshot!.location,
+                      statusLabelOverride: !_snapshot!.locationServicesEnabled
+                          ? 'Services Off'
+                          : null,
+                      statusColorOverride: !_snapshot!.locationServicesEnabled
+                          ? Colors.orange
+                          : null,
+                      onEnable: () => _requestPermission(
+                        _permissionService.requestLocationWhenInUse,
+                        grantedMessage: 'Location permission granted',
+                        deniedMessage: 'Location permission denied',
+                        permanentlyDeniedMessage:
+                            'Location access is blocked. Open Settings to enable it for SenScribe.',
+                      ),
+                      disableMessage:
+                          'Use system settings if you want to revoke location access for SenScribe.',
                     ),
                     if (Platform.isIOS &&
                         _snapshot!.speechRecognition != null) ...[

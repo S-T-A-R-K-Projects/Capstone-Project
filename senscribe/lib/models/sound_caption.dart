@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 
+import 'sound_location_snapshot.dart';
+
 enum SoundCaptionSource { builtIn, custom }
 
 class SoundCaption {
@@ -10,6 +12,7 @@ class SoundCaption {
   final double confidence;
   final SoundCaptionSource source;
   final String? customSoundId;
+  final SoundLocationSnapshot? location;
 
   SoundCaption({
     required this.sound,
@@ -18,7 +21,22 @@ class SoundCaption {
     required this.confidence,
     this.source = SoundCaptionSource.builtIn,
     this.customSoundId,
+    this.location,
   });
+
+  SoundCaption copyWith({
+    SoundLocationSnapshot? location,
+  }) {
+    return SoundCaption(
+      sound: sound,
+      timestamp: timestamp,
+      isCritical: isCritical,
+      confidence: confidence,
+      source: source,
+      customSoundId: customSoundId,
+      location: location ?? this.location,
+    );
+  }
 
   static final RegExp _displaySoundPattern = RegExp(r'[_\-\s]+');
 

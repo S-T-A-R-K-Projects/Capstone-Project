@@ -74,6 +74,7 @@ class PrivacyDataPage extends StatelessWidget {
                 Icons.storage_rounded,
                 'The app can store feature data inside local app storage on this device.\n\n'
                     '• Trigger words and recent trigger alerts\n'
+                    '• Optional saved sound location coordinates when location permission is enabled\n'
                     '• Custom sound profiles and recorded training samples\n'
                     '• Saved texts and generated summaries\n'
                     '• App preferences such as theme and onboarding state\n'
@@ -103,6 +104,7 @@ class PrivacyDataPage extends StatelessWidget {
                 'Permissions are used only for local app features.\n\n'
                     '• Microphone: required for sound recognition, speech-to-text, and custom sound training\n'
                     '• Notifications: used for live updates and local alerts\n'
+                    '• Location: optional, used only to save phone coordinates with new detected sounds\n'
                     '• Device storage/app files: used to keep local preferences and custom sound samples\n'
                     '• No permission is used to upload your data elsewhere',
               ),

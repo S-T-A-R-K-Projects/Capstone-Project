@@ -10,7 +10,10 @@ import '../utils/themed_adaptive_alert_dialog.dart';
 import '../models/sound_caption.dart';
 import '../models/sound_filter.dart';
 import '../models/trigger_alert.dart';
+import '../models/sound_location_snapshot.dart';
 import '../utils/time_utils.dart';
+import '../utils/sound_location_formatter.dart';
+import '../utils/sound_location_map_launcher.dart';
 import '../widgets/sound_caption_card.dart';
 import '../services/audio_classification_service.dart';
 import '../services/sound_filter_service.dart';
@@ -20,12 +23,14 @@ class HomePage extends StatefulWidget {
   final bool isMonitoring;
   final AnimationController pulseController;
   final VoidCallback onToggleMonitoring;
+  final String appBarTitle;
 
   const HomePage({
     super.key,
     required this.isMonitoring,
     required this.pulseController,
     required this.onToggleMonitoring,
+    this.appBarTitle = 'SenScribe',
   });
 
   @override
@@ -186,6 +191,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showCaptionDetails(SoundCaption caption) async {
+    final location =
+        caption.location ?? const SoundLocationSnapshot.notRecorded();
     await showThemedAdaptiveAlertDialog(
       context: context,
       title: caption.displaySound,
@@ -194,6 +201,14 @@ class _HomePageState extends State<HomePage> {
       iconSize: 36,
       iconColor: Theme.of(context).colorScheme.primary,
       actions: [
+        if (location.hasCoordinates)
+          AlertAction(
+            title: 'Open Map',
+            style: AlertActionStyle.info,
+            onPressed: () {
+              unawaited(_openLocationInMap(location));
+            },
+          ),
         AlertAction(
           title: 'Close',
           style: AlertActionStyle.primary,
@@ -215,6 +230,9 @@ class _HomePageState extends State<HomePage> {
       if ((caption.customSoundId ?? '').trim().isNotEmpty)
         'customSoundId': caption.customSoundId,
       if ((eventKey ?? '').trim().isNotEmpty) 'soundEventKey': eventKey,
+      'location':
+          (caption.location ?? const SoundLocationSnapshot.notRecorded())
+              .toJson(),
     };
   }
 
@@ -240,7 +258,18 @@ class _HomePageState extends State<HomePage> {
     return 'Detector: $sourceLabel\n'
         'Confidence: $confidence%\n'
         'Priority: $priority\n'
-        'Detected: $detectedAt';
+        'Detected: $detectedAt\n'
+        '${SoundLocationFormatter.detailsText(caption.location)}';
+  }
+
+  Future<void> _openLocationInMap(SoundLocationSnapshot location) async {
+    final opened = await SoundLocationMapLauncher.open(location);
+    if (!mounted || opened) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Unable to open this location in Maps',
+      type: AdaptiveSnackBarType.warning,
+    );
   }
 
   dynamic _detailIconForCaption(SoundCaption caption) {
@@ -455,7 +484,7 @@ class _HomePageState extends State<HomePage> {
         : 0.0;
 
     return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(title: 'SenScribe'),
+      appBar: AdaptiveAppBar(title: widget.appBarTitle),
       body: Material(
         color: Colors.transparent,
         child: Column(

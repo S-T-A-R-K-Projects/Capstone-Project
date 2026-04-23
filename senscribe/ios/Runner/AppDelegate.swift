@@ -1,5 +1,7 @@
 import ActivityKit
 import AVFoundation
+import AudioToolbox
+import CoreHaptics
 import Flutter
 import Speech
 import UIKit
@@ -9,6 +11,7 @@ import UserNotifications
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     private var backgroundTasks: [Int: UIBackgroundTaskIdentifier] = [:]
     private var nextBackgroundTaskToken: Int = 1
+    private static var hapticEngine: CHHapticEngine?
     
     override func application(
         _ application: UIApplication,
@@ -108,6 +111,23 @@ import UserNotifications
                 }
             }
         }
+
+        if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "SenScribeAlertFeedbackBridge") {
+            let channel = FlutterMethodChannel(
+                name: "senscribe/alert_feedback",
+                binaryMessenger: registrar.messenger()
+            )
+
+            channel.setMethodCallHandler { call, result in
+                switch call.method {
+                case "playTriggerAlertFeedback":
+                    Self.playTriggerAlertFeedback()
+                    result(nil)
+                default:
+                    result(FlutterMethodNotImplemented)
+                }
+            }
+        }
     }
 
     private func handleGetPermissionStatuses(result: @escaping FlutterResult) {
@@ -182,6 +202,94 @@ import UserNotifications
             return
         }
         UIApplication.shared.endBackgroundTask(identifier)
+    }
+
+    private static func playTriggerAlertFeedback() {
+        DispatchQueue.main.async {
+            let audioSession = AVAudioSession.sharedInstance()
+            if #available(iOS 13.0, *) {
+                do {
+                    try audioSession.setAllowHapticsAndSystemSoundsDuringRecording(true)
+                } catch {
+                    // Fall back to the best available haptic path below.
+                }
+            }
+
+            if #available(iOS 13.0, *),
+               CHHapticEngine.capabilitiesForHardware().supportsHaptics {
+                do {
+                    try prepareHapticEngineIfNeeded(audioSession: audioSession)
+                    try playCoreHapticsPattern()
+                    return
+                } catch {
+                    Self.hapticEngine = nil
+                }
+            }
+
+            let notificationGenerator = UINotificationFeedbackGenerator()
+            notificationGenerator.prepare()
+            notificationGenerator.notificationOccurred(.warning)
+            let impactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+            impactGenerator.prepare()
+            impactGenerator.impactOccurred(intensity: 1.0)
+            AudioServicesPlayAlertSound(kSystemSoundID_Vibrate)
+        }
+    }
+
+    @available(iOS 13.0, *)
+    private static func prepareHapticEngineIfNeeded(audioSession: AVAudioSession) throws {
+        if hapticEngine == nil {
+            let engine = try CHHapticEngine(audioSession: audioSession)
+            engine.isAutoShutdownEnabled = true
+            engine.stoppedHandler = { _ in
+                Self.hapticEngine = nil
+            }
+            engine.resetHandler = {
+                do {
+                    try engine.start()
+                } catch {
+                    Self.hapticEngine = nil
+                }
+            }
+            hapticEngine = engine
+        }
+
+        try hapticEngine?.start()
+    }
+
+    @available(iOS 13.0, *)
+    private static func playCoreHapticsPattern() throws {
+        let events = [
+            CHHapticEvent(
+                eventType: .hapticTransient,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.85),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.55),
+                ],
+                relativeTime: 0
+            ),
+            CHHapticEvent(
+                eventType: .hapticTransient,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.8),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5),
+                ],
+                relativeTime: 0.14
+            ),
+            CHHapticEvent(
+                eventType: .hapticContinuous,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.35),
+                ],
+                relativeTime: 0.3,
+                duration: 0.18
+            ),
+        ]
+
+        let pattern = try CHHapticPattern(events: events, parameters: [])
+        let player = try hapticEngine?.makePlayer(with: pattern)
+        try player?.start(atTime: 0)
     }
 }
 

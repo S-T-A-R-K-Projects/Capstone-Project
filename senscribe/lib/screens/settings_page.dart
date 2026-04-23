@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../navigation/adaptive_page_route.dart';
 import '../navigation/main_navigation.dart';
+import '../services/app_logger.dart';
 import 'about_support.dart';
 import 'experimental_page.dart';
 import 'model_settings_page.dart';
@@ -136,22 +137,22 @@ class _SettingsPageState extends State<SettingsPage> {
                             size: 24,
                           ),
                           const SizedBox(width: 12),
-                      Text(
-                        'Sound Filters',
-                        style: GoogleFonts.inter(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                          Text(
+                            'Sound Filters',
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ],
                       ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Choose which sound categories appear in the app and customize individual labels inside each filter.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
+                      const SizedBox(height: 12),
+                      Text(
+                        'Choose which sound categories appear in the app and customize individual labels inside each filter.',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -161,6 +162,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => pushAdaptivePage<void>(
                             context,
                             builder: (_) => const ExperimentalPage(),
+                            pageName: 'Sound Filters',
+                            openedLabel: 'Sound Filters',
+                            returnPageName: 'Settings',
                           ),
                           label: 'Manage',
                           style: AdaptiveButtonStyle.plain,
@@ -214,6 +218,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => pushAdaptivePage<void>(
                             context,
                             builder: (_) => const ModelSettingsPage(),
+                            pageName: 'AI Model Settings',
+                            openedLabel: 'AI Model Configuration',
+                            returnPageName: 'Settings',
                           ),
                           label: 'Configure',
                           style: AdaptiveButtonStyle.plain,
@@ -266,10 +273,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
-                          onPressed: () =>
-                              MainNavigationPage.showAlertsTab(
-                                selectedTabIndex: 1,
-                              ),
+                          onPressed: () => MainNavigationPage.showAlertsTab(
+                            selectedTabIndex: 1,
+                          ),
                           label: 'Open Alert Triggers',
                           style: AdaptiveButtonStyle.plain,
                           useNative: false,
@@ -320,6 +326,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => pushAdaptivePage<void>(
                             context,
                             builder: (_) => const PrivacyDataPage(),
+                            pageName: 'Privacy & Data',
+                            openedLabel: 'Privacy & Data',
+                            returnPageName: 'Settings',
                           ),
                           label: 'Manage',
                           style: AdaptiveButtonStyle.plain,
@@ -375,6 +384,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => pushAdaptivePage<void>(
                             context,
                             builder: (_) => const PermissionsBackgroundPage(),
+                            pageName: 'Permissions & Background',
+                            openedLabel: 'Permissions & Background',
+                            returnPageName: 'Settings',
                           ),
                           label: 'Open',
                           style: AdaptiveButtonStyle.plain,
@@ -424,6 +436,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         alignment: Alignment.centerLeft,
                         child: AdaptiveButton(
                           onPressed: () async {
+                            AppLogger.logSectionOpened(
+                              'Onboarding',
+                              targetPageName: 'Introduction',
+                            );
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('intro_completed', false);
                             if (!context.mounted) return;
@@ -475,6 +491,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => pushAdaptivePage<void>(
                             context,
                             builder: (_) => const AboutSupportPage(),
+                            pageName: 'About & Support',
+                            openedLabel: 'About & Support',
+                            returnPageName: 'Settings',
                           ),
                           label: 'Acknowledgements',
                           style: AdaptiveButtonStyle.plain,

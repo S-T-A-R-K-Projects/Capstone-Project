@@ -124,6 +124,9 @@ class _HistoryPageState extends State<HistoryPage> {
     final changed = await pushAdaptivePage<bool>(
       context,
       builder: (_) => HistoryDetailPage(itemId: item.id),
+      pageName: 'Saved Text Detail',
+      openedLabel: 'Saved Text Detail',
+      returnPageName: 'Saved Texts',
     );
 
     if (changed == true && mounted) {
@@ -453,6 +456,9 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
             pushAdaptivePage<void>(
               context,
               builder: (_) => const ModelSettingsPage(),
+              pageName: 'AI Model Settings',
+              openedLabel: 'AI Model Configuration',
+              returnPageName: 'Saved Text Detail',
             );
           },
         ),

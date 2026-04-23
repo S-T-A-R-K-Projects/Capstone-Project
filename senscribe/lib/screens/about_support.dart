@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../services/app_logger.dart';
+
 class AboutSupportPage extends StatelessWidget {
   const AboutSupportPage({super.key});
 
@@ -42,6 +44,7 @@ class AboutSupportPage extends StatelessWidget {
   }
 
   void _showLicenses(BuildContext context) {
+    AppLogger.logSectionOpened('Licenses', targetPageName: 'Licenses');
     showLicensePage(
       context: context,
       applicationName: 'SenScribe',

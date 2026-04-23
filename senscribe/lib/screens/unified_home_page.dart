@@ -24,6 +24,7 @@ import '../services/trigger_word_service.dart';
 import '../models/trigger_alert.dart';
 import '../models/trigger_word.dart';
 import '../services/android_offline_speech_service.dart';
+import '../services/stt_transcript_refinement_service.dart';
 import '../services/stt_transcript_service.dart';
 import '../utils/time_utils.dart';
 import '../utils/app_constants.dart';
@@ -38,7 +39,7 @@ class UnifiedHomePage extends StatefulWidget {
 }
 
 class _UnifiedHomePageState extends State<UnifiedHomePage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   // Services
   final AudioClassificationService _audioService = AudioClassificationService();
   final SpeechToText _speech = SpeechToText();
@@ -52,6 +53,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   List<SoundCaption> _soundEvents = [];
   final TextEditingController _ttsController = TextEditingController();
   final ScrollController _sttScrollController = ScrollController();
+  bool _shouldAutoScrollStt = true;
+  bool _isUserInteractingWithSttScroll = false;
+  static const double _sttAutoScrollThreshold = 24;
 
   // Expansion State
   bool _isSoundExpanded = true;
@@ -70,10 +74,13 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   String _currentSpeechBuffer = '';
   final List<String> _speechTranscript = [];
   final TriggerWordService _triggerWordService = TriggerWordService();
+  final SttTranscriptRefinementService _sttRefinementService =
+      SttTranscriptRefinementService();
   final SttTranscriptService _sttTranscriptService = SttTranscriptService();
   final Map<String, int> _lastAlertedTriggerCount = {};
   Timer? _speechRestartTimer;
   bool _isSpeechStarting = false;
+  AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
 
   // Animations
   late final AnimationController _soundPulseController;
@@ -82,7 +89,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appLifecycleState =
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     unawaited(_soundFilterService.initialize());
+    unawaited(_triggerWordService.warmCache());
     // Sync initial state
     _isSoundMonitoring = _audioService.isMonitoring;
     _soundEvents = List.from(_audioService.history);
@@ -116,6 +127,9 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     });
 
     _syncFromSharedTranscript(_sttTranscriptService.current, notify: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom(animated: false);
+    });
     _transcriptSubscription = _sttTranscriptService.stream.listen((snapshot) {
       if (!mounted) return;
       _syncFromSharedTranscript(snapshot);
@@ -143,6 +157,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         ..addAll(snapshot.finalizedSegments);
       _currentSpeechBuffer = snapshot.partialWords;
     });
+    _scheduleSttAutoScroll();
   }
 
   Future<void> _initTTS() async {
@@ -210,15 +225,25 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   void _handleAndroidSpeechEvent(AndroidOfflineSpeechEvent event) {
     switch (event.type) {
       case AndroidOfflineSpeechEventType.partial:
-        _sttTranscriptService.setPartialWords(event.text);
-        if (event.text.isNotEmpty) {
-          unawaited(_checkAndNotifyPartialTriggers(event.text));
+        final refinedText = _refineTranscript(
+          event.text,
+          isFinal: false,
+          backend: SttBackend.androidOfflineVosk,
+        );
+        _sttTranscriptService.setPartialWords(refinedText);
+        if (refinedText.isNotEmpty) {
+          unawaited(_checkAndNotifyPartialTriggers(refinedText));
         }
         break;
       case AndroidOfflineSpeechEventType.finalResult:
-        if (event.text.isNotEmpty) {
-          _sttTranscriptService.commitFinalWords(event.text);
-          _scrollToBottom();
+        final refinedText = _refineTranscript(
+          event.text,
+          isFinal: true,
+          backend: SttBackend.androidOfflineVosk,
+        );
+        if (refinedText.isNotEmpty) {
+          _sttTranscriptService.commitFinalWords(refinedText);
+          _resetTriggerDetectionTracking();
         }
         break;
       case AndroidOfflineSpeechEventType.status:
@@ -247,6 +272,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _audioSubscription?.cancel();
     _filterSelectionSubscription?.cancel();
     _androidSpeechSubscription?.cancel();
@@ -263,6 +289,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     _ttsController.dispose();
     _sttScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appLifecycleState = state;
   }
 
   // --- Sound Monitoring ---
@@ -317,7 +348,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         _speechPulseController.repeat(reverse: true);
       } else {
         _speechRestartTimer?.cancel();
-        _lastAlertedTriggerCount.clear();
+        _resetTriggerDetectionTracking();
         _stopSpeechException();
         _speechPulseController.stop();
         _speechPulseController.reset();
@@ -327,6 +358,24 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
   void _toggleSpeechMonitoringFromDetail() {
     _toggleSpeechMonitoring();
+  }
+
+  String _refineTranscript(
+    String text, {
+    required bool isFinal,
+    required SttBackend backend,
+    List<String> alternates = const [],
+    List<String> recognizedPhrases = const [],
+  }) {
+    return _sttRefinementService.refine(
+      SttRefinementRequest(
+        text: text,
+        isFinal: isFinal,
+        backend: backend,
+        alternates: alternates,
+        recognizedPhrases: recognizedPhrases,
+      ),
+    );
   }
 
   Future<void> _startSpeechListening() async {
@@ -347,15 +396,29 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         await _speech.cancel();
         await _speech.listen(
           onResult: (result) {
-            _sttTranscriptService.setPartialWords(result.recognizedWords);
+            final refinedText = _refineTranscript(
+              result.recognizedWords,
+              isFinal: result.finalResult,
+              backend: SttBackend.iosSpeechToText,
+              alternates: result.alternates
+                  .map((alternate) => alternate.recognizedWords)
+                  .toList(),
+              recognizedPhrases: result.alternates
+                  .expand(
+                    (alternate) =>
+                        alternate.recognizedPhrases ?? const <String>[],
+                  )
+                  .toList(),
+            );
+            _sttTranscriptService.setPartialWords(refinedText);
 
-            if (!result.finalResult && result.recognizedWords.isNotEmpty) {
-              _checkAndNotifyPartialTriggers(result.recognizedWords);
+            if (!result.finalResult && refinedText.isNotEmpty) {
+              unawaited(_checkAndNotifyPartialTriggers(refinedText));
             }
 
-            if (result.finalResult && result.recognizedWords.isNotEmpty) {
-              _sttTranscriptService.commitFinalWords(result.recognizedWords);
-              _scrollToBottom();
+            if (result.finalResult && refinedText.isNotEmpty) {
+              _sttTranscriptService.commitFinalWords(refinedText);
+              _resetTriggerDetectionTracking();
             }
           },
           listenFor: const Duration(minutes: 10),
@@ -383,6 +446,32 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
     try {
       final triggerConfigs = await _triggerWordService.loadTriggerWords();
+      final enabledTriggerConfigs =
+          triggerConfigs.where((word) => word.enabled).toList();
+      if (enabledTriggerConfigs.isEmpty) return;
+
+      final currentCounts = <String, int>{};
+      for (final config in enabledTriggerConfigs) {
+        currentCounts[config.word.toLowerCase()] = _countTriggerOccurrences(
+          text,
+          config,
+        );
+      }
+
+      final trackedKeys = _lastAlertedTriggerCount.keys.toList(growable: false);
+      for (final key in trackedKeys) {
+        final currentCount = currentCounts[key] ?? 0;
+        if (currentCount <= 0) {
+          _lastAlertedTriggerCount.remove(key);
+          continue;
+        }
+
+        final lastCount = _lastAlertedTriggerCount[key] ?? 0;
+        if (currentCount < lastCount) {
+          _lastAlertedTriggerCount[key] = currentCount;
+        }
+      }
+
       final detected = await _triggerWordService.checkForTriggers(text);
       if (detected.isEmpty || !mounted) return;
 
@@ -390,7 +479,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
 
       for (final trigger in detected) {
         TriggerWord? config;
-        for (final word in triggerConfigs) {
+        for (final word in enabledTriggerConfigs) {
           if (word.word.toLowerCase() == trigger.toLowerCase()) {
             config = word;
             break;
@@ -398,11 +487,12 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         }
         if (config == null) continue;
 
-        final currentCount = _countTriggerOccurrences(text, config);
-        final lastCount = _lastAlertedTriggerCount[trigger.toLowerCase()] ?? 0;
+        final triggerKey = trigger.toLowerCase();
+        final currentCount = currentCounts[triggerKey] ?? 0;
+        final lastCount = _lastAlertedTriggerCount[triggerKey] ?? 0;
         if (currentCount <= lastCount) continue;
 
-        _lastAlertedTriggerCount[trigger.toLowerCase()] = currentCount;
+        _lastAlertedTriggerCount[triggerKey] = currentCount;
         newlyNotified.add(trigger);
 
         await _triggerWordService.addAlert(
@@ -415,6 +505,11 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       }
 
       if (newlyNotified.isNotEmpty && mounted) {
+        await _triggerWordService.playTriggerDetectedFeedback();
+        if (!mounted) return;
+        if (_appLifecycleState != AppLifecycleState.resumed) {
+          return;
+        }
         AdaptiveSnackBar.show(
           context,
           message: 'Trigger detected: ${newlyNotified.join(', ')}',
@@ -424,6 +519,10 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     } catch (_) {
       // Ignore trigger-check errors silently
     }
+  }
+
+  void _resetTriggerDetectionTracking() {
+    _lastAlertedTriggerCount.clear();
   }
 
   int _countTriggerOccurrences(String text, TriggerWord triggerWord) {
@@ -462,16 +561,71 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
     await _speech.stop();
   }
 
-  void _scrollToBottom() {
-    if (_sttScrollController.hasClients) {
-      Future.delayed(Delays.scrollDelay, () {
-        _sttScrollController.animateTo(
-          _sttScrollController.position.maxScrollExtent,
-          duration: Delays.scrollAnimation,
-          curve: Curves.easeOut,
-        );
-      });
+  bool _isNearSttBottom(ScrollMetrics metrics) {
+    return metrics.maxScrollExtent - metrics.pixels <= _sttAutoScrollThreshold;
+  }
+
+  void _handleSttScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _isUserInteractingWithSttScroll = true;
+      return;
     }
+
+    if (notification is ScrollUpdateNotification) {
+      if (notification.dragDetails != null) {
+        _isUserInteractingWithSttScroll = true;
+      }
+      final nearBottom = _isNearSttBottom(notification.metrics);
+      if (_isUserInteractingWithSttScroll && !nearBottom) {
+        _shouldAutoScrollStt = false;
+      }
+      return;
+    }
+
+    if (notification is OverscrollNotification &&
+        notification.dragDetails != null) {
+      _isUserInteractingWithSttScroll = true;
+      if (!_isNearSttBottom(notification.metrics)) {
+        _shouldAutoScrollStt = false;
+      }
+      return;
+    }
+
+    if (notification is ScrollEndNotification) {
+      final nearBottom = _isNearSttBottom(notification.metrics);
+      _isUserInteractingWithSttScroll = false;
+      _shouldAutoScrollStt = nearBottom;
+      if (nearBottom) {
+        _scrollToBottom(animated: false);
+      }
+    }
+  }
+
+  void _scheduleSttAutoScroll() {
+    if (!_shouldAutoScrollStt || _isUserInteractingWithSttScroll) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom(animated: false);
+    });
+  }
+
+  void _scrollToBottom({bool animated = true}) {
+    if (!_sttScrollController.hasClients) return;
+    if (_isUserInteractingWithSttScroll) return;
+    final position = _sttScrollController.position;
+    final target = position.maxScrollExtent;
+    if ((target - position.pixels).abs() < 1) return;
+    if (!animated) {
+      _sttScrollController.jumpTo(target);
+      return;
+    }
+    unawaited(
+      _sttScrollController.animateTo(
+        target,
+        duration: Delays.scrollAnimation,
+        curve: Curves.easeOut,
+      ),
+    );
   }
 
   // --- TTS ---
@@ -513,6 +667,8 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   void _clearSTT() {
+    _shouldAutoScrollStt = true;
+    _isUserInteractingWithSttScroll = false;
     _sttTranscriptService.clear();
   }
 
@@ -521,8 +677,18 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
   }
 
   // --- Navigation Helpers ---
-  void _navigateToExpanded(Widget page) {
-    pushAdaptivePage<void>(context, builder: (_) => page);
+  void _navigateToExpanded(
+    Widget page, {
+    required String pageName,
+    required String sectionName,
+  }) {
+    pushAdaptivePage<void>(
+      context,
+      builder: (_) => page,
+      pageName: pageName,
+      openedLabel: sectionName,
+      returnPageName: 'Unified Home',
+    );
   }
 
   Future<void> _openExpandedSpeechPage() async {
@@ -534,7 +700,12 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
         isMonitoring: _isSpeechMonitoring,
         pulseController: _speechPulseController,
         onToggleMonitoring: _toggleSpeechMonitoringFromDetail,
+        appBarTitle: 'Speech to Text',
+        showSectionHeader: false,
       ),
+      pageName: 'Speech to Text',
+      openedLabel: 'Speech to Text',
+      returnPageName: 'Unified Home',
     );
   }
 
@@ -598,11 +769,16 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                             () => _isSoundExpanded = !_isSoundExpanded),
                         onExpand: () {
                           // Navigate to detailed Sound page (HomePage)
-                          _navigateToExpanded(HomePage(
-                            isMonitoring: _isSoundMonitoring,
-                            pulseController: _soundPulseController,
-                            onToggleMonitoring: _toggleSoundMonitoring,
-                          ));
+                          _navigateToExpanded(
+                            HomePage(
+                              isMonitoring: _isSoundMonitoring,
+                              pulseController: _soundPulseController,
+                              onToggleMonitoring: _toggleSoundMonitoring,
+                              appBarTitle: 'Sound Recognition',
+                            ),
+                            pageName: 'Sound Recognition',
+                            sectionName: 'Sound Recognition',
+                          );
                         },
                         child: _buildSoundContent(),
                       ),
@@ -624,6 +800,7 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                         isExpanded: _isSTTExpanded,
                         isMonitoring: _isSpeechMonitoring,
                         onToggle: _toggleSpeechMonitoring,
+                        scrollableBody: false,
                         onCollapseToggle: () =>
                             setState(() => _isSTTExpanded = !_isSTTExpanded),
                         onExpand: _openExpandedSpeechPage,
@@ -649,10 +826,15 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
                         scrollableBody: false,
                         onCollapseToggle: () =>
                             setState(() => _isTTSExpanded = !_isTTSExpanded),
-                        onExpand: () => _navigateToExpanded(TextToSpeechPage(
+                        onExpand: () => _navigateToExpanded(
+                          TextToSpeechPage(
                             isMonitoring: false,
                             pulseController: _speechPulseController,
-                            onToggleMonitoring: () {})),
+                            onToggleMonitoring: () {},
+                          ),
+                          pageName: 'Text to Speech',
+                          sectionName: 'Text to Speech',
+                        ),
                         child: _buildTTSContent(),
                       ),
                     ),
@@ -904,59 +1086,92 @@ class _UnifiedHomePageState extends State<UnifiedHomePage>
       );
     }
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         // Action Bar for STT
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            children: [
-              SizedBox(
-                width: 70,
-                child: AdaptiveButton(
-                  onPressed: _saveSTTTranscript,
-                  label: "Save",
-                  style: AdaptiveButtonStyle.plain,
-                  size: AdaptiveButtonSize.small,
-                  useNative: false,
-                ),
-              ),
-              SizedBox(
-                width: 70,
-                child: AdaptiveButton(
-                  onPressed: _clearSTT,
-                  label: "Clear",
-                  style: AdaptiveButtonStyle.plain,
-                  color: scheme.error,
-                  size: AdaptiveButtonSize.small,
-                  useNative: false,
-                ),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final alignment = constraints.maxWidth < 220
+                  ? WrapAlignment.center
+                  : WrapAlignment.end;
+              return Wrap(
+                alignment: alignment,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildSTTActionButton(
+                    onPressed: _saveSTTTranscript,
+                    label: 'Save',
+                  ),
+                  _buildSTTActionButton(
+                    onPressed: _clearSTT,
+                    label: 'Clear',
+                    color: scheme.error,
+                  ),
+                ],
+              );
+            },
           ),
         ),
-
-        Column(
-          children: [
-            ..._speechTranscript.map((t) => Padding(
-                  padding:
-                      const EdgeInsets.only(bottom: 8.0, left: 8.0, right: 8.0),
-                  child: Text(t, style: GoogleFonts.inter(fontSize: 16)),
-                )),
-            if (_currentSpeechBuffer.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(_currentSpeechBuffer,
-                    style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: scheme.onSurface.withValues(alpha: 0.72),
-                        fontStyle: FontStyle.italic)),
+        const SizedBox(height: 8),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              _handleSttScrollNotification(notification);
+              return false;
+            },
+            child: Scrollbar(
+              controller: _sttScrollController,
+              child: SingleChildScrollView(
+                controller: _sttScrollController,
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  children: [
+                    ..._speechTranscript.map((t) => Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: 8.0,
+                            left: 8.0,
+                            right: 8.0,
+                          ),
+                          child:
+                              Text(t, style: GoogleFonts.inter(fontSize: 16)),
+                        )),
+                    if (_currentSpeechBuffer.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          _currentSpeechBuffer,
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            color: scheme.onSurface.withValues(alpha: 0.72),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-          ],
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSTTActionButton({
+    required VoidCallback? onPressed,
+    required String label,
+    Color? color,
+  }) {
+    return AdaptiveButton(
+      onPressed: onPressed,
+      label: label,
+      style: AdaptiveButtonStyle.plain,
+      color: color,
+      size: AdaptiveButtonSize.small,
+      minSize: const Size(88, 32),
+      useNative: false,
     );
   }
 

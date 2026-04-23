@@ -5,6 +5,7 @@ import '../screens/alerts_page.dart';
 import '../screens/history_page.dart';
 import '../screens/home_tab.dart';
 import '../screens/settings_page.dart';
+import '../services/app_logger.dart';
 import '../services/app_permission_service.dart';
 
 class MainNavigationPage extends StatefulWidget {
@@ -50,6 +51,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
 
   void _onItemTapped(int index) {
     if (_selectedIndex != index) {
+      _logPageForIndex(index);
       setState(() {
         _selectedIndex = index;
       });
@@ -58,6 +60,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
 
   void _showAlertsTab({int selectedTabIndex = 0}) {
     if (mounted && _selectedIndex != 2) {
+      _logPageForIndex(2);
       setState(() {
         _selectedIndex = 2;
       });
@@ -80,6 +83,26 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     setState(() {
       _tabBarHidden = hidden;
     });
+  }
+
+  void _logPageForIndex(int index) {
+    switch (index) {
+      case 0:
+        AppLogger.logPageVisit(HomeTab.currentVisiblePageName);
+        break;
+      case 1:
+        AppLogger.logPageVisit('Saved Texts');
+        break;
+      case 2:
+        AppLogger.logSectionOpened(
+          AlertsPage.currentVisibleSectionName,
+          targetPageName: 'Alerts',
+        );
+        break;
+      case 3:
+        AppLogger.logPageVisit('Settings');
+        break;
+    }
   }
 
   @override

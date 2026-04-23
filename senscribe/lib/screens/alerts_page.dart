@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,9 +9,13 @@ import '../models/custom_sound_profile.dart';
 import 'custom_sound_enrollment_page.dart';
 import '../services/trigger_word_service.dart';
 import '../services/custom_sound_service.dart';
+import '../services/app_logger.dart';
 import '../models/trigger_word.dart';
 import '../models/trigger_alert.dart';
+import '../models/sound_location_snapshot.dart';
 import '../utils/time_utils.dart';
+import '../utils/sound_location_formatter.dart';
+import '../utils/sound_location_map_launcher.dart';
 import '../utils/themed_adaptive_alert_dialog.dart';
 import '../widgets/adaptive_input_sheet.dart';
 
@@ -25,6 +31,9 @@ class AlertsPage extends StatefulWidget {
   });
 
   static Key get navigationKey => _alertsPageKey;
+
+  static String get currentVisibleSectionName =>
+      _alertsPageKey.currentState?.currentSectionName ?? 'Recent Alerts';
 
   static void showRecentAlerts() {
     _alertsPageKey.currentState?._setSelectedTabIndex(0);
@@ -46,6 +55,8 @@ class _AlertsPageState extends State<AlertsPage> {
   final Set<String> _selectedAlertIds = <String>{};
 
   bool get _disableEntryAnimationsOnCurrentPlatform => PlatformInfo.isIOS;
+  String get currentSectionName =>
+      _selectedTabIndex == 0 ? 'Recent Alerts' : 'Alert Triggers';
 
   @override
   void initState() {
@@ -63,6 +74,8 @@ class _AlertsPageState extends State<AlertsPage> {
     if (!mounted) return;
 
     final nextIndex = _clampTabIndex(index);
+    final sectionName = nextIndex == 0 ? 'Recent Alerts' : 'Alert Triggers';
+    AppLogger.logSectionOpened(sectionName, targetPageName: 'Alerts');
     setState(() {
       _selectedTabIndex = nextIndex;
       if (_selectedTabIndex != 0) {
@@ -102,6 +115,7 @@ class _AlertsPageState extends State<AlertsPage> {
 
   Future<void> _showAlertDetails(TriggerAlert alert) async {
     final isSoundAlert = _isSoundAlert(alert);
+    final location = SoundLocationSnapshot.fromMetadata(alert.metadata);
     await showThemedAdaptiveAlertDialog(
       context: context,
       title: alert.triggerWord,
@@ -114,6 +128,14 @@ class _AlertsPageState extends State<AlertsPage> {
       iconSize: 36,
       iconColor: Theme.of(context).colorScheme.primary,
       actions: [
+        if (isSoundAlert && location.hasCoordinates)
+          AlertAction(
+            title: 'Open Map',
+            style: AlertActionStyle.info,
+            onPressed: () {
+              unawaited(_openLocationInMap(location));
+            },
+          ),
         AlertAction(
           title: 'Close',
           style: AlertActionStyle.primary,
@@ -135,7 +157,20 @@ class _AlertsPageState extends State<AlertsPage> {
     return 'Detector: ${alert.soundDetectorLabel}\n'
         'Confidence: $confidenceLabel\n'
         'Priority: ${alert.soundPriorityLabel}\n'
-        'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}';
+        'Detected: ${TimeUtils.formatExactDateTime(alert.timestamp)}\n'
+        '${SoundLocationFormatter.detailsText(
+      SoundLocationSnapshot.fromMetadata(alert.metadata),
+    )}';
+  }
+
+  Future<void> _openLocationInMap(SoundLocationSnapshot location) async {
+    final opened = await SoundLocationMapLauncher.open(location);
+    if (!mounted || opened) return;
+    AdaptiveSnackBar.show(
+      context,
+      message: 'Unable to open this location in Maps',
+      type: AdaptiveSnackBarType.warning,
+    );
   }
 
   Widget _buildAlertSubtitle(TriggerAlert alert, ColorScheme scheme) {
@@ -241,6 +276,7 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _showAddTriggerWordDialog() async {
+    AppLogger.logSectionOpened('Add Trigger Word', targetPageName: 'Alerts');
     final result = await _showTriggerWordDialog(
       title: 'Add Trigger Word',
       primaryActionLabel: 'Add',
@@ -264,6 +300,7 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _showEditTriggerWordDialog(TriggerWord existingWord) async {
+    AppLogger.logSectionOpened('Edit Trigger Word', targetPageName: 'Alerts');
     final result = await _showTriggerWordDialog(
       title: 'Edit Trigger Word',
       primaryActionLabel: 'Save',
@@ -370,6 +407,7 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Future<void> _showAddCustomSoundDialog() async {
+    AppLogger.logSectionOpened('Add Custom Sound', targetPageName: 'Alerts');
     final soundName = await showAdaptiveTextEntrySheet(
       context: context,
       title: 'Add Custom Sound',
@@ -401,6 +439,9 @@ class _AlertsPageState extends State<AlertsPage> {
     await pushAdaptivePage<void>(
       context,
       builder: (_) => CustomSoundEnrollmentPage(initialProfile: profile),
+      pageName: 'Custom Sound Enrollment',
+      openedLabel: 'Custom Sound Enrollment',
+      returnPageName: 'Alerts',
     );
     await _customSoundService.discardDraft(profile.id);
     await _customSoundService.refresh();

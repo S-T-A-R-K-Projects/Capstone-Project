@@ -12,12 +12,16 @@ class SpeechToTextPage extends StatefulWidget {
   final bool isMonitoring;
   final AnimationController pulseController;
   final VoidCallback onToggleMonitoring;
+  final String appBarTitle;
+  final bool showSectionHeader;
 
   const SpeechToTextPage({
     super.key,
     required this.isMonitoring,
     required this.pulseController,
     required this.onToggleMonitoring,
+    this.appBarTitle = 'SenScribe',
+    this.showSectionHeader = true,
   });
 
   @override
@@ -30,8 +34,12 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   bool _isListening = false;
   bool _isSaving = false;
   late bool _isMonitoring;
+  final ScrollController _transcriptScrollController = ScrollController();
   StreamSubscription<SttTranscriptSnapshot>? _transcriptSubscription;
   final SttTranscriptService _sttTranscriptService = SttTranscriptService();
+  bool _shouldAutoScrollTranscript = true;
+  bool _isUserInteractingWithTranscriptScroll = false;
+  static const double _transcriptAutoScrollThreshold = 24;
 
   // Helper method to safely show SnackBar
   void _showSnackBar(String message) {
@@ -49,6 +57,9 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
     _isMonitoring = widget.isMonitoring;
     _isListening = _isMonitoring;
     _syncFromSharedTranscript(_sttTranscriptService.current, notify: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollTranscriptToBottom(animated: false);
+    });
     _transcriptSubscription = _sttTranscriptService.stream.listen((snapshot) {
       if (!mounted) return;
       _syncFromSharedTranscript(snapshot);
@@ -69,6 +80,78 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
       _transcribedText = snapshot.finalizedText;
       _currentWords = snapshot.partialWords;
     });
+    _scheduleTranscriptAutoScroll();
+  }
+
+  bool _isNearTranscriptBottom(ScrollMetrics metrics) {
+    return metrics.maxScrollExtent - metrics.pixels <=
+        _transcriptAutoScrollThreshold;
+  }
+
+  void _handleTranscriptScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _isUserInteractingWithTranscriptScroll = true;
+      return;
+    }
+
+    if (notification is ScrollUpdateNotification) {
+      if (notification.dragDetails != null) {
+        _isUserInteractingWithTranscriptScroll = true;
+      }
+      final nearBottom = _isNearTranscriptBottom(notification.metrics);
+      if (_isUserInteractingWithTranscriptScroll && !nearBottom) {
+        _shouldAutoScrollTranscript = false;
+      }
+      return;
+    }
+
+    if (notification is OverscrollNotification &&
+        notification.dragDetails != null) {
+      _isUserInteractingWithTranscriptScroll = true;
+      if (!_isNearTranscriptBottom(notification.metrics)) {
+        _shouldAutoScrollTranscript = false;
+      }
+      return;
+    }
+
+    if (notification is ScrollEndNotification) {
+      final nearBottom = _isNearTranscriptBottom(notification.metrics);
+      _isUserInteractingWithTranscriptScroll = false;
+      _shouldAutoScrollTranscript = nearBottom;
+      if (nearBottom) {
+        _scrollTranscriptToBottom(animated: false);
+      }
+    }
+  }
+
+  void _scheduleTranscriptAutoScroll() {
+    if (!_shouldAutoScrollTranscript ||
+        _isUserInteractingWithTranscriptScroll) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollTranscriptToBottom(animated: false);
+    });
+  }
+
+  void _scrollTranscriptToBottom({bool animated = true}) {
+    if (!_transcriptScrollController.hasClients) return;
+    if (_isUserInteractingWithTranscriptScroll) return;
+    final position = _transcriptScrollController.position;
+    final target = position.maxScrollExtent;
+    if ((target - position.pixels).abs() < 1) return;
+    if (!animated) {
+      _transcriptScrollController.jumpTo(target);
+      return;
+    }
+    unawaited(
+      _transcriptScrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      ),
+    );
   }
 
   @override
@@ -91,6 +174,8 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   }
 
   void _clearText() {
+    _shouldAutoScrollTranscript = true;
+    _isUserInteractingWithTranscriptScroll = false;
     _sttTranscriptService.clear();
   }
 
@@ -190,6 +275,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
   @override
   void dispose() {
     _transcriptSubscription?.cancel();
+    _transcriptScrollController.dispose();
     super.dispose();
   }
 
@@ -201,7 +287,7 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
         : 0.0;
 
     return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(title: 'SenScribe'),
+      appBar: AdaptiveAppBar(title: widget.appBarTitle),
       body: Material(
         color: Colors.transparent,
         child: SingleChildScrollView(
@@ -285,35 +371,39 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
 
               // Speech to Text Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.mic_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Speech to Text',
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
+                    if (widget.showSectionHeader) ...[
+                      Icon(
+                        Icons.mic_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Speech to Text',
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 70,
-                      child: AdaptiveButton(
-                        onPressed: !_hasTranscript || _isListening || _isSaving
-                            ? null
-                            : _saveTranscript,
-                        label: 'Save',
-                        style: AdaptiveButtonStyle.plain,
-                      ),
+                      const SizedBox(width: 8),
+                    ] else
+                      const Spacer(),
+                    AdaptiveButton(
+                      onPressed: !_hasTranscript || _isListening || _isSaving
+                          ? null
+                          : _saveTranscript,
+                      label: 'Save',
+                      style: AdaptiveButtonStyle.plain,
+                      size: AdaptiveButtonSize.small,
+                      minSize: const Size(88, 32),
+                      useNative: false,
                     ),
                     if (_hasTranscript)
                       IconButton(
@@ -377,31 +467,47 @@ class _SpeechToTextPageState extends State<SpeechToTextPage> {
                           padding: const EdgeInsets.all(20),
                           child: SizedBox(
                             width: double.infinity,
-                            child: SingleChildScrollView(
-                              child: SelectableText.rich(
-                                TextSpan(
-                                  children: [
-                                    if (_transcribedText.isNotEmpty)
-                                      TextSpan(
-                                        text: _transcribedText,
-                                        style: theme.textTheme.bodyLarge
-                                            ?.copyWith(height: 1.5),
-                                      ),
-                                    if (_currentWords.isNotEmpty)
-                                      TextSpan(
-                                        text: _currentWords.isNotEmpty &&
-                                                _transcribedText.isNotEmpty &&
-                                                !_transcribedText.endsWith(' ')
-                                            ? ' $_currentWords'
-                                            : _currentWords,
-                                        style:
-                                            theme.textTheme.bodyLarge?.copyWith(
-                                          height: 1.5,
-                                          color: Colors.grey[600],
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                  ],
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (notification) {
+                                _handleTranscriptScrollNotification(
+                                  notification,
+                                );
+                                return false;
+                              },
+                              child: Scrollbar(
+                                controller: _transcriptScrollController,
+                                child: SingleChildScrollView(
+                                  controller: _transcriptScrollController,
+                                  physics: const BouncingScrollPhysics(),
+                                  child: SelectableText.rich(
+                                    TextSpan(
+                                      children: [
+                                        if (_transcribedText.isNotEmpty)
+                                          TextSpan(
+                                            text: _transcribedText,
+                                            style: theme.textTheme.bodyLarge
+                                                ?.copyWith(height: 1.5),
+                                          ),
+                                        if (_currentWords.isNotEmpty)
+                                          TextSpan(
+                                            text: _currentWords.isNotEmpty &&
+                                                    _transcribedText
+                                                        .isNotEmpty &&
+                                                    !_transcribedText.endsWith(
+                                                      ' ',
+                                                    )
+                                                ? ' $_currentWords'
+                                                : _currentWords,
+                                            style: theme.textTheme.bodyLarge
+                                                ?.copyWith(
+                                              height: 1.5,
+                                              color: Colors.grey[600],
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),

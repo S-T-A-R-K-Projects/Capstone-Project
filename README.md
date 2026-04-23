@@ -1,6 +1,10 @@
 # SenScribe - Accessibility-First Sound Detection App
 
-[![SenScribe Presentation](https://img.youtube.com/vi/z16rOocf61Q/0.jpg)](https://youtu.be/z16rOocf61Q)
+<a href="https://youtu.be/z16rOocf61Q" target="_blank">
+  <img src="https://img.youtube.com/vi/z16rOocf61Q/maxresdefault.jpg" alt="SenScribe Presentation Video" width="600" />
+</a>
+<br/>
+<em>▶️ <a href="https://youtu.be/z16rOocf61Q">Click here to watch the SenScribe Demo Video</a></em>
 
 SenScribe is a Flutter-based mobile application designed for individuals with hearing impairments. It provides real-time audio captioning, critical sound alerts, and an accessible user interface with high contrast themes.
 
@@ -106,7 +110,6 @@ flutter run --release
 - **Real-time Audio Classification**: Detects and identifies sounds in the environment.
 - **Custom Sound Recognition**: Train your device to recognize specific custom sounds natively on Android.
 - **Speech-to-Text (STT)**: Converts spoken language into text using Vosk Offline STT.
-- **Transcript Refinement**: Refines real-time STT transcripts for readability.
 - **Text-to-Speech (TTS)**: Converts typed text into audible speech locally when supported.
 - **Trigger Word Alerts**: Get alerted when specific words or phrases are spoken, featuring native haptic feedback.
 - **Sound Location Capture**: Optionally capture the location of detected sounds.
